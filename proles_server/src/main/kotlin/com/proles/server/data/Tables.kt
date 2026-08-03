@@ -115,6 +115,7 @@ object BusinessTripsTable : UUIDTable("business_trips") {
     val participants = text("participants").default("[]")
     val transport = varchar("transport", 100).default("")
     val notes = text("notes").default("")
+    val waypoints = text("waypoints").default("[]")  // 🆕 JSON массив пунктов следования
     val createdAt = long("created_at").default(0L)
 }
 
