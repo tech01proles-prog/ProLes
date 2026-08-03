@@ -1369,6 +1369,9 @@ fun Route.dataRoutes() {
                             type = row[BusinessTripsTable.type],
                             date = row[BusinessTripsTable.date].toString(),
                             city = row[BusinessTripsTable.city],
+                            waypoints = runCatching {
+                                json.decodeFromString<List<WaypointDto>>(row[BusinessTripsTable.waypoints])
+                            }.getOrDefault(emptyList()),
                             participants = runCatching {
                                 json.decodeFromString<List<String>>(row[BusinessTripsTable.participants])
                             }.getOrDefault(emptyList()),
@@ -1404,6 +1407,7 @@ fun Route.dataRoutes() {
                         it[participants] = json.encodeToString(trip.participants)
                         it[transport] = trip.transport
                         it[notes] = trip.notes
+                        it[waypoints] = json.encodeToString(trip.waypoints)
                         it[createdAt] = System.currentTimeMillis()
                     }
                     Pair(trip.copy(id = id.toString()), false)
@@ -1430,6 +1434,7 @@ fun Route.dataRoutes() {
                             it[participants] = json.encodeToString(trip.participants)
                             it[transport] = trip.transport
                             it[notes] = trip.notes
+                            it[waypoints] = json.encodeToString(trip.waypoints)
                             it[createdAt] = System.currentTimeMillis()
                         }
                         Pair(trip.copy(id = id.toString()), false)
@@ -1450,6 +1455,7 @@ fun Route.dataRoutes() {
                                 it[date] = KtLocalDate.parse(trip.date)
                                 it[transport] = trip.transport
                                 it[participants] = json.encodeToString(trip.participants)
+                                it[waypoints] = json.encodeToString(trip.waypoints)
                                 if (trip.notes.isNotBlank()) {
                                     it[notes] = trip.notes
                                 }

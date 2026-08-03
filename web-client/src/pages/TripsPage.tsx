@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
-import type { BusinessTripDto, ProjectDto, UserDto } from '../types';
+import type { BusinessTripDto, ProjectDto, UserDto, WaypointDto } from '../types';
 import { generateUUID, formatDate } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 
@@ -35,6 +35,7 @@ export function TripsPage() {
     type: 'DEPARTURE' as keyof typeof TRIP_TYPES,
     date: new Date().toISOString().slice(0, 10),
     city: '',
+    waypoints: [] as WaypointDto[],
     participants: [] as string[],
     transport: '',
     notes: '',
@@ -97,13 +98,14 @@ export function TripsPage() {
         type: form.type,
         date: form.date,
         city: form.city,
+        waypoints: form.waypoints,
         participants: form.participants,
         transport: form.transport,
         notes: form.notes,
         createdAt: Date.now(),
       });
       setShowForm(false);
-      setForm({ ...form, projectId: '', city: '', participants: [], transport: '', notes: '' });
+      setForm({ ...form, projectId: '', city: '', waypoints: [], participants: [], transport: '', notes: '' });
       await loadData();
     } catch (err) {
       alert('Ошибка создания командировки');
@@ -125,6 +127,45 @@ export function TripsPage() {
         ? f.participants.filter(id => id !== uid)
         : [...f.participants, uid],
     }));
+  };
+
+  const addWaypoint = () => {
+    const newOrder = form.waypoints.length > 0 
+      ? Math.max(...form.waypoints.map(w => w.order)) + 1 
+      : 0;
+    setForm(f => ({
+      ...f,
+      waypoints: [...f.waypoints, { order: newOrder, city: '', address: '' }],
+    }));
+  };
+
+  const updateWaypoint = (index: number, field: 'city' | 'address', value: string) => {
+    setForm(f => ({
+      ...f,
+      waypoints: f.waypoints.map((w, i) => 
+        i === index ? { ...w, [field]: value } : w
+      ),
+    }));
+  };
+
+  const removeWaypoint = (index: number) => {
+    setForm(f => ({
+      ...f,
+      waypoints: f.waypoints.filter((_, i) => i !== index),
+    }));
+  };
+
+  const moveWaypoint = (index: number, direction: 'up' | 'down') => {
+    if ((direction === 'up' && index === 0) || 
+        (direction === 'down' && index === form.waypoints.length - 1)) {
+      return;
+    }
+    setForm(f => {
+      const newWaypoints = [...f.waypoints];
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      [newWaypoints[index], newWaypoints[targetIndex]] = [newWaypoints[targetIndex], newWaypoints[index]];
+      return { ...f, waypoints: newWaypoints };
+    });
   };
 
   const toggleSort = (field: 'date' | 'type') => {
@@ -208,6 +249,71 @@ export function TripsPage() {
                     <input type="text" placeholder="Поезд №123" value={form.transport} onChange={(e) => setForm({ ...form, transport: e.target.value })} className="input" />
                   </div>
                 </div>
+              </div>
+              {/* 🛣 Пункты следования (waypoints) */}
+              <div className="proles-modal-section">
+                <div className="proles-modal-section-title flex items-center justify-between">
+                  <span>🛣 Пункты следования ({form.waypoints.length})</span>
+                  <button
+                    onClick={addWaypoint}
+                    className="text-xs font-semibold px-2 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-all"
+                  >
+                    ➕ Добавить
+                  </button>
+                </div>
+                {form.waypoints.length === 0 ? (
+                  <div className="text-sm text-slate-400 dark:text-slate-500 italic p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-dashed border-slate-200 dark:border-slate-700">
+                    Нет промежуточных пунктов. Нажмите «➕ Добавить», чтобы добавить пункты следования.
+                  </div>
+                ) : (
+                  <div className="space-y-2 mt-2">
+                    {form.waypoints.map((wp, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+                        <div className="flex flex-col gap-1">
+                          <button
+                            onClick={() => moveWaypoint(index, 'up')}
+                            disabled={index === 0}
+                            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            title="Переместить вверх"
+                          >
+                            ⬆️
+                          </button>
+                          <button
+                            onClick={() => moveWaypoint(index, 'down')}
+                            disabled={index === form.waypoints.length - 1}
+                            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            title="Переместить вниз"
+                          >
+                            ⬇️
+                          </button>
+                        </div>
+                        <div className="flex-1 grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Город"
+                            value={wp.city}
+                            onChange={(e) => updateWaypoint(index, 'city', e.target.value)}
+                            className="input text-xs py-1.5"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Адрес (опционально)"
+                            value={wp.address}
+                            onChange={(e) => updateWaypoint(index, 'address', e.target.value)}
+                            className="input text-xs py-1.5"
+                          />
+                        </div>
+                        <button
+                          onClick={() => removeWaypoint(index)}
+                          className="p-1.5 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all"
+                          title="Удалить пункт"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               {/* Участники (только для админа) */}
               {isAdmin && allUsers.length > 0 && (
@@ -297,6 +403,18 @@ export function TripsPage() {
                     </div>
                     <div className="font-bold text-slate-900 dark:text-slate-100 truncate">{trip.projectName}</div>
                     {trip.city && <div className="text-sm text-slate-600 dark:text-slate-400">📍 {trip.city}</div>}
+                    {/* 🛣 Отображение пунктов следования */}
+                    {trip.waypoints && trip.waypoints.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">🛣 Пункты следования:</div>
+                        {trip.waypoints.map((wp, idx) => (
+                          <div key={idx} className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                            <span className="text-slate-400">{idx + 1}.</span>
+                            <span>{wp.city}{wp.address && ` — ${wp.address}`}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {(trip.transport || participants.length > 0 || trip.notes) && (

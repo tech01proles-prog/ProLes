@@ -75,6 +75,12 @@ export interface ExpenseDto {
   hasReceiptPhoto: boolean;
 }
 
+export interface WaypointDto {
+  order: number;
+  city: string;
+  address: string;
+}
+
 export interface BusinessTripDto {
   id: string;
   userId: string;
@@ -83,6 +89,7 @@ export interface BusinessTripDto {
   type: 'DEPARTURE' | 'TRANSFER' | 'COMPLETION';
   date: string;
   city: string;
+  waypoints: WaypointDto[];
   participants: string[];
   transport: string;
   notes: string;
