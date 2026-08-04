@@ -136,6 +136,14 @@ data class Expense(
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
+data class Waypoint(
+    val order: Int,
+    val city: String,
+    val address: String = ""
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
 data class BusinessTrip(
     val id: String = UUID.randomUUID().toString(),
     val userId: String,
@@ -144,6 +152,7 @@ data class BusinessTrip(
     val type: String = "DEPARTURE", // DEPARTURE, TRANSFER, COMPLETION
     val date: LocalDate,
     val city: String = "",
+    val waypoints: List<Waypoint> = emptyList(),  // 🆕 Пункты следования
     val participants: List<String> = emptyList(),
     val transport: String = "",
     val notes: String = "",

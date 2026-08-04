@@ -42,7 +42,12 @@ fun EmployeeExpensesScreen(
     val effectiveIsAdminView = isAdminView && canViewAll
 
     val expenses by viewModel.expenses.collectAsState()
+    val employees by viewModel.employees.collectAsState()
     val context = LocalContext.current
+
+    // 🆕 Находим пользователя COMPANY
+    val companyUser = remember(employees) { employees.find { it.name == "COMPANY" } }
+    val companyUserId = companyUser?.id
 
     // 🆕 Состояние для отслеживания процесса загрузки фото
     var uploadingExpenseId by remember { mutableStateOf<String?>(null) }
@@ -167,9 +172,12 @@ fun EmployeeExpensesScreen(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 items(filteredExpenses, key = { it.id }) { expense ->
+                    // 🆕 Проверяем, является ли расход расходом компании
+                    val isCompanyExpense = companyUserId != null && expense.userId == companyUserId
                     ExpenseRow(
                         expense = expense,
                         isAdminView = effectiveIsAdminView,
+                        isCompanyExpense = isCompanyExpense,
                         isUploading = uploadingExpenseId == expense.id,
                         onToggleReceipt = { newStatus ->
                             viewModel.toggleReceiptSubmitted(expense.id, newStatus)
@@ -311,6 +319,7 @@ private fun AdminExpensesHeader() {
 private fun ExpenseRow(
     expense: Expense,
     isAdminView: Boolean,
+    isCompanyExpense: Boolean = false,  // 🆕
     isUploading: Boolean,
     onToggleReceipt: (Boolean) -> Unit,
     onTakePhoto: () -> Unit,
@@ -349,6 +358,15 @@ private fun ExpenseRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                // 🆕 Индикатор расхода компании
+                if (isCompanyExpense) {
+                    Text(
+                        text = "🏢 Компания",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFFFA000),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
             // 🔹 Средняя часть: зависит от режима
             // 📷 Кнопка камеры (только для сотрудника, не для админа)

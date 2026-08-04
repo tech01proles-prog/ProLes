@@ -61,7 +61,8 @@ export function ExpensesPage() {
     setMyExpenses(myExpRes.status === 'fulfilled' ? myExpRes.value.data : []);
     setAllExpenses(allExpRes.status === 'fulfilled' ? allExpRes.value.data : []);
     setProjects(projRes.status === 'fulfilled' ? projRes.value.data.filter(p => p.isActive) : []);
-    setUsers(usersRes.status === 'fulfilled' ? usersRes.value.data : []);
+    // 🆕 Фильтруем пользователя COMPANY из списка сотрудников (не показываем в фильтрах)
+    setUsers(usersRes.status === 'fulfilled' ? usersRes.value.data.filter(u => u.name !== 'COMPANY') : []);
     setLoading(false);
   }, [user, canViewAll]);
 
@@ -251,6 +252,9 @@ export function ExpensesPage() {
           {filtered.map(expense => {
             const type = EXPENSE_TYPES.find(t => t.key === expense.type) || EXPENSE_TYPES[8];
             const userName = effectiveScope === 'all' ? users.find(u => u.id === expense.userId)?.name : null;
+            // 🆕 Проверяем, является ли расход расходом компании
+            const isCompanyExpense = expense.userId === users.find(u => u.name === 'COMPANY')?.id || 
+                                     (userName === null && effectiveScope === 'all');
             return (
               <div key={expense.id} className="card p-4 md:p-5 group hover:shadow-md transition-all animate-fade-in">
                 <div className="flex items-start justify-between gap-4 mb-2">
@@ -259,6 +263,7 @@ export function ExpensesPage() {
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${type.color}`}>{type.label}</span>
                       <span className="text-xs text-slate-400">{formatDate(expense.date)}</span>
                       {userName && <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">👤 {userName}</span>}
+                      {isCompanyExpense && !userName && <span className="text-xs font-medium text-amber-600 dark:text-amber-400">🏢 Компания</span>}
                     </div>
                     <div className="font-bold text-slate-900 dark:text-slate-100 truncate">{expense.projectName}</div>
                     {expense.name && <div className="text-sm text-slate-600 dark:text-slate-400 truncate">{expense.name}</div>}
