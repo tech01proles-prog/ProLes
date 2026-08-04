@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.BusinessTrip
 import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.model.User
+import com.example.prolestimesheet.model.Waypoint  // 🆕
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
@@ -306,6 +307,8 @@ fun TripDialog(
     var projectName by remember { mutableStateOf(trip?.projectName ?: activeTrip?.projectName ?: "") }
     var date by remember { mutableStateOf(trip?.date ?: today) }
     var city by remember { mutableStateOf(trip?.city ?: "") }
+    // 🆕 Пункты следования (waypoints)
+    var waypoints by remember { mutableStateOf(trip?.waypoints ?: emptyList()) }
 
     // 🔥 Для COMPLETION проект и город read-only из активной командировки
     LaunchedEffect(type, activeTrip) {
@@ -607,6 +610,7 @@ fun TripDialog(
                         type = type,
                         date = date,
                         city = city.trim(),
+                        waypoints = waypoints,  // 🆕 Пункты следования
                         participants = selectedParticipants.toList(),
                         transport = transport.trim(),
                         notes = notes.trim(),
