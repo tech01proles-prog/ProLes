@@ -238,7 +238,11 @@ fun MainScreen(
 
                 Screen.Analytics -> AnalyticsScreen(
                     viewModel = viewModel,
-                    onBack = { goBack() }
+                    onBack = { goBack() },
+                    onNavigateToExpenses = { navigateTo(Screen.AdminExpenses) },
+                    onNavigateToIncomes = { /* Можно добавить экран доходов */ },
+                    onNavigateToProjects = { navigateTo(Screen.Projects) },
+                    onNavigateToEmployees = { navigateTo(Screen.Employees) }
                 )
 
                 Screen.CostCalculation -> CostCalculationScreen(

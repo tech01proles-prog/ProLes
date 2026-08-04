@@ -383,13 +383,14 @@ private fun ExpenseRow(
                     if (expense.hasReceiptPhoto) {
                         Surface(
                             color = Color(0xFF2E7D32).copy(alpha = 0.15f),
-                            shape = MaterialTheme.shapes.small
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.padding(2.dp)
                         ) {
                             Icon(
-                                Icons.Default.Image,
-                                "Фото загружено",
+                                Icons.AutoMirrored.Filled.ReceiptLong,
+                                "Чек загружен",
                                 tint = Color(0xFF2E7D32),
-                                modifier = Modifier.size(20.dp).padding(2.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     } else {

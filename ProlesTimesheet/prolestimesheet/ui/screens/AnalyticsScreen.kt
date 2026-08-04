@@ -32,7 +32,11 @@ import java.time.YearMonth
 fun AnalyticsScreen(
     viewModel: TimesheetViewModel,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateToExpenses: (() -> Unit)? = null,
+    onNavigateToIncomes: (() -> Unit)? = null,
+    onNavigateToProjects: (() -> Unit)? = null,
+    onNavigateToEmployees: (() -> Unit)? = null
 ) {
     val user by viewModel.user.collectAsState()
     val projects by viewModel.projects.collectAsState()
@@ -195,7 +199,8 @@ fun AnalyticsScreen(
                         subtitle = "₽ за месяц",
                         delta = incomesDelta,
                         color = Color(0xFF2E7D32),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        onClick = onNavigateToIncomes
                     )
                     KpiCard(
                         icon = Icons.Default.AttachMoney,
@@ -204,7 +209,8 @@ fun AnalyticsScreen(
                         subtitle = "₽ за месяц",
                         delta = expensesDelta,
                         color = Color(0xFFFF2600),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        onClick = onNavigateToExpenses
                     )
                 }
             }
@@ -227,7 +233,8 @@ fun AnalyticsScreen(
                         subtitle = "за месяц",
                         delta = incomesDaysDelta.toDouble(),
                         color = Color(0xFF388E3C),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        onClick = onNavigateToIncomes
                     )
                 }
             }
@@ -240,7 +247,8 @@ fun AnalyticsScreen(
                         subtitle = "активных",
                         delta = null,
                         color = Color(0xFF0277BD),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        onClick = onNavigateToProjects
                     )
                     KpiCard(
                         icon = Icons.Default.People,
@@ -249,7 +257,8 @@ fun AnalyticsScreen(
                         subtitle = "в системе",
                         delta = null,
                         color = Color(0xFF6A1B9A),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        onClick = onNavigateToEmployees
                     )
                 }
             }
@@ -584,10 +593,11 @@ fun AnalyticsScreen(
 @Composable
 private fun KpiCard(
     icon: ImageVector, title: String, value: String, subtitle: String,
-    delta: Double?, color: Color, modifier: Modifier = Modifier
+    delta: Double?, color: Color, modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.12f))
     ) {
         Column(Modifier.padding(12.dp).fillMaxWidth()) {
