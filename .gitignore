@@ -42,14 +42,25 @@ target/
 .env.local
 *.env.*
 
-# Editors
+# Build directories
+dist/
+build/
+target/
+.gradle/
+
+# IDE and editor files
 .vscode/
 .idea/
+*.swp
+*.swo
+*.tmp
 
 # System files
 .DS_Store
 Thumbs.db
 
+# Logs and coverage
+*.log
 # Coverage
 coverage/
 htmlcov/
