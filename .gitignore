@@ -11,6 +11,17 @@
 build/
 dist/
 
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Android Studio
+*.iml
+*.iws
+*.ipr
+.idea/
+captures/
+*.keystore
+*.db
 # Dependencies
 .venv/
 venv/

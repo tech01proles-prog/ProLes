@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.prolestimesheet.model.User
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
+import kotlinx.coroutines.delay
 import kotlinx.datetime.*
 import java.time.LocalTime
 import java.time.format.TextStyle
@@ -383,14 +384,15 @@ private fun FortuneWheelCard() {
                     isSpinning = true
                     rotationAngle += 720 + Random.nextInt(360)
                     currentFortune = fortunes.random()
-                    kotlinx.coroutines.delay(1500)
-                    isSpinning = false
+                    // Запуск корутины для задержки
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                        delay(1500)
+                        isSpinning = false
+                    }
                 }
             },
         colors = CardDefaults.cardColors(
-            containerColor = Brush.linearGradient(
-                colors = listOf(Color(0xFFFFD700), Color(0xFFFFA000), Color(0xFFFF8F00))
-            ).let { androidx.compose.ui.graphics.Brush.Companion.verticalGradient(listOf(Color(0xFFFFD700), Color(0xFFFFA000))) }
+            containerColor = Color(0xFFFFD700)
         ),
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
