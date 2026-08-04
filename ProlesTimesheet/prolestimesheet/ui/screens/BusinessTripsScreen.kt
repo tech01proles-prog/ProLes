@@ -769,7 +769,7 @@ fun TripDialog(
         ) { DatePicker(state = pickerState) }
     }
 }
-// 🆕 Drag-and-Drop список для пунктов следования
+// 🆕 Список для пунктов следования (без Drag-and-Drop, т.к. библиотека не подключена)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WaypointsDragDropList(
@@ -777,16 +777,10 @@ private fun WaypointsDragDropList(
     onReorder: (List<Waypoint>) -> Unit,
     onRemove: (Int) -> Unit
 ) {
-    val listState = rememberLazyListState()
-    
-    LazyColumn(
-        state = listState,
+    Column(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        items(
-            items = waypoints,
-            key = { it.id }
-        ) { waypoint ->
+        waypoints.forEach { waypoint ->
             val index = waypoints.indexOfFirst { it.id == waypoint.id }
             WaypointItem(
                 waypoint = waypoint,
