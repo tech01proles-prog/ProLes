@@ -2269,6 +2269,13 @@ fun Route.dataRoutes() {
             val uploadDir = java.io.File("uploads/tickets").apply { mkdirs() }
             java.io.File(uploadDir, uniqueFileName).writeBytes(fileBytes)
             transaction {
+                // 🆕 Находим UUID пользователя COMPANY для расходов компании
+                val companyUser = UsersTable.selectAll()
+                    .where { UsersTable.name eq "COMPANY" }
+                    .singleOrNull()
+                val companyUserId = companyUser?.let { it[UsersTable.id] }
+                
+                // 📤 Загрузка билета
                 TicketsTable.insert {
                     it[TicketsTable.id] = ticketId
                     it[uploadedBy] = session.userId
@@ -2285,8 +2292,9 @@ fun Route.dataRoutes() {
                     it[TicketsTable.description] = request.description
                     it[uploadedAt] = System.currentTimeMillis()
                 }
-                // 🆕 Автоматически создаём расход "Билет" в проекте (если есть сумма)
+                // 🆕 Автоматически создаём расход "Билет" от имени COMPANY (если есть сумма)
                 if (request.amount > 0.0) {
+                    val expenseUserId = companyUserId ?: session.userId
                     transaction {
                         // ✅ Используем java.time вместо kotlinx.datetime (проще и всегда доступно)
                         val todayJava = java.time.LocalDate.now()
@@ -2294,7 +2302,7 @@ fun Route.dataRoutes() {
 
                         ExpensesTable.insert {
                             it[ExpensesTable.id] = UUID.randomUUID()
-                            it[userId] = session.userId
+                            it[userId] = expenseUserId
                             it[projectId] = UUID.fromString(request.projectId)
                             it[date] = todayKt
                             it[type] = "OTHER"
@@ -2307,7 +2315,7 @@ fun Route.dataRoutes() {
                             it[createdAt] = System.currentTimeMillis()
                         }
                     }
-                    println("✅ Auto-expense created: ${request.amount} ${request.currency} for ticket $uniqueFileName")
+                    println("✅ Auto-expense created: ${request.amount} ${request.currency} for ticket $uniqueFileName (userId=$expenseUserId)")
                 }
 
                 request.recipientIds.forEach { recipientId ->
