@@ -4,6 +4,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.draggableItems
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongClick
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -15,13 +18,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.BusinessTrip
 import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.model.User
-import com.example.prolestimesheet.model.Waypoint  // 🆕
+import com.example.prolestimesheet.model.Waypoint
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
@@ -32,6 +37,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.HorizontalDivider
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -523,6 +529,40 @@ fun TripDialog(
                     maxLines = 3
                 )
 
+                // 🆕 ПУНКТЫ СЛЕДОВАНИЯ (Drag-and-Drop интерфейс)
+                HorizontalDivider()
+                Text("📍 Пункты следования", style = MaterialTheme.typography.labelLarge)
+                
+                if (waypoints.isEmpty()) {
+                    Text(
+                        "Нет промежуточных пунктов",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+                } else {
+                    WaypointsDragDropList(
+                        waypoints = waypoints,
+                        onReorder = { newOrder -> waypoints = newOrder },
+                        onRemove = { index -> waypoints = waypoints.filterIndexed { i, _ -> i != index } }
+                    )
+                }
+                
+                AssistChip(
+                    onClick = {
+                        waypoints = waypoints + Waypoint(
+                            id = java.util.UUID.randomUUID().toString(),
+                            city = "",
+                            address = "",
+                            order = waypoints.size
+                        )
+                    },
+                    label = { Text("Добавить пункт") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                    }
+                )
+
                 // 🔥 УЧАСТНИКИ (в самом низу)
                 HorizontalDivider()
                 Text("Участники командировки", style = MaterialTheme.typography.labelLarge)
@@ -729,5 +769,96 @@ fun TripDialog(
                 TextButton(onClick = { showDatePicker = false }) { Text("Отмена") }
             }
         ) { DatePicker(state = pickerState) }
+    }
+}
+// 🆕 Drag-and-Drop список для пунктов следования
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WaypointsDragDropList(
+    waypoints: List<Waypoint>,
+    onReorder: (List<Waypoint>) -> Unit,
+    onRemove: (Int) -> Unit
+) {
+    val listState = rememberLazyListState()
+    
+    LazyColumn(
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items(
+            items = waypoints,
+            key = { it.id }
+        ) { waypoint ->
+            val index = waypoints.indexOfFirst { it.id == waypoint.id }
+            WaypointItem(
+                waypoint = waypoint,
+                index = index,
+                onValueChange = { updated ->
+                    val newWaypoints = waypoints.toMutableList()
+                    newWaypoints[index] = updated
+                    onReorder(newWaypoints)
+                },
+                onRemove = { onRemove(index) }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WaypointItem(
+    waypoint: Waypoint,
+    index: Int,
+    onValueChange: (Waypoint) -> Unit,
+    onRemove: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(8.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "#${index + 1}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.width(30.dp)
+            )
+            
+            Column(Modifier.weight(1f)) {
+                OutlinedTextField(
+                    value = waypoint.city,
+                    onValueChange = { onValueChange(waypoint.copy(city = it)) },
+                    label = { Text("Город") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = waypoint.address,
+                    onValueChange = { onValueChange(waypoint.copy(address = it)) },
+                    label = { Text("Адрес") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall
+                )
+            }
+            
+            IconButton(onClick = onRemove) {
+                Icon(
+                    Icons.Default.Delete,
+                    "Удалить",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
     }
 }
