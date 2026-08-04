@@ -41,6 +41,7 @@ sealed class Screen(val title: String, val icon: ImageVector) {
     object MyTickets : Screen("Мои билеты", Icons.Default.ConfirmationNumber)
     object AdminTickets : Screen("Билеты", Icons.Default.UploadFile)
     object AdminProjectExpenses : Screen("Расходы по проектам", Icons.Default.AttachMoney)
+    object EmployeeStats : Screen("Моя статистика", Icons.Default.Analytics)
 }
 
 @Composable
@@ -176,7 +177,8 @@ fun MainScreen(
                     onNavigateToMyExpenses = { navigateTo(Screen.MyExpenses) },
                     onNavigateToMyTrips = { navigateTo(Screen.BusinessTrips) },
                     onNavigateToNotifications = { navigateTo(Screen.Notifications) },
-                    onNavigateToMyTickets = { navigateTo(Screen.MyTickets) }  // 🆕
+                    onNavigateToMyTickets = { navigateTo(Screen.MyTickets) },  // 🆕
+                    onNavigateToStats = { navigateTo(Screen.EmployeeStats) }  // 🆕 Статистика сотрудника
                 )
 
                 Screen.Admin -> AdminManagementScreen(
@@ -273,6 +275,12 @@ fun MainScreen(
                     viewModel = viewModel,
                     onBack = { goBack() },
                     initialPayload = PendingNavigationHolder.get()?.second  // передаём payload для автооткрытия
+                )
+
+                Screen.EmployeeStats -> EmployeeStatsScreen(
+                    viewModel = viewModel,
+                    userId = user?.id ?: "",
+                    onBack = { goBack() }
                 )
             }
         }

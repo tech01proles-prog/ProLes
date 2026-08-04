@@ -99,6 +99,7 @@ fun ProfileScreen(
     onNavigateToMyTrips: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     onNavigateToMyTickets: () -> Unit,  // 🆕
+    onNavigateToStats: () -> Unit,  // 🆕 Статистика сотрудника
     modifier: Modifier = Modifier
 ) {
     val scroll = rememberScrollState()
@@ -315,7 +316,33 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        // 🔹 Кнопка выхода (внизу)
+        // Строка 3: Статистика + Выход
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            NavigationTile(
+                title = "Статистика",
+                subtitle = "Доходы и расходы",
+                emoji = "📊",
+                gradientColors = listOf(Color(0xFF81C784), Color(0xFF64B5F6)),
+                onClick = onNavigateToStats,
+                modifier = Modifier.weight(1f)
+            )
+            // Пустая плашка для симметрии (можно заменить на другую функцию)
+            NavigationTile(
+                title = "Выход",
+                subtitle = "Завершить сессию",
+                emoji = "🚪",
+                gradientColors = listOf(Color(0xFFEF9A9A), Color(0xFFE57373)),
+                onClick = onLogout,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // 🔹 Кнопка выхода (внизу, полная ширина)
         OutlinedButton(
             onClick = onLogout,
             modifier = Modifier

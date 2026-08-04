@@ -21,6 +21,7 @@ import { ManagementPage } from './pages/ManagementPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { CostCalculationPage } from './pages/CostCalculationPage';
 import { EmployeesPage } from './pages/EmployeesPage';
+import { EmployeeStatsPage } from './pages/EmployeeStatsPage';
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
             <Route path="/management" element={<ManagementPage />} />
             <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
             <Route path="/cost-calculation" element={<CostCalculationPage />} />
+            <Route path="/employee-stats" element={<EmployeeStatsPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
