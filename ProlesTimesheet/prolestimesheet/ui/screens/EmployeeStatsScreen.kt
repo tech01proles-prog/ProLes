@@ -23,7 +23,9 @@ import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
-import java.time.YearMonth
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.minus
+import kotlinx.datetime.DateTimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,14 +47,15 @@ fun EmployeeStatsScreen(
     val myIncomes = remember(incomes, userId) { incomes.filter { it.userId == userId } }
 
     // Период (текущий месяц по умолчанию)
-    var selectedPeriod by remember { mutableStateOf<"week" | "month" | "year">("month") }
+    var selectedPeriod by remember { mutableStateOf("month") }
     
     val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
     val cutoffDate = remember(selectedPeriod, today) {
         when (selectedPeriod) {
-            "week" -> today.minusDays(7)
-            "month" -> today.copy(dayOfMonth = 1)
-            "year" -> today.copy(monthNumber = 1, dayOfMonth = 1)
+            "week" -> today.minus(7, DateTimeUnit.DAY)
+            "month" -> LocalDate(today.year, today.monthNumber, 1)
+            "year" -> LocalDate(today.year, 1, 1)
+            else -> LocalDate(today.year, today.monthNumber, 1)
         }
     }
 
