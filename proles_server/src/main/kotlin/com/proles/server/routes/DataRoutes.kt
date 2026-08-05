@@ -1380,7 +1380,6 @@ fun Route.dataRoutes() {
                             city = row[BusinessTripsTable.city],
                             waypoints = runCatching {
                                 json.decodeFromString<List<WaypointDto>>(row[BusinessTripsTable.waypoints])
-                                    .map { WaypointDto(it.order, it.city, it.address) }
                             }.getOrDefault(emptyList()),
                             participants = runCatching {
                                 json.decodeFromString<List<String>>(row[BusinessTripsTable.participants])
@@ -1417,7 +1416,7 @@ fun Route.dataRoutes() {
                         it[participants] = json.encodeToString(trip.participants)
                         it[transport] = trip.transport
                         it[notes] = trip.notes
-                        it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints.map { w -> mapOf("order" to w.order, "city" to w.city, "address" to w.address) })
+                        it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints)
                         it[createdAt] = System.currentTimeMillis()
                     }
                     Pair(trip.copy(id = id.toString()), false)
@@ -1444,7 +1443,7 @@ fun Route.dataRoutes() {
                             it[participants] = json.encodeToString(trip.participants)
                             it[transport] = trip.transport
                             it[notes] = trip.notes
-                            it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints.map { w -> mapOf("order" to w.order, "city" to w.city, "address" to w.address) })
+                            it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints)
                             it[createdAt] = System.currentTimeMillis()
                         }
                         Pair(trip.copy(id = id.toString()), false)
@@ -1465,7 +1464,7 @@ fun Route.dataRoutes() {
                                 it[date] = KtLocalDate.parse(trip.date)
                                 it[transport] = trip.transport
                                 it[participants] = json.encodeToString(trip.participants)
-                                it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints.map { w -> mapOf("order" to w.order, "city" to w.city, "address" to w.address) })
+                                it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints)
                                 if (trip.notes.isNotBlank()) {
                                     it[notes] = trip.notes
                                 }
