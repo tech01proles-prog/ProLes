@@ -1,12 +1,99 @@
-# Dependencies
-node_modules/
-
-# Build outputs
-dist/
+Nothing should be ignored based on the provided file changes, as only a Kotlin source file was modified and no build artifacts, dependencies, or temporary files were detected.
+# Compiled and build artifacts
+*.class
+*.o
+*.obj
+*.out
 build/
 target/
 
-# Python
+# Dependencies
+.gradle/
+lib/
+vendor/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# MyPy
+.mypy_cache/
+
+# Pytest
+```
+# Dependencies
+.gradle/
+build/
+# Compiled and build artifacts
+*.class
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+build/
+dist/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Android Studio
+*.iml
+*.iws
+*.ipr
+.idea/
+captures/
+*.keystore
+*.db
+# Dependencies
+.venv/
+venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.gradle/
+target/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Editors
+.idea/
+.vscode/
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# Python specific
 __pycache__/
 *.pyc
 *.pyo
@@ -16,39 +103,40 @@ env/
 venv/
 .venv/
 .ENV
-.python-version
-.pytest_cache/
-.mypy_cache/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
 .coverage
-
-# Logs
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
 *.log
+.git*
+!.gitignore
+!.editorconfig
+.pytest_cache/
 
-# Environment variables
-.env
-.env.local
-.env.*
-!.env.example
+# Distribution
+dist/
+*.tar.gz
+*.zip
+*.jar
+*.war
 
-# IDE specific
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# OS generated
+# OS specific
 .DS_Store
 Thumbs.db
 
-# Coverage
-coverage/
-htmlcov/
-
-# Compressed files
+# Kotlin/JVM specific
+*.kotlin_metadata
+*.kotlin_built
+!proles_server/src/main/kotlin/com/proles/server/routes/DataRoutes.kt
+# Archives
 *.zip
-*.gz
 *.tar
+*.tar.gz
 *.tgz
 *.bz2
 *.xz
@@ -64,7 +152,4 @@ htmlcov/
 *.Z
 *.lz
 *.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+```
