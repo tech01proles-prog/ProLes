@@ -63,51 +63,64 @@ __pycache__/
 env/
 venv/
 .venv/
+.ENV
 pip-log.txt
 pip-delete-this-directory.txt
 .tox/
-.coverage*
+.coverage
+.coverage.*
 .cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git*
+!.gitignore
+!.editorconfig
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
 
-# Compiled files
-*.class
-*.o
-*.obj
-*.out
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+node_modules/
+dist/
+build/
+.nyc_output
+coverage/
+*.lcov
+.nyc_output/
+coverage/
+coverage-final.json
+
+# Compiled Binary Files
+*.exe
 *.dll
 *.so
 *.a
-*.exe
+*.o
+*.out
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# IDE specific
-.vs/
-*.swp
-*.swo
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
 ```

@@ -805,8 +805,7 @@ private fun WaypointsDragDropList(
                             }
                         },
                         enabled = index > 0,
-                        modifier = Modifier.size(32.dp),
-                        contentPadding = PaddingValues(0.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowUp,
@@ -826,8 +825,7 @@ private fun WaypointsDragDropList(
                             }
                         },
                         enabled = index < waypoints.lastIndex,
-                        modifier = Modifier.size(32.dp),
-                        contentPadding = PaddingValues(0.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
@@ -884,8 +882,7 @@ private fun WaypointsDragDropList(
                 // Кнопка удаления
                 IconButton(
                     onClick = { onRemove(index) },
-                    modifier = Modifier.size(40.dp),
-                    contentPadding = PaddingValues(0.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.DeleteOutline,
