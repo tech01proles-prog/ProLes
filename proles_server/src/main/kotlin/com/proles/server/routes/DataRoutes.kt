@@ -35,6 +35,7 @@ import kotlinx.io.readByteArray
 import com.proles.server.config.PermissionMiddleware
 import com.proles.server.config.PermissionMiddleware.checkPermission  // 🆕 extension-функция
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList  // 🆕
+import org.jetbrains.exposed.dao.id.EntityID  // 🆕 для работы с ID
 
 
 @Serializable
@@ -1379,6 +1380,7 @@ fun Route.dataRoutes() {
                             city = row[BusinessTripsTable.city],
                             waypoints = runCatching {
                                 json.decodeFromString<List<WaypointDto>>(row[BusinessTripsTable.waypoints])
+                                    .map { WaypointDto(it.order, it.city, it.address) }
                             }.getOrDefault(emptyList()),
                             participants = runCatching {
                                 json.decodeFromString<List<String>>(row[BusinessTripsTable.participants])
@@ -1415,7 +1417,7 @@ fun Route.dataRoutes() {
                         it[participants] = json.encodeToString(trip.participants)
                         it[transport] = trip.transport
                         it[notes] = trip.notes
-                        it[waypoints] = json.encodeToString(trip.waypoints)
+                        it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints.map { w -> mapOf("order" to w.order, "city" to w.city, "address" to w.address) })
                         it[createdAt] = System.currentTimeMillis()
                     }
                     Pair(trip.copy(id = id.toString()), false)
@@ -1442,7 +1444,7 @@ fun Route.dataRoutes() {
                             it[participants] = json.encodeToString(trip.participants)
                             it[transport] = trip.transport
                             it[notes] = trip.notes
-                            it[waypoints] = json.encodeToString(trip.waypoints)
+                            it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints.map { w -> mapOf("order" to w.order, "city" to w.city, "address" to w.address) })
                             it[createdAt] = System.currentTimeMillis()
                         }
                         Pair(trip.copy(id = id.toString()), false)
@@ -1463,7 +1465,7 @@ fun Route.dataRoutes() {
                                 it[date] = KtLocalDate.parse(trip.date)
                                 it[transport] = trip.transport
                                 it[participants] = json.encodeToString(trip.participants)
-                                it[waypoints] = json.encodeToString(trip.waypoints)
+                                it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints.map { w -> mapOf("order" to w.order, "city" to w.city, "address" to w.address) })
                                 if (trip.notes.isNotBlank()) {
                                     it[notes] = trip.notes
                                 }
@@ -2281,7 +2283,7 @@ fun Route.dataRoutes() {
                 val companyUser = UsersTable.selectAll()
                     .where { UsersTable.name eq "COMPANY" }
                     .singleOrNull()
-                val companyUserId = companyUser?.let { it[UsersTable.id] }
+                val companyUserId = companyUser?.let { it[UsersTable.id].value }
                 
                 // 📤 Загрузка билета
                 TicketsTable.insert {
