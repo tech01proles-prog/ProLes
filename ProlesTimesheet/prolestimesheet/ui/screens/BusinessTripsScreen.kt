@@ -778,78 +778,126 @@ private fun WaypointsDragDropList(
     onRemove: (Int) -> Unit
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
     ) {
-        waypoints.forEach { waypoint ->
-            val index = waypoints.indexOfFirst { it.id == waypoint.id }
-            WaypointItem(
-                waypoint = waypoint,
-                index = index,
-                onValueChange = { updated ->
-                    val newWaypoints = waypoints.toMutableList()
-                    newWaypoints[index] = updated
-                    onReorder(newWaypoints)
-                },
-                onRemove = { onRemove(index) }
-            )
-        }
-    }
-}
+        waypoints.forEachIndexed { index, waypoint ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Кнопки управления порядком
+                Column(
+                    modifier = Modifier.padding(end = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    IconButton(
+                        onClick = { 
+                            if (index > 0) {
+                                val newList = waypoints.toMutableList()
+                                val temp = newList[index - 1]
+                                newList[index - 1] = newList[index]
+                                newList[index] = temp
+                                onReorder(newList)
+                            }
+                        },
+                        enabled = index > 0,
+                        modifier = Modifier.size(32.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Вверх",
+                            tint = if (index > 0) MaterialTheme.colorScheme.primary else Color.Gray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { 
+                            if (index < waypoints.lastIndex) {
+                                val newList = waypoints.toMutableList()
+                                val temp = newList[index + 1]
+                                newList[index + 1] = newList[index]
+                                newList[index] = temp
+                                onReorder(newList)
+                            }
+                        },
+                        enabled = index < waypoints.lastIndex,
+                        modifier = Modifier.size(32.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Вниз",
+                            tint = if (index < waypoints.lastIndex) MaterialTheme.colorScheme.primary else Color.Gray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun WaypointItem(
-    waypoint: Waypoint,
-    index: Int,
-    onValueChange: (Waypoint) -> Unit,
-    onRemove: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(8.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                "#${index + 1}",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(30.dp)
-            )
-            
-            Column(Modifier.weight(1f)) {
-                OutlinedTextField(
-                    value = waypoint.city,
-                    onValueChange = { onValueChange(waypoint.copy(city = it)) },
-                    label = { Text("Город") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodySmall
-                )
-                Spacer(Modifier.height(4.dp))
-                OutlinedTextField(
-                    value = waypoint.address,
-                    onValueChange = { onValueChange(waypoint.copy(address = it)) },
-                    label = { Text("Адрес") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodySmall
-                )
+                // Поля ввода (компактные)
+                Column(modifier = Modifier.weight(1f)) {
+                    OutlinedTextField(
+                        value = waypoint.city,
+                        onValueChange = { onReorder(waypoints.mapIndexed { i, w -> 
+                            if (i == index) w.copy(city = it) else w 
+                        }) },
+                        label = { Text("Город", fontSize = 10.sp) },
+                        placeholder = { Text("Например: Москва") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                        ),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    OutlinedTextField(
+                        value = waypoint.address,
+                        onValueChange = { onReorder(waypoints.mapIndexed { i, w -> 
+                            if (i == index) w.copy(address = it) else w 
+                        }) },
+                        label = { Text("Адрес/Объект", fontSize = 10.sp) },
+                        placeholder = { Text("Улица, дом, офис") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                        ),
+                        singleLine = true
+                    )
+                }
+
+                // Кнопка удаления
+                IconButton(
+                    onClick = { onRemove(index) },
+                    modifier = Modifier.size(40.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = "Удалить пункт",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
-            
-            IconButton(onClick = onRemove) {
-                Icon(
-                    Icons.Default.Delete,
-                    "Удалить",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
-                )
+            // Разделитель между пунктами, если не последний
+            if (index < waypoints.lastIndex) {
+                Divider(modifier = Modifier.padding(vertical = 2.dp), color = Color.LightGray.copy(alpha = 0.3f))
             }
         }
     }

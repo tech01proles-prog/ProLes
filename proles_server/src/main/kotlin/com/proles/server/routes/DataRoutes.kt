@@ -277,9 +277,17 @@ fun Route.dataRoutes() {
                 call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}"); return@put
             }
 
+            // 🔥 ЗАПРЕТ: нельзя добавлять часы за будущие даты
+            val entryDate = KtLocalDate.parse(entry.date)
+            val today = java.time.LocalDate.now()
+            val entryJavaDate = java.time.LocalDate.of(entryDate.year, entryDate.monthNumber, entryDate.dayOfMonth)
+            if (entryJavaDate > today) {
+                call.respond(HttpStatusCode.BadRequest, "Нельзя добавлять часы за будущие даты")
+                return@put
+            }
+
             val userId = UUID.fromString(entry.userId)
             val projectId = UUID.fromString(entry.projectId)
-            val entryDate = KtLocalDate.parse(entry.date)
 
             // 🔥 Возвращаем из транзакции и данные, и флаг "было ли обновление"
             val result = transaction {
