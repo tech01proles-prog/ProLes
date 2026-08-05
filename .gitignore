@@ -1,3 +1,41 @@
+# Compiled and build artifacts
+*.class
+*.o
+*.obj
+*.out
+build/
+target/
+
+# Dependencies
+.gradle/
+lib/
+vendor/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# MyPy
+.mypy_cache/
+
+# Pytest
 ```
 # Dependencies
 .gradle/
@@ -78,32 +116,22 @@ coverage.xml
 !.gitignore
 !.editorconfig
 .pytest_cache/
-.mypy_cache/
-.hypothesis/
 
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-node_modules/
+# Distribution
 dist/
-build/
-.nyc_output
-coverage/
-*.lcov
-.nyc_output/
-coverage/
-coverage-final.json
+*.tar.gz
+*.zip
+*.jar
+*.war
 
-# Compiled Binary Files
-*.exe
-*.dll
-*.so
-*.a
-*.o
-*.out
+# OS specific
+.DS_Store
+Thumbs.db
 
+# Kotlin/JVM specific
+*.kotlin_metadata
+*.kotlin_built
+!proles_server/src/main/kotlin/com/proles/server/routes/DataRoutes.kt
 # Archives
 *.zip
 *.tar
