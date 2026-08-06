@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import type { UserDto, RoleDto, RolePermissionDto, UserEffectivePermissionDto, ExpenseDto, IncomeDto, BusinessTripDto, TimeEntryDto } from '../types';
-import { generateUUID } from '../lib/utils';
+import { generateUUID, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import { createPortal } from 'react-dom';
 
@@ -150,21 +150,17 @@ export function AdminPage() {
 
         const [hoursRes, expensesRes, incomesRes, tripsRes] = await Promise.allSettled([
           api.get<TimeEntryDto[]>(`/timesheet?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
-          can('expenses_all', 'view') 
-            ? api.get<ExpenseDto[]>(`/expenses?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`)
-            : api.get<ExpenseDto[]>(`/expenses?userId=${profileUser.id}`),
-          can('expenses_all', 'view')
-            ? api.get<IncomeDto[]>(`/incomes?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`)
-            : api.get<IncomeDto[]>(`/incomes?userId=${profileUser.id}`),
-          api.get<BusinessTripDto[]>(`/business-trips?userId=${profileUser.id}`),
+          api.get<ExpenseDto[]>(`/expenses?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          api.get<IncomeDto[]>(`/incomes?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          api.get<BusinessTripDto[]>(`/business-trips?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
         ]);
 
-        const hours = hoursRes.status === 'fulfilled' ? hoursRes.value.data.length : 0;
-        const expenses = expensesRes.status === 'fulfilled' 
-          ? expensesRes.value.data.filter(e => e.date >= dateFrom && e.date <= dateTo).reduce((sum, e) => sum + e.amount, 0) 
+        const hours = hoursRes.status === 'fulfilled' ? hoursRes.value.data.reduce((sum, h) => sum + h.hours, 0) : 0;
+        const expenses = expensesRes.status === 'fulfilled'
+          ? expensesRes.value.data.reduce((sum, e) => sum + e.amount, 0)
           : 0;
         const incomes = incomesRes.status === 'fulfilled'
-          ? incomesRes.value.data.filter(i => i.date >= dateFrom && i.date <= dateTo).reduce((sum, i) => sum + i.amount, 0)
+          ? incomesRes.value.data.reduce((sum, i) => sum + i.amount, 0)
           : 0;
         const trips = tripsRes.status === 'fulfilled' ? tripsRes.value.data.length : 0;
 
@@ -828,7 +824,13 @@ export function AdminPage() {
               <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Переходы</h3>
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => { setProfileUser(null); navigate(`/hours-calendar?userId=${profileUser.id}`); }}
+                  onClick={() => { 
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    setProfileUser(null); 
+                    navigate(`/hours-calendar?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31`); 
+                  }}
                   className="flex items-center gap-2 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all text-left"
                 >
                   <span className="text-lg">⏱</span>
@@ -870,7 +872,13 @@ export function AdminPage() {
                   </div>
                 </button>
                 <button
-                  onClick={() => { setProfileUser(null); navigate(`/trips?userId=${profileUser.id}`); }}
+                  onClick={() => { 
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    setProfileUser(null);
+                    navigate(`/trips?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31`); 
+                  }}
                   className="flex items-center gap-2 p-2 rounded-lg bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-800 hover:border-cyan-400 dark:hover:border-cyan-600 transition-all text-left"
                 >
                   <span className="text-lg">🚆</span>
