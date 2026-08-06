@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/client';
-import type { UserDto, RoleDto, RolePermissionDto, UserEffectivePermissionDto } from '../types';
+import type { UserDto, RoleDto, RolePermissionDto, UserEffectivePermissionDto, ExpenseDto, IncomeDto, BusinessTripDto, TimeEntryDto } from '../types';
 import { generateUUID } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import { createPortal } from 'react-dom';
@@ -51,6 +51,14 @@ export function AdminPage() {
   const [editingRole, setEditingRole] = useState<RoleDto | null>(null);
   const [overrideUser, setOverrideUser] = useState<UserDto | null>(null);
   const [profileUser, setProfileUser] = useState<UserDto | null>(null);
+
+  // Статистика для модального окна профиля
+  const [profileStats, setProfileStats] = useState<{ hours: number; expenses: number; incomes: number; trips: number } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsMonth, setStatsMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   // Форма создания сотрудника
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -126,6 +134,51 @@ export function AdminPage() {
       .catch(err => console.error(err))
       .finally(() => setOverrideLoading(false));
   }, [overrideUser]);
+
+  // Загрузка статистики профиля при открытии модального окна или смене месяца
+  useEffect(() => {
+    if (!profileUser) return;
+    
+    const loadStats = async () => {
+      setStatsLoading(true);
+      try {
+        const year = parseInt(statsMonth.split('-')[0]);
+        const month = parseInt(statsMonth.split('-')[1]);
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const dateFrom = `${statsMonth}-01`;
+        const dateTo = `${statsMonth}-${String(daysInMonth).padStart(2, '0')}`;
+
+        const [hoursRes, expensesRes, incomesRes, tripsRes] = await Promise.allSettled([
+          api.get<TimeEntryDto[]>(`/timesheet?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          can('expenses_all', 'view') 
+            ? api.get<ExpenseDto[]>(`/expenses?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`)
+            : api.get<ExpenseDto[]>(`/expenses?userId=${profileUser.id}`),
+          can('expenses_all', 'view')
+            ? api.get<IncomeDto[]>(`/incomes?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`)
+            : api.get<IncomeDto[]>(`/incomes?userId=${profileUser.id}`),
+          api.get<BusinessTripDto[]>(`/business-trips?userId=${profileUser.id}`),
+        ]);
+
+        const hours = hoursRes.status === 'fulfilled' ? hoursRes.value.data.length : 0;
+        const expenses = expensesRes.status === 'fulfilled' 
+          ? expensesRes.value.data.filter(e => e.date >= dateFrom && e.date <= dateTo).reduce((sum, e) => sum + e.amount, 0) 
+          : 0;
+        const incomes = incomesRes.status === 'fulfilled'
+          ? incomesRes.value.data.filter(i => i.date >= dateFrom && i.date <= dateTo).reduce((sum, i) => sum + i.amount, 0)
+          : 0;
+        const trips = tripsRes.status === 'fulfilled' ? tripsRes.value.data.length : 0;
+
+        setProfileStats({ hours, expenses, incomes, trips });
+      } catch (err) {
+        console.error('Ошибка загрузки статистики:', err);
+        setProfileStats({ hours: 0, expenses: 0, incomes: 0, trips: 0 });
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    loadStats();
+  }, [profileUser, statsMonth, can]);
 
   // ═══════════════════════════════════════════════════════
   // ✏️ Действия
@@ -705,27 +758,67 @@ export function AdminPage() {
 
             {/* Подробная статистика сотрудника */}
             <div className="space-y-4 mb-6">
-              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Статистика</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Статистика</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const [year, month] = statsMonth.split('-').map(Number);
+                      const prevMonth = new Date(year, month - 2, 1);
+                      setStatsMonth(`${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`);
+                    }}
+                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                    disabled={statsLoading}
+                  >
+                    ◀
+                  </button>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {new Date(statsMonth + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const [year, month] = statsMonth.split('-').map(Number);
+                      const nextMonth = new Date(year, month, 1);
+                      const now = new Date();
+                      if (nextMonth <= now) {
+                        setStatsMonth(`${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`);
+                      }
+                    }}
+                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                    disabled={statsLoading || new Date(statsMonth + '-01') >= new Date(new Date().getFullYear(), new Date().getMonth(), 1)}
+                  >
+                    ▶
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="card p-3 text-center">
                   <div className="text-2xl mb-1">⏱</div>
                   <div className="text-xs text-slate-500">Часы</div>
-                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">
+                    {statsLoading ? '⏳' : profileStats ? profileStats.hours : '—'}
+                  </div>
                 </div>
                 <div className="card p-3 text-center">
                   <div className="text-2xl mb-1">💸</div>
                   <div className="text-xs text-slate-500">Расходы</div>
-                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">
+                    {statsLoading ? '⏳' : profileStats ? formatMoney(profileStats.expenses) : '—'}
+                  </div>
                 </div>
                 <div className="card p-3 text-center">
                   <div className="text-2xl mb-1">💵</div>
                   <div className="text-xs text-slate-500">Доходы</div>
-                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">
+                    {statsLoading ? '⏳' : profileStats ? formatMoney(profileStats.incomes) : '—'}
+                  </div>
                 </div>
                 <div className="card p-3 text-center">
                   <div className="text-2xl mb-1">🚆</div>
                   <div className="text-xs text-slate-500">Командировки</div>
-                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">
+                    {statsLoading ? '⏳' : profileStats ? profileStats.trips : '—'}
+                  </div>
                 </div>
               </div>
             </div>

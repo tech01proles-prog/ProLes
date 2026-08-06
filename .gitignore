@@ -8,10 +8,10 @@ build/
 *.js.map
 *.tsbuildinfo
 
-# Environment
+# Environment variables
 .env
 .env.local
-.env.*
+*.env.*
 
 # Editors
 .vscode/
@@ -19,39 +19,37 @@ build/
 *.swp
 *.swo
 
-# Logs
+# Logs and temporary files
 *.log
+*.tmp
 
-# Coverage
+# Coverage reports
 coverage/
 htmlcov/
-.coverage
 
-# Python
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Python specific
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage*
-.nox/
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
+*.so
+.coverage
 
-# Temporary files
-*.tmp
-*.temp
-.DS_Store
-Thumbs.db
+# Compiled Binary files
+*.exe
+*.dll
+*.so
+*.a
+*.o
+*.obj
+*.out
 
-# Compression
+# Compressed files
 *.zip
 *.gz
 *.tar

@@ -41,6 +41,13 @@ export function ExpensesPage() {
   const [filterProject, setFilterProject] = useState('all');
   const [filterType, setFilterType] = useState('all');
   
+  // Состояние формы
+  const [form, setForm] = useState({ projectId: '', date: new Date().toISOString().split('T')[0], type: 'OTHER', amount: '', currency: 'RUB', name: '' });
+  const [saving, setSaving] = useState(false);
+  const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedExpenseForReceipt, setSelectedExpenseForReceipt] = useState<string | null>(null);
+  
   // Фильтр по датам
   const now = new Date();
   const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
@@ -335,8 +342,8 @@ export function ExpensesPage() {
                   ) : (
                     <>
                       <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadReceipt(expense.id, f); e.target.value = ''; }} />
-                      <button onClick={() => fileInputRef.current?.click()} disabled={uploadingReceipt === expense.id}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f && selectedExpenseForReceipt) { handleUploadReceipt(selectedExpenseForReceipt, f); } e.target.value = ''; setSelectedExpenseForReceipt(null); }} />
+                      <button onClick={() => { setSelectedExpenseForReceipt(expense.id); fileInputRef.current?.click(); }} disabled={uploadingReceipt === expense.id}
                         className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 px-2 py-1 rounded-lg">
                         {uploadingReceipt === expense.id ? '⏳...' : '📷 Чек'}
                       </button>
