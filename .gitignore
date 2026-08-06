@@ -22,121 +22,44 @@ vendor/
 .env.local
 *.env.*
 
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# MyPy
-.mypy_cache/
-
-# Pytest
-```
-# Dependencies
-.gradle/
-build/
-# Compiled and build artifacts
-*.class
-*.o
-*.obj
-*.exe
-*.dll
-*.so
-*.a
-*.out
-build/
-dist/
-
-# Local configuration file (sdk path, etc)
-local.properties
-
-# Android Studio
-*.iml
-*.iws
-*.ipr
-.idea/
-captures/
-*.keystore
-*.db
-# Dependencies
-.venv/
-venv/
-__pycache__/
-.mypy_cache/
-.pytest_cache/
-.gradle/
-target/
-
 # Logs and temp files
 *.log
 *.tmp
-*.swp
-*.swo
-
-# Environment
-.env
-.env.local
-.env.*
 
 # Editors
+.vscode/
 .idea/
 .vscode/
 
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
-
-# Python specific
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
 venv/
 .venv/
-.ENV
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git*
-!.gitignore
-!.editorconfig
-.pytest_cache/
+env/
+ENV/
 
-# Distribution
+# Build outputs
 dist/
-*.tar.gz
-*.zip
-*.jar
-*.war
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage/
+htmlcov/
 
-# OS specific
+# OS generated files
 .DS_Store
 Thumbs.db
 
-# Kotlin/JVM specific
-*.kotlin_metadata
-*.kotlin_built
-!proles_server/src/main/kotlin/com/proles/server/routes/DataRoutes.kt
-# Archives
+# Compressed files
 *.zip
+*.gz
 *.tar
-*.tar.gz
 *.tgz
 *.bz2
 *.xz
@@ -152,4 +75,8 @@ Thumbs.db
 *.Z
 *.lz
 *.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```
