@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
 import type { ExpenseDto, ProjectDto, UserDto } from '../types';
@@ -19,6 +20,7 @@ const EXPENSE_TYPES = [
 ];
 
 export function ExpensesPage() {
+  const [searchParams] = useSearchParams();
   const [user, setUser] = useState<UserDto | null>(null);
   const { can } = usePermissions();
   const canViewAll = can('expenses_all', 'view');
@@ -35,14 +37,19 @@ export function ExpensesPage() {
   const [showForm, setShowForm] = useState(false);
   const [sortField, setSortField] = useState<'date' | 'amount'>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [filterUser, setFilterUser] = useState('all');
+  const [filterUser, setFilterUser] = useState(searchParams.get('userId') || 'all');
   const [filterProject, setFilterProject] = useState('all');
   const [filterType, setFilterType] = useState('all');
-
-  const [form, setForm] = useState({ projectId: '', date: new Date().toISOString().slice(0, 10), type: 'OTHER', name: '', amount: '', currency: 'RUB' });
-  const [saving, setSaving] = useState(false);
-  const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Фильтр по датам
+  const now = new Date();
+  const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const currentMonthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-31`;
+  const [dateFrom, setDateFrom] = useState(searchParams.get('dateFrom') || currentMonthStart);
+  const [dateTo, setDateTo] = useState(searchParams.get('dateTo') || currentMonthEnd);
+  const [datePreset, setDatePreset] = useState<'current' | 'last' | 'custom'>(
+    searchParams.get('dateFrom') ? 'custom' : 'current'
+  );
 
   useEffect(() => {
     const stored = localStorage.getItem('proles_user');
@@ -75,6 +82,7 @@ export function ExpensesPage() {
     .filter(e => effectiveScope !== 'all' || filterUser === 'all' || e.userId === filterUser)
     .filter(e => effectiveScope !== 'all' || filterProject === 'all' || e.projectId === filterProject)
     .filter(e => effectiveScope !== 'all' || filterType === 'all' || e.type === filterType)
+    .filter(e => e.date >= dateFrom && e.date <= dateTo)
     .sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
       return sortField === 'date' ? a.date.localeCompare(b.date) * dir : (a.amount - b.amount) * dir;
@@ -209,9 +217,60 @@ export function ExpensesPage() {
         document.body
       )}
 
-      {/* Фильтры — только в режиме «Все» */}
-      {effectiveScope === 'all' && (
-        <div className="card p-4 animate-fade-in">
+      {/* Фильтры */}
+      <div className="card p-4 animate-fade-in">
+        {/* Предустановки дат */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            onClick={() => {
+              const now = new Date();
+              const year = now.getFullYear();
+              const month = String(now.getMonth() + 1).padStart(2, '0');
+              setDateFrom(`${year}-${month}-01`);
+              setDateTo(`${year}-${month}-31`);
+              setDatePreset('current');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${datePreset === 'current' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}
+          >
+            Текущий месяц
+          </button>
+          <button
+            onClick={() => {
+              const now = new Date();
+              const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+              const year = lastMonth.getFullYear();
+              const month = String(lastMonth.getMonth() + 1).padStart(2, '0');
+              const lastDay = new Date(year, lastMonth.getMonth() + 1, 0).getDate();
+              setDateFrom(`${year}-${month}-01`);
+              setDateTo(`${year}-${month}-${lastDay}`);
+              setDatePreset('last');
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${datePreset === 'last' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}
+          >
+            Прошлый месяц
+          </button>
+          <button
+            onClick={() => setDatePreset('custom')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${datePreset === 'custom' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}
+          >
+            Произвольный
+          </button>
+        </div>
+        
+        {/* Поля ввода дат */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <div>
+            <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">С даты</label>
+            <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setDatePreset('custom'); }} className="input text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">По дату</label>
+            <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setDatePreset('custom'); }} className="input text-sm" />
+          </div>
+        </div>
+
+        {/* Остальные фильтры — только в режиме «Все» */}
+        {effectiveScope === 'all' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <select value={filterUser} onChange={(e) => setFilterUser(e.target.value)} className="input bg-white dark:bg-slate-900">
               <option value="all">Все сотрудники</option>
@@ -226,8 +285,8 @@ export function ExpensesPage() {
               {EXPENSE_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Сортировка */}
       <div className="flex gap-2">
