@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
 import type { UserDto } from '../types';
@@ -6,6 +7,7 @@ import { generateUUID } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 
 export function EmployeesPage() {
+  const navigate = useNavigate();
   const { can, loading: permLoading } = usePermissions();
   const canView = !permLoading && can('employees', 'view');
   const canCreate = !permLoading && can('employees', 'create');
@@ -18,6 +20,7 @@ export function EmployeesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<UserDto | null>(null);
   const [saving, setSaving] = useState(false);
+  const [profileUser, setProfileUser] = useState<UserDto | null>(null);
 
   const [form, setForm] = useState({
     firstName: '',
@@ -185,7 +188,11 @@ export function EmployeesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(user => (
-            <div key={user.id} className="card p-5 group hover:shadow-md transition-all">
+            <div 
+              key={user.id} 
+              className="card p-5 group hover:shadow-md transition-all cursor-pointer"
+              onClick={() => setProfileUser(user)}
+            >
               <div className="flex items-start gap-3 mb-3">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-lg font-bold flex-shrink-0">
                   {user.name.charAt(0)}
@@ -198,7 +205,7 @@ export function EmployeesPage() {
                   )}
                 </div>
               </div>
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800" onClick={(e) => e.stopPropagation()}>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${ROLE_COLORS[user.role] || ROLE_COLORS.employee}`}>
                   {user.role}
                 </span>
@@ -360,6 +367,116 @@ export function EmployeesPage() {
         </div>,
         document.body
       )}
+
+      {/* ═══════════ МОДАЛКА: МИНИ-ПРОФИЛЬ (как в AdminPage) ═══════════ */}
+      {profileUser && createPortal(
+        <div className="fixed inset-0 top-0 left-0 z-[9999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setProfileUser(null)} />
+          <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 animate-fade-in border border-slate-200 dark:border-slate-700">
+            <button onClick={() => setProfileUser(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl">✕</button>
+
+            {/* Заголовок профиля */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                {profileUser.name.charAt(0)}
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{profileUser.name}</h2>
+                <div className="text-sm text-slate-500 dark:text-slate-400">{profileUser.position || 'Без должности'}</div>
+                <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${ROLE_COLORS[profileUser.role] || ROLE_COLORS.employee}`}>
+                  {profileUser.role}
+                </span>
+              </div>
+            </div>
+
+            {/* Подробная статистика сотрудника */}
+            <div className="space-y-4 mb-6">
+              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Статистика</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="card p-3 text-center">
+                  <div className="text-2xl mb-1">⏱</div>
+                  <div className="text-xs text-slate-500">Часы</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                </div>
+                <div className="card p-3 text-center">
+                  <div className="text-2xl mb-1">💸</div>
+                  <div className="text-xs text-slate-500">Расходы</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                </div>
+                <div className="card p-3 text-center">
+                  <div className="text-2xl mb-1">💵</div>
+                  <div className="text-xs text-slate-500">Доходы</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                </div>
+                <div className="card p-3 text-center">
+                  <div className="text-2xl mb-1">🚆</div>
+                  <div className="text-xs text-slate-500">Командировки</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Кнопки быстрого перехода - компактный вид */}
+            <div className="space-y-2 mb-4">
+              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Переходы</h3>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => { setProfileUser(null); navigate(`/hours-calendar?userId=${profileUser.id}`); }}
+                  className="flex items-center gap-2 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all text-left"
+                >
+                  <span className="text-lg">⏱</span>
+                  <div className="text-xs">
+                    <div className="font-bold text-slate-900 dark:text-slate-100">Часы</div>
+                    <div className="text-[10px] text-slate-500">Календарь</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => { 
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    setProfileUser(null); 
+                    navigate(`/expenses?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31`); 
+                  }}
+                  className="flex items-center gap-2 p-2 rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 hover:border-orange-400 dark:hover:border-orange-600 transition-all text-left"
+                >
+                  <span className="text-lg">💸</span>
+                  <div className="text-xs">
+                    <div className="font-bold text-slate-900 dark:text-slate-100">Расходы</div>
+                    <div className="text-[10px] text-slate-500">Текущий месяц</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => { 
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    setProfileUser(null); 
+                    navigate(`/incomes?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31`); 
+                  }}
+                  className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 transition-all text-left"
+                >
+                  <span className="text-lg">💵</span>
+                  <div className="text-xs">
+                    <div className="font-bold text-slate-900 dark:text-slate-100">Доходы</div>
+                    <div className="text-[10px] text-slate-500">Текущий месяц</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => { setProfileUser(null); navigate(`/trips?userId=${profileUser.id}`); }}
+                  className="flex items-center gap-2 p-2 rounded-lg bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-800 hover:border-cyan-400 dark:hover:border-cyan-600 transition-all text-left"
+                >
+                  <span className="text-lg">🚆</span>
+                  <div className="text-xs">
+                    <div className="font-bold text-slate-900 dark:text-slate-100">Команд.</div>
+                    <div className="text-[10px] text-slate-500">Поездки</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      , document.body)}
     </div>
   );
 }
