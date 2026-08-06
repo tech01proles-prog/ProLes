@@ -8,7 +8,7 @@ build/
 *.js.map
 *.tsbuildinfo
 
-# Environment variables
+# Environment
 .env
 .env.local
 *.env.*
@@ -19,13 +19,13 @@ build/
 *.swp
 *.swo
 
-# Logs and temporary files
+# Logs
 *.log
-*.tmp
 
-# Coverage reports
+# Coverage
 coverage/
 htmlcov/
+*.coverage
 
 # OS generated files
 .DS_Store
@@ -38,38 +38,12 @@ __pycache__/
 *.pyd
 .Python
 *.so
-.coverage
+*.egg-info/
+.eggs/
 
-# Compiled Binary files
-*.exe
-*.dll
-*.so
-*.a
-*.o
-*.obj
-*.out
-
-# Compressed files
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+# Temporary files
+*.tmp
+*.temp
+*~
+.DS_Store
 ```

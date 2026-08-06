@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
-import type { UserDto } from '../types';
-import { generateUUID } from '../lib/utils';
+import type { UserDto, ExpenseDto, IncomeDto, BusinessTripDto, TimeEntryDto } from '../types';
+import { generateUUID, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 
 export function EmployeesPage() {
@@ -21,6 +21,12 @@ export function EmployeesPage() {
   const [editingUser, setEditingUser] = useState<UserDto | null>(null);
   const [saving, setSaving] = useState(false);
   const [profileUser, setProfileUser] = useState<UserDto | null>(null);
+  const [profileStats, setProfileStats] = useState<{ hours: number; expenses: number; incomes: number; trips: number } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsMonth, setStatsMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   const [form, setForm] = useState({
     firstName: '',
@@ -129,6 +135,49 @@ export function EmployeesPage() {
     u.login.toLowerCase().includes(search.toLowerCase()) ||
     u.position.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Загрузка статистики для профиля
+  useEffect(() => {
+    if (!profileUser) return;
+
+    const loadProfileStats = async () => {
+      setStatsLoading(true);
+      try {
+        const year = parseInt(statsMonth.split('-')[0]);
+        const month = parseInt(statsMonth.split('-')[1]);
+        const daysInMonth = new Date(year, month, 0).getDate();
+        
+        const dateFrom = `${statsMonth}-01`;
+        const dateTo = `${statsMonth}-${String(daysInMonth).padStart(2, '0')}`;
+
+        const [timesheet, expenses, incomes, trips] = await Promise.all([
+          api.get<TimeEntryDto[]>(`/timesheet?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          api.get<ExpenseDto[]>(`/expenses?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          api.get<IncomeDto[]>(`/incomes?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          api.get<BusinessTripDto[]>(`/business-trips?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+        ]);
+
+        const totalHours = timesheet.data.reduce((sum, e) => sum + (e.hours || 0), 0);
+        const totalExpenses = expenses.data.reduce((sum, e) => sum + (e.amountRub || 0), 0);
+        const totalIncomes = incomes.data.reduce((sum, e) => sum + (e.amountRub || 0), 0);
+        const totalTrips = trips.data.length;
+
+        setProfileStats({
+          hours: Math.round(totalHours),
+          expenses: totalExpenses,
+          incomes: totalIncomes,
+          trips: totalTrips,
+        });
+      } catch (err) {
+        console.error('Ошибка загрузки статистики профиля:', err);
+        setProfileStats(null);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    loadProfileStats();
+  }, [profileUser, statsMonth]);
 
   const ROLE_COLORS: Record<string, string> = {
     superadmin: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-900',
@@ -391,27 +440,67 @@ export function EmployeesPage() {
 
             {/* Подробная статистика сотрудника */}
             <div className="space-y-4 mb-6">
-              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Статистика</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Статистика</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const [year, month] = statsMonth.split('-').map(Number);
+                      const prevMonth = new Date(year, month - 2, 1);
+                      setStatsMonth(`${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`);
+                    }}
+                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                    disabled={statsLoading}
+                  >
+                    ◀
+                  </button>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {new Date(statsMonth + '-01').toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const [year, month] = statsMonth.split('-').map(Number);
+                      const nextMonth = new Date(year, month, 1);
+                      const now = new Date();
+                      if (nextMonth <= now) {
+                        setStatsMonth(`${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`);
+                      }
+                    }}
+                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                    disabled={statsLoading || new Date(statsMonth + '-01') >= new Date(new Date().getFullYear(), new Date().getMonth(), 1)}
+                  >
+                    ▶
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="card p-3 text-center">
                   <div className="text-2xl mb-1">⏱</div>
                   <div className="text-xs text-slate-500">Часы</div>
-                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">
+                    {statsLoading ? '⏳' : profileStats ? profileStats.hours : '—'}
+                  </div>
                 </div>
                 <div className="card p-3 text-center">
                   <div className="text-2xl mb-1">💸</div>
                   <div className="text-xs text-slate-500">Расходы</div>
-                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">
+                    {statsLoading ? '⏳' : profileStats ? formatMoney(profileStats.expenses) : '—'}
+                  </div>
                 </div>
                 <div className="card p-3 text-center">
                   <div className="text-2xl mb-1">💵</div>
                   <div className="text-xs text-slate-500">Доходы</div>
-                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">
+                    {statsLoading ? '⏳' : profileStats ? formatMoney(profileStats.incomes) : '—'}
+                  </div>
                 </div>
                 <div className="card p-3 text-center">
                   <div className="text-2xl mb-1">🚆</div>
                   <div className="text-xs text-slate-500">Командировки</div>
-                  <div className="font-bold text-slate-900 dark:text-slate-100">—</div>
+                  <div className="font-bold text-slate-900 dark:text-slate-100">
+                    {statsLoading ? '⏳' : profileStats ? profileStats.trips : '—'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -422,7 +511,13 @@ export function EmployeesPage() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => { setProfileUser(null); navigate(`/hours-calendar?userId=${profileUser.id}`); }}
-                  className="flex items-center gap-2 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all text-left"
+                  onClick={() => {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    setProfileUser(null);
+                    navigate(`/hours-calendar?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31`);
+                  }}
                 >
                   <span className="text-lg">⏱</span>
                   <div className="text-xs">
@@ -463,7 +558,13 @@ export function EmployeesPage() {
                   </div>
                 </button>
                 <button
-                  onClick={() => { setProfileUser(null); navigate(`/trips?userId=${profileUser.id}`); }}
+                  onClick={() => {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    setProfileUser(null);
+                    navigate(`/trips?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31`);
+                  }}
                   className="flex items-center gap-2 p-2 rounded-lg bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-800 hover:border-cyan-400 dark:hover:border-cyan-600 transition-all text-left"
                 >
                   <span className="text-lg">🚆</span>
