@@ -17,15 +17,20 @@ export function NotificationBell() {
 
   const loadNotifications = async () => {
     try {
-      const { data } = await api.get<NotificationDto[]>('/notifications');
-      setNotifications(data);
+      const response = await api.get('/notifications');
+      // Обрабатываем разные возможные форматы ответа
+      const data = Array.isArray(response.data)
+        ? response.data
+        : (response.data?.notifications || response.data?.items || []);
+      setNotifications(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load notifications', err);
+      setNotifications([]); // Гарантируем массив даже при ошибке
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-  const recent = notifications.slice(0, 5);
+  const unreadCount = Array.isArray(notifications) ? notifications.filter(n => !n.isRead).length : 0;
+  const recent = Array.isArray(notifications) ? notifications.slice(0, 5) : [];
 
   const handleMarkRead = async (id: string) => {
     await api.post('/notifications/mark-read', { id });
