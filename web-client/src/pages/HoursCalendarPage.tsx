@@ -44,6 +44,7 @@ export function HoursCalendarPage() {
   const [calYear, setCalYear] = useState(now.getFullYear());
   const [calMonth, setCalMonth] = useState(now.getMonth());
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'month' | 'day'>('month');
   const [selectedDate, setSelectedDate] = useState<string>(now.toISOString().slice(0, 10));
@@ -78,9 +79,10 @@ export function HoursCalendarPage() {
     return entries.filter(e => {
       if (!e.date.startsWith(calMonthStr)) return false;
       if (selectedUserIds.size > 0 && !selectedUserIds.has(e.userId)) return false;
+      if (selectedProjectIds.size > 0 && !selectedProjectIds.has(e.projectId)) return false;
       return true;
     });
-  }, [entries, calMonthStr, selectedUserIds]);
+  }, [entries, calMonthStr, selectedUserIds, selectedProjectIds]);
 
   const filteredDayOffs = useMemo(() => {
     return dayOffs.filter(d => {
@@ -143,7 +145,19 @@ export function HoursCalendarPage() {
     });
   };
 
-  const resetFilter = () => setSelectedUserIds(new Set());
+  const toggleProject = (projectId: string) => {
+    setSelectedProjectIds(prev => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  };
+
+  const resetFilter = () => {
+    setSelectedUserIds(new Set());
+    setSelectedProjectIds(new Set());
+  };
 
   // 📊 Статистика: зависит от режима
   const dayEntries = filteredEntries.filter(e => e.date === selectedDate);
@@ -234,43 +248,69 @@ export function HoursCalendarPage() {
         </div>
       </div>
 
-      {/* Фильтры по сотрудникам */}
+      {/* Фильтры по сотрудникам и проектам */}
       {showFilters && (
         <div className="card p-4 animate-fade-in">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Выберите сотрудников:</h3>
-            {selectedUserIds.size > 0 && (
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Фильтры:</h3>
+            {(selectedUserIds.size > 0 || selectedProjectIds.size > 0) && (
               <button onClick={resetFilter} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                Сбросить
+                Сбросить всё
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-60 overflow-y-auto">
-            {users.map(u => (
-              <label key={u.id} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer text-sm transition-all ${
-                selectedUserIds.has(u.id)
-                  ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-300 dark:ring-indigo-700'
-                  : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-              }`}>
-                <input type="checkbox" checked={selectedUserIds.has(u.id)} onChange={() => toggleUser(u.id)} className="rounded accent-indigo-600" />
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: getUserColor(u.id) }} />
-                <span className="truncate">{u.name}</span>
-              </label>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Сотрудники */}
+            <div>
+              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+                <span>👤</span> Сотрудники ({selectedUserIds.size})
+              </h4>
+              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto p-1">
+                {users.map(u => (
+                  <label key={u.id} className={`flex items-center gap-1.5 p-1.5 rounded-lg cursor-pointer text-xs transition-all ${
+                    selectedUserIds.has(u.id)
+                      ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-300 dark:ring-indigo-700'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}>
+                    <input type="checkbox" checked={selectedUserIds.has(u.id)} onChange={() => toggleUser(u.id)} className="rounded accent-indigo-600 w-3.5 h-3.5" />
+                    <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: getUserColor(u.id) }} />
+                    <span className="truncate">{u.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {/* Проекты */}
+            <div>
+              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
+                <span>📁</span> Проекты ({selectedProjectIds.size})
+              </h4>
+              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto p-1">
+                {projects.filter(p => p.isActive).map(p => (
+                  <label key={p.id} className={`flex items-center gap-1.5 p-1.5 rounded-lg cursor-pointer text-xs transition-all ${
+                    selectedProjectIds.has(p.id)
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-300 dark:ring-emerald-700'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}>
+                    <input type="checkbox" checked={selectedProjectIds.has(p.id)} onChange={() => toggleProject(p.id)} className="rounded accent-emerald-600 w-3.5 h-3.5" />
+                    <span className="truncate">{p.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* 🎯 Блок выбранных сотрудников (показывается когда есть фильтр) */}
-      {selectedUserIds.size > 0 && (
+      {/* 🎯 Блок выбранных фильтров (сотрудники и проекты) */}
+      {(selectedUserIds.size > 0 || selectedProjectIds.size > 0) && (
         <div className="card p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800 animate-fade-in">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-bold text-indigo-900 dark:text-indigo-200 uppercase tracking-wide flex items-center gap-2">
               <span className="w-1.5 h-4 bg-indigo-500 rounded-full"></span>
-              Выбранные сотрудники ({selectedUserIds.size})
+              Активные фильтры ({selectedUserIds.size + selectedProjectIds.size})
             </h3>
             <button onClick={resetFilter} className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1">
-              ✕ Показать всех
+              ✕ Сбросить всё
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -280,9 +320,24 @@ export function HoursCalendarPage() {
               return (
                 <div key={userId} className="inline-flex items-center gap-2 pl-3 pr-1 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
                   <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: userColor }} />
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{userName}</span>
+                  <span className="text-xs font-medium text-slate-900 dark:text-slate-100">👤 {userName}</span>
                   <button
                     onClick={() => toggleUser(userId)}
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-xs"
+                    title="Убрать из фильтра"
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
+            {Array.from(selectedProjectIds).map(projectId => {
+              const projectName = projects.find(p => p.id === projectId)?.name || 'Неизвестный';
+              return (
+                <div key={projectId} className="inline-flex items-center gap-2 pl-3 pr-1 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                  <span className="text-xs font-medium text-slate-900 dark:text-slate-100">📁 {projectName}</span>
+                  <button
+                    onClick={() => toggleProject(projectId)}
                     className="w-5 h-5 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors text-xs"
                     title="Убрать из фильтра"
                   >
