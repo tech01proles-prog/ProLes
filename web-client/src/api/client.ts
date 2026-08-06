@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api/v1',
@@ -6,16 +6,16 @@ const api = axios.create({
 });
 
 // Автоматическая подстановка токена
-api.interceptors.request.use((config) => {
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('proles_token');
-  if (token) config.headers['X-Session-Token'] = token;
+  if (token && config.headers) config.headers['X-Session-Token'] = token;
   return config;
 });
 
 // Обработка 401 → редирект на логин
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  (err: AxiosError) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('proles_token');
       localStorage.removeItem('proles_user');

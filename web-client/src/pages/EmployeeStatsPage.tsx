@@ -1,11 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import type { TimeEntryDto, ExpenseDto, IncomeDto, ProjectDto } from '../types';
 import { formatMoney } from '../lib/utils';
 
 export function EmployeeStatsPage() {
-  const navigate = useNavigate();
   const [entries, setEntries] = useState<TimeEntryDto[]>([]);
   const [expenses, setExpenses] = useState<ExpenseDto[]>([]);
   const [incomes, setIncomes] = useState<IncomeDto[]>([]);
