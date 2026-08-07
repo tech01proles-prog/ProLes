@@ -41,6 +41,15 @@ export function ExpensesPage() {
   const [filterProject, setFilterProject] = useState('all');
   const [filterType, setFilterType] = useState('all');
   
+  // Автоматически переключаем на 'all' если в URL есть userId
+  useEffect(() => {
+    const userIdFromUrl = searchParams.get('userId');
+    if (userIdFromUrl && canViewAll) {
+      setScope('all');
+      setFilterUser(userIdFromUrl);
+    }
+  }, [searchParams, canViewAll]);
+  
   // Состояние формы
   const [form, setForm] = useState({ projectId: '', date: new Date().toISOString().split('T')[0], type: 'OTHER', amount: '', currency: 'RUB', name: '' });
   const [saving, setSaving] = useState(false);

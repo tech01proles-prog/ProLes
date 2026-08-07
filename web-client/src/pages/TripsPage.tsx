@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
 import type { BusinessTripDto, ProjectDto, UserDto, WaypointDto } from '../types';
@@ -12,8 +13,11 @@ const TRIP_TYPES = {
 };
 
 export function TripsPage() {
+  const [searchParams] = useSearchParams();
   const [user, setUser] = useState<UserDto | null>(null);
   const { can, loading: permLoading } = usePermissions();
+
+  const isAdmin = !permLoading && can('business_trips_all', 'view');
 
   const [trips, setTrips] = useState<BusinessTripDto[]>([]);
   const [projects, setProjects] = useState<ProjectDto[]>([]);
@@ -25,9 +29,16 @@ export function TripsPage() {
   const [sortField, setSortField] = useState<'date' | 'type'>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  // Фильтры (только админ)
-  const [filterUser, setFilterUser] = useState('all');
+  // Автоматически устанавливаем filterUser если в URL есть userId
+  const [filterUser, setFilterUser] = useState(searchParams.get('userId') || 'all');
   const [filterProject, setFilterProject] = useState('all');
+
+  useEffect(() => {
+    const userIdFromUrl = searchParams.get('userId');
+    if (userIdFromUrl && isAdmin) {
+      setFilterUser(userIdFromUrl);
+    }
+  }, [searchParams, isAdmin]);
 
   // Форма
   const [form, setForm] = useState({
@@ -41,8 +52,6 @@ export function TripsPage() {
     notes: '',
   });
   const [saving, setSaving] = useState(false);
-
-  const isAdmin = !permLoading && can('business_trips_all', 'view');
 
   useEffect(() => {
     const stored = localStorage.getItem('proles_user');
