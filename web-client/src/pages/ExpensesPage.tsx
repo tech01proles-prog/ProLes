@@ -41,12 +41,13 @@ export function ExpensesPage() {
   const [filterProject, setFilterProject] = useState('all');
   const [filterType, setFilterType] = useState('all');
   
-  // Автоматически переключаем на 'all' если в URL есть userId
+  // Автоматически переключаем на 'all' если в URL есть userId или scope=all
   useEffect(() => {
     const userIdFromUrl = searchParams.get('userId');
-    if (userIdFromUrl && canViewAll) {
+    const scopeFromUrl = searchParams.get('scope');
+    if ((userIdFromUrl || scopeFromUrl === 'all') && canViewAll) {
       setScope('all');
-      setFilterUser(userIdFromUrl);
+      setFilterUser(userIdFromUrl || 'all');
     }
   }, [searchParams, canViewAll]);
   
