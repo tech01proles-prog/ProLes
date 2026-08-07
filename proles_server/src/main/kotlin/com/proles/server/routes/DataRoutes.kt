@@ -1437,18 +1437,28 @@ fun Route.dataRoutes() {
                     com.proles.server.config.PermissionMiddleware.canView(session.userId, Permission.BUSINESS_TRIPS_ALL)
 
             val trips = transaction {
-                var query = if (all && isAdmin) {
-                    (BusinessTripsTable innerJoin ProjectsTable).selectAll()
-                } else {
-                    (BusinessTripsTable innerJoin ProjectsTable).selectAll()
-                        .where { BusinessTripsTable.userId eq UUID.fromString(userIdParam!!) }
-                }
+                val userId = if (!all || !isAdmin) UUID.fromString(userIdParam!!) else null
 
-                if (!dateFrom.isNullOrBlank()) {
-                    query = query.and { BusinessTripsTable.date greaterEq KtLocalDate.parse(dateFrom) }
-                }
-                if (!dateTo.isNullOrBlank()) {
-                    query = query.and { BusinessTripsTable.date lessEq KtLocalDate.parse(dateTo) }
+                var query = (BusinessTripsTable innerJoin ProjectsTable).selectAll()
+
+                query = query.where {
+                    val conditions = mutableListOf<Op<Boolean>>()
+
+                    if (userId != null) {
+                        conditions.add(BusinessTripsTable.userId eq userId)
+                    }
+                    if (!dateFrom.isNullOrBlank()) {
+                        conditions.add(BusinessTripsTable.date greaterEq KtLocalDate.parse(dateFrom))
+                    }
+                    if (!dateTo.isNullOrBlank()) {
+                        conditions.add(BusinessTripsTable.date lessEq KtLocalDate.parse(dateTo))
+                    }
+
+                    when {
+                        conditions.isEmpty() -> Op.TRUE
+                        conditions.size == 1 -> conditions[0]
+                        else -> conditions.reduce { acc, op -> acc and op }
+                    }
                 }
 
                 query.orderBy(BusinessTripsTable.date to SortOrder.DESC)
