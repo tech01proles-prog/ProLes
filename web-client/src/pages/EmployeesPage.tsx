@@ -163,8 +163,8 @@ export function EmployeesPage() {
         const tripsData = Array.isArray(tripsRes.data) ? tripsRes.data : [];
 
         const totalHours = timesheetData.reduce((sum, e) => sum + (e.hours || 0), 0);
-        const totalExpenses = expensesData.reduce((sum, e) => sum + (e.amountRub || 0), 0);
-        const totalIncomes = incomesData.reduce((sum, e) => sum + (e.amountRub || 0), 0);
+        const totalExpenses = expensesData.reduce((sum, e) => sum + (e.amount || 0), 0);
+        const totalIncomes = incomesData.reduce((sum, e) => sum + (e.amount || 0), 0);
         const totalTrips = tripsData.length;
 
         setProfileStats({
