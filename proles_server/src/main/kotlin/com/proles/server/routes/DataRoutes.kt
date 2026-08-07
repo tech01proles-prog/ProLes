@@ -225,24 +225,48 @@ fun Route.dataRoutes() {
         // 🆕 Эндпоинт для админа: все записи всех сотрудников
         get("/all") {
             if (!call.checkPermission(Permission.PROJECTS, "view")) return@get
+            val dateFrom = call.request.queryParameters["dateFrom"]
+            val dateTo = call.request.queryParameters["dateTo"]
             val entries = transaction {
-                TimeEntriesTable.selectAll()
+                val query = TimeEntriesTable.selectAll()
+                    .apply {
+                        if (!dateFrom.isNullOrBlank()) {
+                            where { TimeEntriesTable.date ge KtLocalDate.parse(dateFrom) }
+                        }
+                    }
+                    .apply {
+                        if (!dateTo.isNullOrBlank()) {
+                            where { TimeEntriesTable.date le KtLocalDate.parse(dateTo) }
+                        }
+                    }
                     .orderBy(TimeEntriesTable.date to SortOrder.DESC)
-                    .map { row -> mapRowToEntryDto(row) }
+                query.map { row -> mapRowToEntryDto(row) }
             }
             call.respond(HttpStatusCode.OK, entries)
         }
         get {
             if (call.checkSession() == null) return@get
             val userIdParam = call.request.queryParameters["userId"]
+            val dateFrom = call.request.queryParameters["dateFrom"]
+            val dateTo = call.request.queryParameters["dateTo"]
             if (userIdParam.isNullOrBlank()) {
                 call.respond(HttpStatusCode.BadRequest, "userId parameter required")
                 return@get
             }
             val entries = transaction {
-                TimeEntriesTable.selectAll()
+                val query = TimeEntriesTable.selectAll()
                     .where { TimeEntriesTable.userId eq UUID.fromString(userIdParam) }
-                    .map { row -> mapRowToEntryDto(row) }
+                    .apply {
+                        if (!dateFrom.isNullOrBlank()) {
+                            where { TimeEntriesTable.date ge KtLocalDate.parse(dateFrom) }
+                        }
+                    }
+                    .apply {
+                        if (!dateTo.isNullOrBlank()) {
+                            where { TimeEntriesTable.date le KtLocalDate.parse(dateTo) }
+                        }
+                    }
+                query.map { row -> mapRowToEntryDto(row) }
             }
             call.respond(HttpStatusCode.OK, entries)
         }
@@ -629,11 +653,23 @@ fun Route.dataRoutes() {
         // 🆕 Эндпоинт для админа: все расходы всех сотрудников
         get("/all") {
             if (!call.checkPermission(Permission.EXPENSES_ALL, "view")) return@get
+            val dateFrom = call.request.queryParameters["dateFrom"]
+            val dateTo = call.request.queryParameters["dateTo"]
             val list = transaction {
-                (ExpensesTable innerJoin ProjectsTable)
+                val query = (ExpensesTable innerJoin ProjectsTable)
                     .selectAll()
+                    .apply {
+                        if (!dateFrom.isNullOrBlank()) {
+                            where { ExpensesTable.date ge KtLocalDate.parse(dateFrom) }
+                        }
+                    }
+                    .apply {
+                        if (!dateTo.isNullOrBlank()) {
+                            where { ExpensesTable.date le KtLocalDate.parse(dateTo) }
+                        }
+                    }
                     .orderBy(ExpensesTable.date to SortOrder.DESC)
-                    .map { row ->
+                query.map { row ->
                         ExpenseDto(
                             id = row[ExpensesTable.id].value.toString(),
                             userId = row[ExpensesTable.userId].value.toString(),
@@ -656,15 +692,27 @@ fun Route.dataRoutes() {
         get {
             if (call.checkSession() == null) return@get
             val userIdParam = call.request.queryParameters["userId"]
+            val dateFrom = call.request.queryParameters["dateFrom"]
+            val dateTo = call.request.queryParameters["dateTo"]
             if (userIdParam.isNullOrBlank()) {
                 call.respond(HttpStatusCode.BadRequest, "userId required"); return@get
             }
             val list = transaction {
-                (ExpensesTable innerJoin ProjectsTable)
+                val query = (ExpensesTable innerJoin ProjectsTable)
                     .selectAll()
                     .where { ExpensesTable.userId eq UUID.fromString(userIdParam) }
+                    .apply {
+                        if (!dateFrom.isNullOrBlank()) {
+                            where { ExpensesTable.date ge KtLocalDate.parse(dateFrom) }
+                        }
+                    }
+                    .apply {
+                        if (!dateTo.isNullOrBlank()) {
+                            where { ExpensesTable.date le KtLocalDate.parse(dateTo) }
+                        }
+                    }
                     .orderBy(ExpensesTable.date to SortOrder.DESC)
-                    .map { row ->
+                query.map { row ->
                         ExpenseDto(
                             id = row[ExpensesTable.id].value.toString(),
                             userId = row[ExpensesTable.userId].value.toString(),
@@ -748,11 +796,23 @@ fun Route.dataRoutes() {
     route("/api/v1/incomes") {
         get("/all") {
             if (!call.checkPermission(Permission.EXPENSES_ALL, "view")) return@get
+            val dateFrom = call.request.queryParameters["dateFrom"]
+            val dateTo = call.request.queryParameters["dateTo"]
             val list = transaction {
-                (IncomesTable leftJoin ProjectsTable)
+                val query = (IncomesTable leftJoin ProjectsTable)
                     .selectAll()
+                    .apply {
+                        if (!dateFrom.isNullOrBlank()) {
+                            where { IncomesTable.date ge KtLocalDate.parse(dateFrom) }
+                        }
+                    }
+                    .apply {
+                        if (!dateTo.isNullOrBlank()) {
+                            where { IncomesTable.date le KtLocalDate.parse(dateTo) }
+                        }
+                    }
                     .orderBy(IncomesTable.date to SortOrder.DESC)
-                    .map { row ->
+                query.map { row ->
                         IncomeDto(
                             id = row[IncomesTable.id].value.toString(),
                             userId = row[IncomesTable.userId].value.toString(),
@@ -771,15 +831,27 @@ fun Route.dataRoutes() {
         get {
             if (call.checkSession() == null) return@get
             val userIdParam = call.request.queryParameters["userId"]
+            val dateFrom = call.request.queryParameters["dateFrom"]
+            val dateTo = call.request.queryParameters["dateTo"]
             if (userIdParam.isNullOrBlank()) {
                 call.respond(HttpStatusCode.BadRequest, "userId required"); return@get
             }
             val list = transaction {
-                (IncomesTable leftJoin ProjectsTable)
+                val query = (IncomesTable leftJoin ProjectsTable)
                     .selectAll()
                     .where { IncomesTable.userId eq UUID.fromString(userIdParam) }
+                    .apply {
+                        if (!dateFrom.isNullOrBlank()) {
+                            where { IncomesTable.date ge KtLocalDate.parse(dateFrom) }
+                        }
+                    }
+                    .apply {
+                        if (!dateTo.isNullOrBlank()) {
+                            where { IncomesTable.date le KtLocalDate.parse(dateTo) }
+                        }
+                    }
                     .orderBy(IncomesTable.date to SortOrder.DESC)
-                    .map { row ->
+                query.map { row ->
                         IncomeDto(
                             id = row[IncomesTable.id].value.toString(),
                             userId = row[IncomesTable.userId].value.toString(),
@@ -1352,6 +1424,8 @@ fun Route.dataRoutes() {
         get {
             val session = call.checkSession() ?: return@get  // ✅ Сохраняем сессию
             val userIdParam = call.request.queryParameters["userId"]
+            val dateFrom = call.request.queryParameters["dateFrom"]
+            val dateTo = call.request.queryParameters["dateTo"]
             val all = call.request.queryParameters["all"] == "true"
             if (!all && userIdParam.isNullOrBlank()) {
                 call.respond(HttpStatusCode.BadRequest, "userId required")
@@ -1361,11 +1435,18 @@ fun Route.dataRoutes() {
                     com.proles.server.config.PermissionMiddleware.canView(session.userId, Permission.BUSINESS_TRIPS_ALL)
 
             val trips = transaction {
-                val query = if (all && isAdmin) {
+                var query = if (all && isAdmin) {
                     (BusinessTripsTable innerJoin ProjectsTable).selectAll()
                 } else {
                     (BusinessTripsTable innerJoin ProjectsTable).selectAll()
                         .where { BusinessTripsTable.userId eq UUID.fromString(userIdParam!!) }
+                }
+
+                if (!dateFrom.isNullOrBlank()) {
+                    query = query.and { BusinessTripsTable.date ge KtLocalDate.parse(dateFrom) }
+                }
+                if (!dateTo.isNullOrBlank()) {
+                    query = query.and { BusinessTripsTable.date le KtLocalDate.parse(dateTo) }
                 }
 
                 query.orderBy(BusinessTripsTable.date to SortOrder.DESC)

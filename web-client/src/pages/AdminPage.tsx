@@ -149,7 +149,7 @@ export function AdminPage() {
         const dateTo = `${statsMonth}-${String(daysInMonth).padStart(2, '0')}`;
 
         const [hoursRes, expensesRes, incomesRes, tripsRes] = await Promise.allSettled([
-          api.get<TimeEntryDto[]>(`/timesheet?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          api.get<TimeEntryDto[]>(`/entries?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
           api.get<ExpenseDto[]>(`/expenses?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
           api.get<IncomeDto[]>(`/incomes?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
           api.get<BusinessTripDto[]>(`/business-trips?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),

@@ -151,7 +151,7 @@ export function EmployeesPage() {
         const dateTo = `${statsMonth}-${String(daysInMonth).padStart(2, '0')}`;
 
         const [timesheetRes, expensesRes, incomesRes, tripsRes] = await Promise.all([
-          api.get(`/timesheet?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          api.get(`/entries?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
           api.get(`/expenses?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
           api.get(`/incomes?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
           api.get(`/business-trips?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
