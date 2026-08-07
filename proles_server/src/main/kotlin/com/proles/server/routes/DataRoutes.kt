@@ -35,9 +35,9 @@ import java.util.Base64
 import io.ktor.utils.io.readRemaining
 import kotlinx.io.readByteArray
 import com.proles.server.config.PermissionMiddleware
-import com.proles.server.config.PermissionMiddleware.checkPermission  // 🆕 extension-функция
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList  // 🆕
-import org.jetbrains.exposed.dao.id.EntityID  // 🆕 для работы с ID
+import com.proles.server.config.PermissionMiddleware.checkPermission  //  extension-функция
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList  // 
+import org.jetbrains.exposed.dao.id.EntityID  //  для работы с ID
 
 
 @Serializable
@@ -123,8 +123,8 @@ data class TicketUploadRequest(
     val fileBase64: String,
     val fileName: String,
     val fileType: String,
-    val amount: Double = 0.0,        // 🆕
-    val currency: String = "RUB"     // 🆕
+    val amount: Double = 0.0,        // 
+    val currency: String = "RUB"     // 
 )
 
 @Serializable
@@ -224,7 +224,7 @@ fun Route.dataRoutes() {
     // ─────────────────────────────────────────────────────────────
     route("/api/v1/entries") {
 
-        // 🆕 Эндпоинт для админа: все записи всех сотрудников
+        //  Эндпоинт для админа: все записи всех сотрудников
         get("/all") {
             if (!call.checkPermission(Permission.PROJECTS, "view")) return@get
             val dateFrom = call.request.queryParameters["dateFrom"]
@@ -366,7 +366,7 @@ fun Route.dataRoutes() {
                 }
             }
 
-            // 📤 Теперь используем результат транзакции
+            // Теперь используем результат транзакции
             val (dto, wasUpdate) = result
             val statusCode = if (wasUpdate) HttpStatusCode.OK else HttpStatusCode.Created
             call.respond(statusCode, dto)
@@ -573,7 +573,7 @@ fun Route.dataRoutes() {
         post("/upload-receipt") {
             if (call.checkSession() == null) return@post
 
-            // 🆕 НОВЫЙ ПОДХОД: принимаем JSON вместо multipart
+            //  НОВЫЙ ПОДХОД: принимаем JSON вместо multipart
             val requestBody = try {
                 call.receive<Map<String, String>>()
             } catch (e: Exception) {
@@ -644,7 +644,7 @@ fun Route.dataRoutes() {
                 }
                 ExpensesTable.update({ ExpensesTable.id eq UUID.fromString(expenseId) }) {
                     it[hasReceiptPhoto] = true
-                    it[receiptSubmitted] = true  // 🆕 Автоматически подтверждаем чек
+                    it[receiptSubmitted] = true  //  Автоматически подтверждаем чек
                 }
             }
 
@@ -652,7 +652,7 @@ fun Route.dataRoutes() {
             call.respond(HttpStatusCode.Created, mapOf("id" to receiptId.toString(), "url" to imageUrl))
         }
 
-        // 🆕 Эндпоинт для админа: все расходы всех сотрудников
+        //  Эндпоинт для админа: все расходы всех сотрудников
         get("/all") {
             if (!call.checkPermission(Permission.EXPENSES_ALL, "view")) return@get
             val dateFrom = call.request.queryParameters["dateFrom"]
@@ -684,7 +684,7 @@ fun Route.dataRoutes() {
                             currency = row[ExpensesTable.currency],
                             comment = row[ExpensesTable.comment],
                             receiptSubmitted = row[ExpensesTable.receiptSubmitted],
-                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto]  // 🆕 ДОБАВЬТЕ
+                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto]  //  ДОБАВЬТЕ
                         )
                     }
             }
@@ -727,7 +727,7 @@ fun Route.dataRoutes() {
                             currency = row[ExpensesTable.currency],
                             comment = row[ExpensesTable.comment],
                             receiptSubmitted = row[ExpensesTable.receiptSubmitted],
-                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto]  // 🆕 ДОБАВЬТЕ
+                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto]  //  ДОБАВЬТЕ
                         )
                     }
             }
@@ -752,7 +752,7 @@ fun Route.dataRoutes() {
                     it[currency] = exp.currency
                     it[comment] = exp.comment
                     it[receiptSubmitted] = exp.receiptSubmitted
-                    it[hasReceiptPhoto] = exp.hasReceiptPhoto  // 🆕 ДОБАВЬТЕ
+                    it[hasReceiptPhoto] = exp.hasReceiptPhoto  //  ДОБАВЬТЕ
                     it[createdAt] = System.currentTimeMillis()
                 }
                 exp.copy(id = id.toString())
@@ -776,7 +776,7 @@ fun Route.dataRoutes() {
                     it[currency] = exp.currency
                     it[comment] = exp.comment
                     it[receiptSubmitted] = exp.receiptSubmitted
-                    it[hasReceiptPhoto] = exp.hasReceiptPhoto  // 🆕 ДОБАВЬТЕ
+                    it[hasReceiptPhoto] = exp.hasReceiptPhoto  //  ДОБАВЬТЕ
                 }
                 exp
             }
@@ -1058,7 +1058,7 @@ fun Route.dataRoutes() {
     // 🏖 VACATIONS
     // ─────────────────────────────────────────────────────────────
     route("/api/v1/vacations") {
-        // 🆕 Эндпоинт для админа: все отпуска всех сотрудников
+        //  Эндпоинт для админа: все отпуска всех сотрудников
         get("/all") {
             if (!call.checkPermission(Permission.VACATIONS_ALL, "view")) return@get
 
@@ -2291,8 +2291,8 @@ fun Route.dataRoutes() {
         val downloadUrl: String,
         val sendToAccountant: Boolean = false,
         val accountantEmail: String = "",
-        val amount: Double = 0.0,        // 🆕
-        val currency: String = "RUB",    // 🆕
+        val amount: Double = 0.0,        // 
+        val currency: String = "RUB",    // 
         val recipients: List<TicketRecipientDto> = emptyList()
     )
 
@@ -2342,7 +2342,7 @@ fun Route.dataRoutes() {
             call.respond(HttpStatusCode.NoContent)
         }
 
-        // 📤 Загрузка билета
+        // Загрузка билета
         post("/upload") {
             if (!call.checkPermission(Permission.TICKETS, "create")) return@post
             val request = try {
@@ -2361,13 +2361,13 @@ fun Route.dataRoutes() {
             val uploadDir = java.io.File("uploads/tickets").apply { mkdirs() }
             java.io.File(uploadDir, uniqueFileName).writeBytes(fileBytes)
             transaction {
-                // 🆕 Находим UUID пользователя COMPANY для расходов компании
+                // Находим UUID пользователя COMPANY для расходов компании
                 val companyUser = UsersTable.selectAll()
                     .where { UsersTable.name eq "COMPANY" }
                     .singleOrNull()
                 val companyUserId = companyUser?.let { it[UsersTable.id].value }
                 
-                // 📤 Загрузка билета
+                // Загрузка билета
                 TicketsTable.insert {
                     it[TicketsTable.id] = ticketId
                     it[uploadedBy] = session.userId
@@ -2379,12 +2379,12 @@ fun Route.dataRoutes() {
                     it[fileSize] = fileBytes.size.toLong()
                     it[TicketsTable.sendToAccountant] = request.sendToAccountant
                     it[TicketsTable.accountantEmail] = request.accountantEmail
-                    it[TicketsTable.amount] = request.amount            // 🆕
-                    it[TicketsTable.currency] = request.currency        // 🆕
+                    it[TicketsTable.amount] = request.amount            // 
+                    it[TicketsTable.currency] = request.currency        // 
                     it[TicketsTable.description] = request.description
                     it[uploadedAt] = System.currentTimeMillis()
                 }
-                // 🆕 Автоматически создаём расход "Билет" от имени COMPANY (если есть сумма)
+                //  Автоматически создаём расход "Билет" от имени COMPANY (если есть сумма)
                 if (request.amount > 0.0) {
                     val expenseUserId = companyUserId ?: session.userId
                     transaction {
@@ -2458,7 +2458,7 @@ fun Route.dataRoutes() {
                         data = mapOf("type" to "TICKET"))
                 }
             }
-            // 🆕 Отправка email бухгалтеру (если выбрана галочка)
+            //  Отправка email бухгалтеру (если выбрана галочка)
             if (request.sendToAccountant && request.accountantEmail.isNotBlank()) {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
@@ -2509,7 +2509,7 @@ fun Route.dataRoutes() {
                     }
                 }
             }
-            // 🆕 Telegram-уведомление о новом билете
+            //  Telegram-уведомление о новом билете
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val telegramMsg = buildString {
@@ -2567,8 +2567,8 @@ fun Route.dataRoutes() {
                             downloadUrl = row[TicketsTable.filePath],
                             sendToAccountant = row[TicketsTable.sendToAccountant],
                             accountantEmail = row[TicketsTable.accountantEmail],
-                            amount = row[TicketsTable.amount],          // 🆕
-                            currency = row[TicketsTable.currency],      // 🆕
+                            amount = row[TicketsTable.amount],          // 
+                            currency = row[TicketsTable.currency],      // 
                             recipients = emptyList()
                         )
                     }
@@ -2604,8 +2604,8 @@ fun Route.dataRoutes() {
                             description = row[TicketsTable.description],
                             sendToAccountant = row[TicketsTable.sendToAccountant],
                             accountantEmail = row[TicketsTable.accountantEmail],
-                            amount = row[TicketsTable.amount],          // 🆕
-                            currency = row[TicketsTable.currency],      // 🆕
+                            amount = row[TicketsTable.amount],          // 
+                            currency = row[TicketsTable.currency],      // 
                             uploadedAt = row[TicketsTable.uploadedAt],
                             recipients = recipients,
                             downloadUrl = row[TicketsTable.filePath]
