@@ -537,7 +537,7 @@ export function EmployeesPage() {
                     const year = now.getFullYear();
                     const month = String(now.getMonth() + 1).padStart(2, '0');
                     setProfileUser(null); 
-                    navigate(`/expenses?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31`); 
+                    navigate(`/expenses?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31&scope=all`); 
                   }}
                   className="flex items-center gap-2 p-2 rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 hover:border-orange-400 dark:hover:border-orange-600 transition-all text-left"
                 >
@@ -553,7 +553,7 @@ export function EmployeesPage() {
                     const year = now.getFullYear();
                     const month = String(now.getMonth() + 1).padStart(2, '0');
                     setProfileUser(null); 
-                    navigate(`/incomes?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31`); 
+                    navigate(`/incomes?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31&scope=all`); 
                   }}
                   className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 transition-all text-left"
                 >
@@ -570,7 +570,7 @@ export function EmployeesPage() {
                     const month = String(now.getMonth() + 1).padStart(2, '0');
                     const daysInMonth = new Date(year, parseInt(month), 0).getDate();
                     setProfileUser(null);
-                    navigate(`/trips?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-${String(daysInMonth).padStart(2, '0')}`);
+                    navigate(`/trips?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-${String(daysInMonth).padStart(2, '0')}&scope=all`);
                   }}
                   className="flex items-center gap-2 p-2 rounded-lg bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-800 hover:border-cyan-400 dark:hover:border-cyan-600 transition-all text-left"
                 >

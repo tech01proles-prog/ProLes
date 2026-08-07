@@ -29,14 +29,18 @@ export function TripsPage() {
   const [sortField, setSortField] = useState<'date' | 'type'>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  // Автоматически устанавливаем filterUser если в URL есть userId
-  const [filterUser, setFilterUser] = useState(searchParams.get('userId') || 'all');
+  // Автоматически устанавливаем filterUser если в URL есть userId или scope=all
+  const urlUserId = searchParams.get('userId');
+  const urlScope = searchParams.get('scope');
+  const [filterUser, setFilterUser] = useState(urlUserId || 'all');
   const [filterProject, setFilterProject] = useState('all');
 
   useEffect(() => {
     const userIdFromUrl = searchParams.get('userId');
-    if (userIdFromUrl && isAdmin) {
-      setFilterUser(userIdFromUrl);
+    const scopeFromUrl = searchParams.get('scope');
+    // Если передан userId и есть права админа, или явно указан scope=all
+    if ((userIdFromUrl || scopeFromUrl === 'all') && isAdmin) {
+      setFilterUser(userIdFromUrl || 'all');
     }
   }, [searchParams, isAdmin]);
 
