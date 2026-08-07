@@ -37,6 +37,15 @@ export function IncomesPage() {
   const [filterUser, setFilterUser] = useState(searchParams.get('userId') || 'all');
   const [filterType, setFilterType] = useState('all');
   
+  // Автоматически переключаем на 'all' если в URL есть userId
+  useEffect(() => {
+    const userIdFromUrl = searchParams.get('userId');
+    if (userIdFromUrl && canViewAll) {
+      setScope('all');
+      setFilterUser(userIdFromUrl);
+    }
+  }, [searchParams, canViewAll]);
+  
   // Фильтр по датам
   const now = new Date();
   const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;

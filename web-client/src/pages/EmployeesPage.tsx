@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
-import type { UserDto, ExpenseDto, IncomeDto, BusinessTripDto, TimeEntryDto } from '../types';
+import type { UserDto } from '../types';
 import { generateUUID, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 
