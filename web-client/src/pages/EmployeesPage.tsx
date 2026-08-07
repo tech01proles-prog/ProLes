@@ -150,17 +150,22 @@ export function EmployeesPage() {
         const dateFrom = `${statsMonth}-01`;
         const dateTo = `${statsMonth}-${String(daysInMonth).padStart(2, '0')}`;
 
-        const [timesheet, expenses, incomes, trips] = await Promise.all([
-          api.get<TimeEntryDto[]>(`/timesheet?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
-          api.get<ExpenseDto[]>(`/expenses?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
-          api.get<IncomeDto[]>(`/incomes?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
-          api.get<BusinessTripDto[]>(`/business-trips?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+        const [timesheetRes, expensesRes, incomesRes, tripsRes] = await Promise.all([
+          api.get(`/timesheet?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          api.get(`/expenses?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          api.get(`/incomes?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
+          api.get(`/business-trips?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
         ]);
 
-        const totalHours = timesheet.data.reduce((sum, e) => sum + (e.hours || 0), 0);
-        const totalExpenses = expenses.data.reduce((sum, e) => sum + (e.amountRub || 0), 0);
-        const totalIncomes = incomes.data.reduce((sum, e) => sum + (e.amountRub || 0), 0);
-        const totalTrips = trips.data.length;
+        const timesheetData = Array.isArray(timesheetRes.data) ? timesheetRes.data : [];
+        const expensesData = Array.isArray(expensesRes.data) ? expensesRes.data : [];
+        const incomesData = Array.isArray(incomesRes.data) ? incomesRes.data : [];
+        const tripsData = Array.isArray(tripsRes.data) ? tripsRes.data : [];
+
+        const totalHours = timesheetData.reduce((sum, e) => sum + (e.hours || 0), 0);
+        const totalExpenses = expensesData.reduce((sum, e) => sum + (e.amountRub || 0), 0);
+        const totalIncomes = incomesData.reduce((sum, e) => sum + (e.amountRub || 0), 0);
+        const totalTrips = tripsData.length;
 
         setProfileStats({
           hours: Math.round(totalHours),
@@ -510,14 +515,15 @@ export function EmployeesPage() {
               <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Переходы</h3>
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => { setProfileUser(null); navigate(`/hours-calendar?userId=${profileUser.id}`); }}
                   onClick={() => {
                     const now = new Date();
                     const year = now.getFullYear();
                     const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const daysInMonth = new Date(year, parseInt(month), 0).getDate();
                     setProfileUser(null);
-                    navigate(`/hours-calendar?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31`);
+                    navigate(`/hours-calendar?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-${String(daysInMonth).padStart(2, '0')}`);
                   }}
+                  className="flex items-center gap-2 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all text-left"
                 >
                   <span className="text-lg">⏱</span>
                   <div className="text-xs">
@@ -562,8 +568,9 @@ export function EmployeesPage() {
                     const now = new Date();
                     const year = now.getFullYear();
                     const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const daysInMonth = new Date(year, parseInt(month), 0).getDate();
                     setProfileUser(null);
-                    navigate(`/trips?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31`);
+                    navigate(`/trips?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-${String(daysInMonth).padStart(2, '0')}`);
                   }}
                   className="flex items-center gap-2 p-2 rounded-lg bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-800 hover:border-cyan-400 dark:hover:border-cyan-600 transition-all text-left"
                 >
