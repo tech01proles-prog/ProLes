@@ -13,8 +13,6 @@ import kotlinx.datetime.LocalDate as KtLocalDate
 import java.time.LocalDate as JavaLocalDate
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.ge
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.le
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
 import at.favre.lib.crypto.bcrypt.BCrypt
@@ -233,12 +231,12 @@ fun Route.dataRoutes() {
                 val query = TimeEntriesTable.selectAll()
                     .apply {
                         if (!dateFrom.isNullOrBlank()) {
-                            where { TimeEntriesTable.date ge KtLocalDate.parse(dateFrom) }
+                            where { TimeEntriesTable.date greaterEq KtLocalDate.parse(dateFrom) }
                         }
                     }
                     .apply {
                         if (!dateTo.isNullOrBlank()) {
-                            where { TimeEntriesTable.date le KtLocalDate.parse(dateTo) }
+                            where { TimeEntriesTable.date lessEq KtLocalDate.parse(dateTo) }
                         }
                     }
                     .orderBy(TimeEntriesTable.date to SortOrder.DESC)
@@ -260,12 +258,12 @@ fun Route.dataRoutes() {
                     .where { TimeEntriesTable.userId eq UUID.fromString(userIdParam) }
                     .apply {
                         if (!dateFrom.isNullOrBlank()) {
-                            where { TimeEntriesTable.date ge KtLocalDate.parse(dateFrom) }
+                            where { TimeEntriesTable.date greaterEq KtLocalDate.parse(dateFrom) }
                         }
                     }
                     .apply {
                         if (!dateTo.isNullOrBlank()) {
-                            where { TimeEntriesTable.date le KtLocalDate.parse(dateTo) }
+                            where { TimeEntriesTable.date lessEq KtLocalDate.parse(dateTo) }
                         }
                     }
                 query.map { row -> mapRowToEntryDto(row) }
@@ -662,12 +660,12 @@ fun Route.dataRoutes() {
                     .selectAll()
                     .apply {
                         if (!dateFrom.isNullOrBlank()) {
-                            where { ExpensesTable.date ge KtLocalDate.parse(dateFrom) }
+                            where { ExpensesTable.date greaterEq KtLocalDate.parse(dateFrom) }
                         }
                     }
                     .apply {
                         if (!dateTo.isNullOrBlank()) {
-                            where { ExpensesTable.date le KtLocalDate.parse(dateTo) }
+                            where { ExpensesTable.date lessEq KtLocalDate.parse(dateTo) }
                         }
                     }
                     .orderBy(ExpensesTable.date to SortOrder.DESC)
@@ -705,12 +703,12 @@ fun Route.dataRoutes() {
                     .where { ExpensesTable.userId eq UUID.fromString(userIdParam) }
                     .apply {
                         if (!dateFrom.isNullOrBlank()) {
-                            where { ExpensesTable.date ge KtLocalDate.parse(dateFrom) }
+                            where { ExpensesTable.date greaterEq KtLocalDate.parse(dateFrom) }
                         }
                     }
                     .apply {
                         if (!dateTo.isNullOrBlank()) {
-                            where { ExpensesTable.date le KtLocalDate.parse(dateTo) }
+                            where { ExpensesTable.date lessEq KtLocalDate.parse(dateTo) }
                         }
                     }
                     .orderBy(ExpensesTable.date to SortOrder.DESC)
@@ -805,12 +803,12 @@ fun Route.dataRoutes() {
                     .selectAll()
                     .apply {
                         if (!dateFrom.isNullOrBlank()) {
-                            where { IncomesTable.date ge KtLocalDate.parse(dateFrom) }
+                            where { IncomesTable.date greaterEq KtLocalDate.parse(dateFrom) }
                         }
                     }
                     .apply {
                         if (!dateTo.isNullOrBlank()) {
-                            where { IncomesTable.date le KtLocalDate.parse(dateTo) }
+                            where { IncomesTable.date lessEq KtLocalDate.parse(dateTo) }
                         }
                     }
                     .orderBy(IncomesTable.date to SortOrder.DESC)
@@ -844,12 +842,12 @@ fun Route.dataRoutes() {
                     .where { IncomesTable.userId eq UUID.fromString(userIdParam) }
                     .apply {
                         if (!dateFrom.isNullOrBlank()) {
-                            where { IncomesTable.date ge KtLocalDate.parse(dateFrom) }
+                            where { IncomesTable.date greaterEq KtLocalDate.parse(dateFrom) }
                         }
                     }
                     .apply {
                         if (!dateTo.isNullOrBlank()) {
-                            where { IncomesTable.date le KtLocalDate.parse(dateTo) }
+                            where { IncomesTable.date lessEq KtLocalDate.parse(dateTo) }
                         }
                     }
                     .orderBy(IncomesTable.date to SortOrder.DESC)
@@ -1445,10 +1443,10 @@ fun Route.dataRoutes() {
                 }
 
                 if (!dateFrom.isNullOrBlank()) {
-                    query = query.and { BusinessTripsTable.date ge KtLocalDate.parse(dateFrom) }
+                    query = query.and { BusinessTripsTable.date greaterEq KtLocalDate.parse(dateFrom) }
                 }
                 if (!dateTo.isNullOrBlank()) {
-                    query = query.and { BusinessTripsTable.date le KtLocalDate.parse(dateTo) }
+                    query = query.and { BusinessTripsTable.date lessEq KtLocalDate.parse(dateTo) }
                 }
 
                 query.orderBy(BusinessTripsTable.date to SortOrder.DESC)
