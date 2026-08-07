@@ -256,20 +256,16 @@ fun Route.dataRoutes() {
                 return@get
             }
             val entries = transaction {
+                val conditions = mutableListOf<Op<Boolean>>()
+                conditions.add(TimeEntriesTable.userId eq UUID.fromString(userIdParam))
+                if (!dateFrom.isNullOrBlank()) {
+                    conditions.add(TimeEntriesTable.date greaterEq KtLocalDate.parse(dateFrom))
+                }
+                if (!dateTo.isNullOrBlank()) {
+                    conditions.add(TimeEntriesTable.date lessEq KtLocalDate.parse(dateTo))
+                }
                 val query = TimeEntriesTable.selectAll()
-                    .where {
-                        TimeEntriesTable.userId eq UUID.fromString(userIdParam)
-                            .let { baseOp ->
-                                var op = baseOp
-                                if (!dateFrom.isNullOrBlank()) {
-                                    op = op.and { TimeEntriesTable.date greaterEq KtLocalDate.parse(dateFrom) }
-                                }
-                                if (!dateTo.isNullOrBlank()) {
-                                    op = op.and { TimeEntriesTable.date lessEq KtLocalDate.parse(dateTo) }
-                                }
-                                op
-                            }
-                    }
+                    .where { conditions.reduce { acc, op -> acc and op } }
                 query.map { row -> mapRowToEntryDto(row) }
             }
             call.respond(HttpStatusCode.OK, entries)
@@ -702,21 +698,17 @@ fun Route.dataRoutes() {
                 call.respond(HttpStatusCode.BadRequest, "userId required"); return@get
             }
             val list = transaction {
+                val conditions = mutableListOf<Op<Boolean>>()
+                conditions.add(ExpensesTable.userId eq UUID.fromString(userIdParam))
+                if (!dateFrom.isNullOrBlank()) {
+                    conditions.add(ExpensesTable.date greaterEq KtLocalDate.parse(dateFrom))
+                }
+                if (!dateTo.isNullOrBlank()) {
+                    conditions.add(ExpensesTable.date lessEq KtLocalDate.parse(dateTo))
+                }
                 val query = (ExpensesTable innerJoin ProjectsTable)
                     .selectAll()
-                    .where {
-                        ExpensesTable.userId eq UUID.fromString(userIdParam)
-                            .let { baseOp ->
-                                var op = baseOp
-                                if (!dateFrom.isNullOrBlank()) {
-                                    op = op.and { ExpensesTable.date greaterEq KtLocalDate.parse(dateFrom) }
-                                }
-                                if (!dateTo.isNullOrBlank()) {
-                                    op = op.and { ExpensesTable.date lessEq KtLocalDate.parse(dateTo) }
-                                }
-                                op
-                            }
-                    }
+                    .where { conditions.reduce { acc, op -> acc and op } }
                     .orderBy(ExpensesTable.date to SortOrder.DESC)
                 query.map { row ->
                         ExpenseDto(
@@ -843,21 +835,17 @@ fun Route.dataRoutes() {
                 call.respond(HttpStatusCode.BadRequest, "userId required"); return@get
             }
             val list = transaction {
+                val conditions = mutableListOf<Op<Boolean>>()
+                conditions.add(IncomesTable.userId eq UUID.fromString(userIdParam))
+                if (!dateFrom.isNullOrBlank()) {
+                    conditions.add(IncomesTable.date greaterEq KtLocalDate.parse(dateFrom))
+                }
+                if (!dateTo.isNullOrBlank()) {
+                    conditions.add(IncomesTable.date lessEq KtLocalDate.parse(dateTo))
+                }
                 val query = (IncomesTable leftJoin ProjectsTable)
                     .selectAll()
-                    .where {
-                        IncomesTable.userId eq UUID.fromString(userIdParam)
-                            .let { baseOp ->
-                                var op = baseOp
-                                if (!dateFrom.isNullOrBlank()) {
-                                    op = op.and { IncomesTable.date greaterEq KtLocalDate.parse(dateFrom) }
-                                }
-                                if (!dateTo.isNullOrBlank()) {
-                                    op = op.and { IncomesTable.date lessEq KtLocalDate.parse(dateTo) }
-                                }
-                                op
-                            }
-                    }
+                    .where { conditions.reduce { acc, op -> acc and op } }
                     .orderBy(IncomesTable.date to SortOrder.DESC)
                 query.map { row ->
                         IncomeDto(
