@@ -257,16 +257,18 @@ fun Route.dataRoutes() {
             }
             val entries = transaction {
                 val query = TimeEntriesTable.selectAll()
-                    .where { TimeEntriesTable.userId eq UUID.fromString(userIdParam) }
-                    .apply {
-                        if (!dateFrom.isNullOrBlank()) {
-                            where { TimeEntriesTable.date greaterEq KtLocalDate.parse(dateFrom) }
-                        }
-                    }
-                    .apply {
-                        if (!dateTo.isNullOrBlank()) {
-                            where { TimeEntriesTable.date lessEq KtLocalDate.parse(dateTo) }
-                        }
+                    .where {
+                        TimeEntriesTable.userId eq UUID.fromString(userIdParam)
+                            .let { baseOp ->
+                                var op = baseOp
+                                if (!dateFrom.isNullOrBlank()) {
+                                    op = op.and { TimeEntriesTable.date greaterEq KtLocalDate.parse(dateFrom) }
+                                }
+                                if (!dateTo.isNullOrBlank()) {
+                                    op = op.and { TimeEntriesTable.date lessEq KtLocalDate.parse(dateTo) }
+                                }
+                                op
+                            }
                     }
                 query.map { row -> mapRowToEntryDto(row) }
             }
@@ -702,16 +704,18 @@ fun Route.dataRoutes() {
             val list = transaction {
                 val query = (ExpensesTable innerJoin ProjectsTable)
                     .selectAll()
-                    .where { ExpensesTable.userId eq UUID.fromString(userIdParam) }
-                    .apply {
-                        if (!dateFrom.isNullOrBlank()) {
-                            where { ExpensesTable.date greaterEq KtLocalDate.parse(dateFrom) }
-                        }
-                    }
-                    .apply {
-                        if (!dateTo.isNullOrBlank()) {
-                            where { ExpensesTable.date lessEq KtLocalDate.parse(dateTo) }
-                        }
+                    .where {
+                        ExpensesTable.userId eq UUID.fromString(userIdParam)
+                            .let { baseOp ->
+                                var op = baseOp
+                                if (!dateFrom.isNullOrBlank()) {
+                                    op = op.and { ExpensesTable.date greaterEq KtLocalDate.parse(dateFrom) }
+                                }
+                                if (!dateTo.isNullOrBlank()) {
+                                    op = op.and { ExpensesTable.date lessEq KtLocalDate.parse(dateTo) }
+                                }
+                                op
+                            }
                     }
                     .orderBy(ExpensesTable.date to SortOrder.DESC)
                 query.map { row ->
@@ -841,16 +845,18 @@ fun Route.dataRoutes() {
             val list = transaction {
                 val query = (IncomesTable leftJoin ProjectsTable)
                     .selectAll()
-                    .where { IncomesTable.userId eq UUID.fromString(userIdParam) }
-                    .apply {
-                        if (!dateFrom.isNullOrBlank()) {
-                            where { IncomesTable.date greaterEq KtLocalDate.parse(dateFrom) }
-                        }
-                    }
-                    .apply {
-                        if (!dateTo.isNullOrBlank()) {
-                            where { IncomesTable.date lessEq KtLocalDate.parse(dateTo) }
-                        }
+                    .where {
+                        IncomesTable.userId eq UUID.fromString(userIdParam)
+                            .let { baseOp ->
+                                var op = baseOp
+                                if (!dateFrom.isNullOrBlank()) {
+                                    op = op.and { IncomesTable.date greaterEq KtLocalDate.parse(dateFrom) }
+                                }
+                                if (!dateTo.isNullOrBlank()) {
+                                    op = op.and { IncomesTable.date lessEq KtLocalDate.parse(dateTo) }
+                                }
+                                op
+                            }
                     }
                     .orderBy(IncomesTable.date to SortOrder.DESC)
                 query.map { row ->
