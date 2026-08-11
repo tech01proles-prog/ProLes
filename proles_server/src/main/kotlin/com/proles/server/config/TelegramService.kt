@@ -89,6 +89,93 @@ object TelegramService {
     }
 
     /**
+     * Отправка файла (документа) в Telegram.
+     * Работает асинхронно, не блокирует основной поток.
+     */
+    suspend fun sendFile(fileBytes: ByteArray, fileName: String, caption: String = ""): Boolean {
+        if (!enabled) {
+            println("⚠️ Telegram: сервис не инициализирован, файл не отправлен")
+            return false
+        }
+
+        return try {
+            val url = "https://api.telegram.org/bot$botToken/sendDocument"
+            
+            // Кодируем файл в base64 для отправки
+            val fileBase64 = java.util.Base64.getEncoder().encodeToString(fileBytes)
+            
+            // Определяем MIME-тип по расширению
+            val ext = fileName.substringAfterLast('.', "").lowercase()
+            val mimeType = when (ext) {
+                "pdf" -> "application/pdf"
+                "jpg", "jpeg" -> "image/jpeg"
+                "png" -> "image/png"
+                "gif" -> "image/gif"
+                "doc" -> "application/msword"
+                "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                "xls" -> "application/vnd.ms-excel"
+                "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                else -> "application/octet-stream"
+            }
+
+            // Формируем multipart/form-data запрос вручную
+            val boundary = "----WebKitFormBoundary${System.currentTimeMillis()}"
+            val crlf = "\r\n"
+            
+            val requestBody = buildString {
+                // Часть для файла
+                append("--$boundary$crlf")
+                append("Content-Disposition: form-data; name=\"document\"; filename=\"$fileName\"$crlf")
+                append("Content-Type: $mimeType$crlf")
+                append("Content-Transfer-Encoding: base64$crlf$crlf")
+                append(fileBase64)
+                append(crlf)
+                
+                // Часть для chat_id
+                append("--$boundary$crlf")
+                append("Content-Disposition: form-data; name=\"chat_id\"$crlf$crlf")
+                append(chatId)
+                append(crlf)
+                
+                // Часть для caption
+                append("--$boundary$crlf")
+                append("Content-Disposition: form-data; name=\"caption\"$crlf$crlf")
+                append(caption)
+                append(crlf)
+                
+                // Часть для parse_mode
+                append("--$boundary$crlf")
+                append("Content-Disposition: form-data; name=\"parse_mode\"$crlf$crlf")
+                append("HTML")
+                append(crlf)
+                
+                // Завершающий boundary
+                append("--$boundary--$crlf")
+            }
+
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "multipart/form-data; boundary=$boundary")
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .timeout(java.time.Duration.ofSeconds(30))
+                .build()
+
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+
+            if (response.statusCode() == 200) {
+                println("✅ Telegram: файл $fileName отправлен в чат $chatId")
+                true
+            } else {
+                println("❌ Telegram: ошибка ${response.statusCode()} - ${response.body().take(200)}")
+                false
+            }
+        } catch (e: Exception) {
+            println("❌ Telegram: исключение ${e.javaClass.simpleName}: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Формирует красивое HTML-сообщение о командировке.
      */
     fun formatTripMessage(
