@@ -138,6 +138,13 @@ object ExpenseReceiptsTable : UUIDTable("expense_receipts") {
     val uploadedAt = long("uploaded_at").default(0L)
 }
 
+// 🆕 Таблица фото чеков для билетов
+object TicketReceiptsTable : UUIDTable("ticket_receipts") {
+    val ticketId = reference("ticket_id", TicketsTable, onDelete = ReferenceOption.CASCADE).index()
+    val imageUrl = text("image_url")
+    val uploadedAt = long("uploaded_at").default(0L)
+}
+
 // 🆕 Таблица FCM токенов
 object FcmTokensTable : UUIDTable("fcm_tokens") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()

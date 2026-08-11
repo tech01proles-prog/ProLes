@@ -1,41 +1,36 @@
-```gitignore
-# Dependencies
-node_modules/
-
-# Build outputs
-dist/
+```
+# Compiled and build artifacts
+*.class
+*.o
+*.obj
+*.out
 build/
 target/
 
-# Python
+# Dependencies
+.gradle/
+.mypy_cache/
+.pytest_cache/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
+node_modules/
 venv/
 .venv/
-.ENV
-.ENV.*
-.venv/
-.venv.*
 
-# Logs
+# Logs and temp files
 *.log
+*.tmp
+*.swp
 
-# Environment variables
+# Environment
 .env
 .env.local
-.env.*
-!.env.example
+*.env.*
 
-# IDE
+# Editors
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
+
+# System files
 .DS_Store
 Thumbs.db
 
@@ -44,13 +39,7 @@ coverage/
 htmlcov/
 .coverage
 
-# Testing
-.pytest_cache/
-.mypy_cache/
-.nyc_output/
-coverage/
-
-# Compressed files
+# Archives
 *.zip
 *.gz
 *.tar
@@ -69,8 +58,4 @@ coverage/
 *.Z
 *.lz
 *.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
 ```
