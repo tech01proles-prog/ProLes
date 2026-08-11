@@ -27,9 +27,11 @@ export function TicketsPage() {
     currency: 'RUB',
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedReceiptFile, setSelectedReceiptFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = !permLoading && can('tickets', 'view');
 
@@ -117,23 +119,31 @@ export function TicketsPage() {
     }
   };
 
-  const handleFileChange = (file: File | null) => {
+  const handleFileChange = (file: File | null, isReceipt = false) => {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { alert('Файл не должен превышать 10 МБ'); return; }
-    setSelectedFile(file);
+    if (isReceipt) {
+      setSelectedReceiptFile(file);
+    } else {
+      setSelectedFile(file);
+    }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent, isReceipt = false) => {
     e.preventDefault();
     setDragActive(false);
-    if (e.dataTransfer.files?.[0]) handleFileChange(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files?.[0]) handleFileChange(e.dataTransfer.files[0], isReceipt);
   };
 
   const handleUpload = async () => {
-    if (!user || !selectedFile || !form.projectId) { alert('Заполните все поля и выберите файл'); return; }
+    if (!user || !selectedFile || !form.projectId) { alert('Заполните все поля и выберите файл билета'); return; }
     setUploading(true);
     try {
       const base64 = await readFileAsBase64(selectedFile);
+      let receiptBase64: string | null = null;
+      if (selectedReceiptFile) {
+        receiptBase64 = await readFileAsBase64(selectedReceiptFile);
+      }
       await api.post('/tickets/upload', {
         projectId: form.projectId,
         description: form.description,
@@ -143,11 +153,15 @@ export function TicketsPage() {
         fileBase64: base64,
         fileName: selectedFile.name,
         fileType: selectedFile.type || 'application/octet-stream',
+        receiptBase64: receiptBase64,
+        receiptFileName: selectedReceiptFile?.name || null,
+        receiptFileType: selectedReceiptFile?.type || null,
         amount: form.amount ? parseFloat(form.amount) : 0,
         currency: form.currency,
       });
       setShowForm(false);
       setSelectedFile(null);
+      setSelectedReceiptFile(null);
       setForm({ projectId: '', description: '', sendToAccountant: false, accountantEmail: '', recipientIds: [], amount: '', currency: 'RUB' });
       await loadData();
     } catch (err) {
@@ -232,7 +246,7 @@ export function TicketsPage() {
             </div>
             <div className="proles-modal-body">
               <div className="proles-modal-section">
-                <div className="proles-modal-section-title">Файл</div>
+                <div className="proles-modal-section-title">Файл билета *</div>
                 <div
                   onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
                   onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
@@ -261,7 +275,43 @@ export function TicketsPage() {
                   ) : (
                     <div>
                       <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📤</div>
-                      <div style={{ fontWeight: 600, color: '#475569' }}>Перетащите файл сюда</div>
+                      <div style={{ fontWeight: 600, color: '#475569' }}>Перетащите файл билета</div>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>или кликните (до 10 МБ)</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* 🆕 Поле для загрузки чека */}
+              <div className="proles-modal-section">
+                <div className="proles-modal-section-title">Чек (прилагается к билету)</div>
+                <div
+                  onDragEnter={(e) => { e.preventDefault(); }}
+                  onDragOver={(e) => { e.preventDefault(); }}
+                  onDragLeave={() => { }}
+                  onDrop={(e) => handleDrop(e, true)}
+                  onClick={() => receiptInputRef.current?.click()}
+                  style={{
+                    border: '2px dashed #cbd5e1',
+                    borderRadius: '0.75rem',
+                    padding: '1.5rem',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    background: 'transparent'
+                  }}
+                >
+                  <input ref={receiptInputRef} type="file" className="hidden" onChange={(e) => handleFileChange(e.target.files?.[0] || null, true)} />
+                  {selectedReceiptFile ? (
+                    <div>
+                      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{getFileIcon(selectedReceiptFile.type)}</div>
+                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{selectedReceiptFile.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>{formatFileSize(selectedReceiptFile.size)}</div>
+                      <button onClick={(e) => { e.stopPropagation(); setSelectedReceiptFile(null); }} style={{ marginTop: 8, fontSize: 12, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Убрать</button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🧾</div>
+                      <div style={{ fontWeight: 600, color: '#475569' }}>Перетащите файл чека</div>
                       <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>или кликните (до 10 МБ)</div>
                     </div>
                   )}

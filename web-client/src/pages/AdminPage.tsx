@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
-import type { UserDto, RoleDto, RolePermissionDto, UserEffectivePermissionDto } from '../types';
+import type { UserDto, RoleDto, RolePermissionDto, UserEffectivePermissionDto, TimeEntryDto, ExpenseDto, IncomeDto, BusinessTripDto } from '../types';
 import { generateUUID, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import { createPortal } from 'react-dom';

@@ -31,7 +31,7 @@ export function TripsPage() {
 
   // Автоматически устанавливаем filterUser если в URL есть userId или scope=all
   const urlUserId = searchParams.get('userId');
-  const urlScope = searchParams.get('scope');
+  
   const [filterUser, setFilterUser] = useState(urlUserId || 'all');
   const [filterProject, setFilterProject] = useState('all');
 
