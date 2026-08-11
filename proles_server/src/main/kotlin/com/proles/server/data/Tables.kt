@@ -253,6 +253,10 @@ object TicketsTable : UUIDTable("tickets") {
     val currency = varchar("currency", 3).default("RUB")  // 🆕 ВАЛЮТА
     val description = text("description").default("")
     val uploadedAt = long("uploaded_at")
+    // 🆕 Поля для чека
+    val receiptPath = varchar("receipt_path", 500).nullable()
+    val receiptOriginalName = varchar("receipt_original_name", 255).nullable()
+    val receiptFileType = varchar("receipt_file_type", 50).nullable()
 }
 
 object TicketRecipientsTable : UUIDTable("ticket_recipients") {

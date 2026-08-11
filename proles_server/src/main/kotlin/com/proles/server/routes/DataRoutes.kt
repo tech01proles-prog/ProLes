@@ -124,7 +124,9 @@ data class TicketUploadRequest(
     val fileName: String,
     val fileType: String,
     val amount: Double = 0.0,        // 
-    val currency: String = "RUB"     // 
+    val currency: String = "RUB",     // 
+    val receiptBase64: String? = null,  // 🆕 Чек (опционально)
+    val receiptFileName: String? = null  // 🆕 Имя файла чека
 )
 
 @Serializable
@@ -2364,6 +2366,30 @@ fun Route.dataRoutes() {
             val uniqueFileName = "${ticketId}_${request.fileName}"
             val uploadDir = java.io.File("uploads/tickets").apply { mkdirs() }
             java.io.File(uploadDir, uniqueFileName).writeBytes(fileBytes)
+            
+            // 🆕 Обработка чека если предоставлен
+            var receiptFilePath: String? = null
+            var receiptOriginalName: String? = null
+            var receiptFileType: String? = null
+            
+            if (!request.receiptBase64.isNullOrBlank()) {
+                val receiptBytes = try { java.util.Base64.getDecoder().decode(request.receiptBase64) }
+                catch (e: Exception) { 
+                    println("⚠️ Invalid receipt Base64: ${e.message}")
+                    null 
+                }
+                
+                if (receiptBytes != null) {
+                    val receiptFileName = request.receiptFileName ?: "receipt"
+                    val uniqueReceiptFileName = "${ticketId}_receipt_$receiptFileName"
+                    java.io.File(uploadDir, uniqueReceiptFileName).writeBytes(receiptBytes)
+                    receiptFilePath = "/uploads/tickets/$uniqueReceiptFileName"
+                    receiptOriginalName = receiptFileName
+                    receiptFileType = request.receiptFileType ?: "application/octet-stream"
+                    println("✅ Receipt saved: $uniqueReceiptFileName (${receiptBytes.size / 1024} KB)")
+                }
+            }
+            
             transaction {
                 // Находим UUID пользователя COMPANY для расходов компании
                 val companyUser = UsersTable.selectAll()
@@ -2387,6 +2413,10 @@ fun Route.dataRoutes() {
                     it[TicketsTable.currency] = request.currency        // 
                     it[TicketsTable.description] = request.description
                     it[uploadedAt] = System.currentTimeMillis()
+                    // 🆕 Сохраняем данные чека
+                    it[TicketsTable.receiptPath] = receiptFilePath
+                    it[TicketsTable.receiptOriginalName] = receiptOriginalName
+                    it[TicketsTable.receiptFileType] = receiptFileType
                 }
                 //  Автоматически создаём расход "Билет" от имени COMPANY (если есть сумма)
                 if (request.amount > 0.0) {
@@ -2717,7 +2747,7 @@ fun Route.dataRoutes() {
 
         // 🗑 Удалить компонент зарплаты
         delete("/components/{componentId}") {
-            if (!call.checkPermission(Permission.PAYROLL, "edit")) return@delete
+            if (!call.checkPermission(Permission.PAYROLL, "delete")) return@delete
             val componentId = runCatching {
                 UUID.fromString(call.parameters["componentId"])
             }.getOrNull() ?: return@delete call.respond(HttpStatusCode.BadRequest, "Invalid componentId")
@@ -2745,6 +2775,75 @@ fun Route.dataRoutes() {
 
             println("✅ Component $componentId deleted")
             call.respond(HttpStatusCode.NoContent)
+        }
+
+        // ✏️ Редактировать компонент зарплаты
+        put("/components/{componentId}") {
+            if (!call.checkPermission(Permission.PAYROLL, "edit")) return@put
+            
+            val componentId = runCatching {
+                UUID.fromString(call.parameters["componentId"])
+            }.getOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "Invalid componentId")
+
+            val body = try { call.receive<SalaryComponentDto>() }
+            catch (e: Exception) {
+                println("❌ PUT /components: bad JSON: ${e.message}")
+                return@put call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}")
+            }
+
+            val session = call.checkSession() ?: return@put
+            
+            // Проверяем, что компонент принадлежит пользователю (или текущий пользователь — админ)
+            val componentOwner = transaction {
+                SalaryComponentsTable.selectAll()
+                    .where { SalaryComponentsTable.id eq componentId }
+                    .singleOrNull()?.get(SalaryComponentsTable.userId)?.value
+            }
+
+            if (componentOwner == null) {
+                return@put call.respond(HttpStatusCode.NotFound, "Component not found")
+            }
+
+            // Если не супер-админ, проверяем что компонент принадлежит текущему пользователю
+            if (session.role != "superadmin" && componentOwner != session.userId) {
+                return@put call.respond(HttpStatusCode.Forbidden, "Cannot edit another user's component")
+            }
+
+            val userId = runCatching { UUID.fromString(body.userId) }.getOrNull()
+                ?: return@put call.respond(HttpStatusCode.BadRequest, "Invalid userId")
+
+            val projectId = body.projectId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            val effectiveFrom = runCatching {
+                kotlinx.datetime.LocalDate.parse(body.effectiveFrom)
+            }.getOrNull() ?: run {
+                val today = java.time.LocalDate.now()
+                kotlinx.datetime.LocalDate(today.year, today.monthValue, today.dayOfMonth)
+            }
+            val effectiveTo = body.effectiveTo?.let {
+                runCatching { kotlinx.datetime.LocalDate.parse(it) }.getOrNull()
+            }
+
+            transaction {
+                SalaryComponentsTable.update({ SalaryComponentsTable.id eq componentId }) {
+                    it[SalaryComponentsTable.userId] = userId
+                    it[SalaryComponentsTable.type] = body.type
+                    it[SalaryComponentsTable.amount] = body.amount
+                    if (projectId != null) it[SalaryComponentsTable.projectId] = projectId
+                    else it[SalaryComponentsTable.projectId] = null
+                    if (body.ratePerHour != null) it[SalaryComponentsTable.ratePerHour] = body.ratePerHour
+                    else it[SalaryComponentsTable.ratePerHour] = null
+                    if (body.ratePerUnit != null) it[SalaryComponentsTable.ratePerUnit] = body.ratePerUnit
+                    else it[SalaryComponentsTable.ratePerUnit] = null
+                    it[SalaryComponentsTable.description] = body.description
+                    it[SalaryComponentsTable.effectiveFrom] = effectiveFrom
+                    if (effectiveTo != null) it[SalaryComponentsTable.effectiveTo] = effectiveTo
+                    else it[SalaryComponentsTable.effectiveTo] = null
+                    it[SalaryComponentsTable.isActive] = body.isActive
+                }
+            }
+
+            println("✅ Component $componentId updated")
+            call.respond(HttpStatusCode.OK, mapOf("id" to componentId.toString()))
         }
 
         // Рассчитать зарплату за период

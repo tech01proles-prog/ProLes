@@ -189,7 +189,7 @@ fun AdminTicketsScreen(
             employees = employees,
             initialAccountantEmail = savedAccountantEmail,
             onDismiss = { showUploadDialog = false },
-            onUpload = { projectId, description, amount, currency, sendToAccountant, accountantEmail, recipientIds, fileUri ->
+            onUpload = { projectId, description, amount, currency, sendToAccountant, accountantEmail, recipientIds, fileUri, receiptUri ->
                 isUploading = true
                 showUploadDialog = false
                 scope.launch {
@@ -207,7 +207,8 @@ fun AdminTicketsScreen(
                         sendToAccountant = sendToAccountant,
                         accountantEmail = accountantEmail,
                         recipientIds = recipientIds,
-                        fileUri = fileUri
+                        fileUri = fileUri,
+                        receiptUri = receiptUri  // 🆕 Передаём чек
                     )
                     isUploading = false
                     if (success) {
@@ -577,7 +578,8 @@ private fun UploadTicketDialog(
         sendToAccountant: Boolean,
         accountantEmail: String,
         recipientIds: List<String>,
-        fileUri: Uri
+        fileUri: Uri,
+        receiptUri: Uri?         // 🆕 Чек (опционально)
     ) -> Unit
 ) {
     val context = LocalContext.current
@@ -592,17 +594,29 @@ private fun UploadTicketDialog(
     var selectedRecipients by remember { mutableStateOf<Set<String>>(emptySet()) }
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
     var selectedFileName by remember { mutableStateOf("") }
+    var selectedReceiptUri by remember { mutableStateOf<Uri?>(null) }  // 🆕
+    var selectedReceiptFileName by remember { mutableStateOf("") }      // 🆕
 
     var showProjectPicker by remember { mutableStateOf(false) }
     var showRecipientPicker by remember { mutableStateOf(false) }
 
-    // Launcher для выбора файла
+    // Launcher для выбора файла билета
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
             selectedFileUri = uri
             selectedFileName = getFileName(context, uri) ?: "Выбранный файл"
+        }
+    }
+    
+    // 🆕 Launcher для выбора файла чека
+    val receiptPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedReceiptUri = uri
+            selectedReceiptFileName = getFileName(context, uri) ?: "Выбранный файл"
         }
     }
 
@@ -637,7 +651,7 @@ private fun UploadTicketDialog(
                     )
                 }
 
-                // Файл
+                // Файл билета
                 Text("Билет *", style = MaterialTheme.typography.labelMedium)
                 OutlinedButton(
                     onClick = { filePickerLauncher.launch("*/*") },
@@ -649,6 +663,35 @@ private fun UploadTicketDialog(
                         selectedFileName.ifBlank { "Выберите файл (PDF, JPG...)" },
                         maxLines = 1
                     )
+                }
+                
+                // 🆕 Файл чека (опционально)
+                Text("Чек (опционально)", style = MaterialTheme.typography.labelMedium)
+                OutlinedButton(
+                    onClick = { receiptPickerLauncher.launch("*/*") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.ReceiptLong, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        selectedReceiptFileName.ifBlank { "Выберите файл чека (PDF, JPG...)" },
+                        maxLines = 1
+                    )
+                }
+                
+                // 🆕 Кнопка для удаления чека если выбран
+                if (selectedReceiptUri != null) {
+                    TextButton(
+                        onClick = {
+                            selectedReceiptUri = null
+                            selectedReceiptFileName = ""
+                        },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Icon(Icons.Default.Close, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Удалить чек")
+                    }
                 }
 
                 // Описание
@@ -808,7 +851,8 @@ private fun UploadTicketDialog(
                             sendToAccountant,
                             accountantEmail,
                             selectedRecipients.toList(),
-                            selectedFileUri!!
+                            selectedFileUri!!,
+                            selectedReceiptUri                      // 🆕 Передаём чек
                         )
                     }
                 },
