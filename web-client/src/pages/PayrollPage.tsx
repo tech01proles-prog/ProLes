@@ -42,6 +42,7 @@ export function PayrollPage() {
 
   // Форма добавления компонента
   const [showForm, setShowForm] = useState(false);
+  const [editingComponentId, setEditingComponentId] = useState<string | null>(null);
   const [editingForUserId, setEditingForUserId] = useState<string | null>(null);
   const [form, setForm] = useState({
     type: 'HOURLY' as keyof typeof COMPONENT_TYPES,
@@ -158,8 +159,8 @@ export function PayrollPage() {
     if (!targetUserId) return;
     setSaving(true);
     try {
-      await api.post('/payroll/components', {
-        id: generateUUID(),
+      const payload = {
+        id: editingComponentId || generateUUID(),
         userId: targetUserId,
         type: form.type,
         amount: parseFloat(form.amount) || 0,
@@ -170,21 +171,49 @@ export function PayrollPage() {
         effectiveFrom: form.effectiveFrom,
         effectiveTo: null,
         isActive: true,
-      });
+      };
+      
+      if (editingComponentId) {
+        // Редактирование существующего компонента
+        await api.put(`/payroll/components/${editingComponentId}`, payload);
+      } else {
+        // Создание нового компонента
+        await api.post('/payroll/components', payload);
+      }
+      
       setShowForm(false);
+      setEditingComponentId(null);
+      setEditingForUserId(null);
       setForm({ type: 'HOURLY', amount: '', projectId: '', ratePerHour: '', ratePerUnit: '', description: '', effectiveFrom: new Date().toISOString().slice(0, 10) });
       if (tab === 'my') await loadMyData();
+      else await loadAdminData();
     } catch (err) {
-      alert('Ошибка добавления компонента');
+      alert('Ошибка сохранения компонента');
     } finally {
       setSaving(false);
     }
   };
 
+  const handleEditComponent = (component: SalaryComponentDto) => {
+    setEditingComponentId(component.id);
+    setEditingForUserId(component.userId);
+    setForm({
+      type: component.type,
+      amount: component.amount.toString(),
+      projectId: component.projectId || '',
+      ratePerHour: component.ratePerHour?.toString() || '',
+      ratePerUnit: component.ratePerUnit?.toString() || '',
+      description: component.description,
+      effectiveFrom: component.effectiveFrom,
+    });
+    setShowForm(true);
+  };
+
   const handleDeleteComponent = async (id: string) => {
     if (!confirm('Удалить компонент?')) return;
     await api.delete(`/payroll/components/${id}`);
-    await loadMyData();
+    if (tab === 'my') await loadMyData();
+    else await loadAdminData();
   };
 
   const handleUpdateStatus = async (recordId: string, status: string) => {
@@ -289,7 +318,9 @@ export function PayrollPage() {
                     <div className="proles-modal-title">
                       <div className="proles-modal-icon">💰</div>
                       <div>
-                        <div>{editingForUserId && editingForUserId !== user?.id
+                        <div>{editingComponentId 
+                          ? '✏️ Редактирование компонента'
+                          : editingForUserId && editingForUserId !== user?.id
                           ? `Компонент для: ${allUsers.find(u => u.id === editingForUserId)?.name || ''}`
                           : 'Новый компонент'}</div>
                         <div style={{ fontSize: '0.75rem', fontWeight: 500, opacity: 0.85, marginTop: 2 }}>
@@ -392,15 +423,21 @@ export function PayrollPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {myComponents.map(c => {
                   const cfg = COMPONENT_TYPES[c.type as keyof typeof COMPONENT_TYPES];
-                  // 🔐 Удаление: свои компоненты или супер-админ
+                  // 🔐 Редактирование/удаление: свои компоненты или при наличии прав
+                  const canEdit = can('payroll', 'edit') || c.userId === user?.id;
                   const canDelete = can('payroll', 'delete') || c.userId === user?.id;
                   return (
                     <div key={c.id} className="card p-4 group hover:shadow-md transition-all">
                       <div className="flex items-start justify-between mb-2">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.color}`}>{cfg.label}</span>
-                        {canDelete && (
-                          <button onClick={() => handleDeleteComponent(c.id)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity text-sm">🗑</button>
-                        )}
+                        <div className="flex gap-1">
+                          {canEdit && (
+                            <button onClick={() => handleEditComponent(c)} className="opacity-0 group-hover:opacity-100 text-blue-500 hover:text-blue-700 transition-opacity text-sm" title="Редактировать">✏️</button>
+                          )}
+                          {canDelete && (
+                            <button onClick={() => handleDeleteComponent(c.id)} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity text-sm" title="Удалить">🗑</button>
+                          )}
+                        </div>
                       </div>
                       <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatMoney(c.amount)}</div>
                       {c.ratePerHour != null && c.ratePerHour > 0 && (
