@@ -133,7 +133,10 @@ data class TicketUploadRequest(
     val fileName: String,
     val fileType: String,
     val amount: Double = 0.0,        // 🆕
-    val currency: String = "RUB"     // 🆕
+    val currency: String = "RUB",     // 🆕
+    val receiptBase64: String? = null,  // 🆕 Чек (опционально)
+    val receiptFileName: String? = null,  // 🆕 Имя файла чека
+    val receiptFileType: String? = null  // 🆕 MIME-тип чека
 )
 
 @SuppressLint("UnsafeOptInUsageError")
@@ -1373,17 +1376,18 @@ object ApiClient {
         sendToAccountant: Boolean,
         accountantEmail: String,
         recipientIds: List<String>,
-        fileUri: android.net.Uri
+        fileUri: android.net.Uri,
+        receiptUri: android.net.Uri? = null  // 🆕 Чек (опционально)
     ): Boolean {
         return try {
             val contentResolver = context.contentResolver
 
-            // Читаем файл в ByteArray
+            // Читаем файл билета в ByteArray
             val inputStream = contentResolver.openInputStream(fileUri) ?: return false
             val fileBytes = inputStream.readBytes()
             inputStream.close()
 
-            // Получаем имя файла
+            // Получаем имя файла билета
             var fileName = "ticket"
             contentResolver.query(fileUri, null, null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
@@ -1392,11 +1396,36 @@ object ApiClient {
                 }
             }
 
-            // Получаем MIME-тип
+            // Получаем MIME-тип билета
             val mimeType = contentResolver.getType(fileUri) ?: "application/octet-stream"
 
-            // Кодируем в Base64
+            // Кодируем билет в Base64
             val fileBase64 = java.util.Base64.getEncoder().encodeToString(fileBytes)
+
+            // 🆕 Читаем чек если предоставлен
+            var receiptBase64: String? = null
+            var receiptFileName: String? = null
+            var receiptFileType: String? = null
+            
+            if (receiptUri != null) {
+                val receiptStream = contentResolver.openInputStream(receiptUri)
+                if (receiptStream != null) {
+                    val receiptBytes = receiptStream.readBytes()
+                    receiptStream.close()
+                    receiptBase64 = java.util.Base64.getEncoder().encodeToString(receiptBytes)
+                    
+                    // Получаем имя файла чека
+                    contentResolver.query(receiptUri, null, null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (nameIndex >= 0) receiptFileName = cursor.getString(nameIndex)
+                        }
+                    }
+                    
+                    // Получаем MIME-тип чека
+                    receiptFileType = contentResolver.getType(receiptUri) ?: "application/octet-stream"
+                }
+            }
 
             // Формируем JSON
             val requestBody = TicketUploadRequest(
@@ -1409,10 +1438,16 @@ object ApiClient {
                 fileName = fileName,
                 fileType = mimeType,
                 amount = amount,        // 🆕
-                currency = currency     // 🆕
+                currency = currency,     // 🆕
+                receiptBase64 = receiptBase64,  // 🆕
+                receiptFileName = receiptFileName,  // 🆕
+                receiptFileType = receiptFileType  // 🆕
             )
 
             android.util.Log.d("ApiClient", "📤 Sending ticket: ${fileBytes.size / 1024} KB as Base64")
+            if (receiptBase64 != null) {
+                android.util.Log.d("ApiClient", "📤 Sending receipt: ${receiptBase64.length / 1024} KB as Base64")
+            }
 
             val response = client.post("$BASE_URL/tickets/upload") {
                 contentType(io.ktor.http.ContentType.Application.Json)

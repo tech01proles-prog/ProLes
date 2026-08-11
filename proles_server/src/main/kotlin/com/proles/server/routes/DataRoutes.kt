@@ -2366,6 +2366,30 @@ fun Route.dataRoutes() {
             val uniqueFileName = "${ticketId}_${request.fileName}"
             val uploadDir = java.io.File("uploads/tickets").apply { mkdirs() }
             java.io.File(uploadDir, uniqueFileName).writeBytes(fileBytes)
+            
+            // 🆕 Обработка чека если предоставлен
+            var receiptFilePath: String? = null
+            var receiptOriginalName: String? = null
+            var receiptFileType: String? = null
+            
+            if (!request.receiptBase64.isNullOrBlank()) {
+                val receiptBytes = try { java.util.Base64.getDecoder().decode(request.receiptBase64) }
+                catch (e: Exception) { 
+                    println("⚠️ Invalid receipt Base64: ${e.message}")
+                    null 
+                }
+                
+                if (receiptBytes != null) {
+                    val receiptFileName = request.receiptFileName ?: "receipt"
+                    val uniqueReceiptFileName = "${ticketId}_receipt_$receiptFileName"
+                    java.io.File(uploadDir, uniqueReceiptFileName).writeBytes(receiptBytes)
+                    receiptFilePath = "/uploads/tickets/$uniqueReceiptFileName"
+                    receiptOriginalName = receiptFileName
+                    receiptFileType = request.receiptFileType ?: "application/octet-stream"
+                    println("✅ Receipt saved: $uniqueReceiptFileName (${receiptBytes.size / 1024} KB)")
+                }
+            }
+            
             transaction {
                 // Находим UUID пользователя COMPANY для расходов компании
                 val companyUser = UsersTable.selectAll()
@@ -2389,6 +2413,10 @@ fun Route.dataRoutes() {
                     it[TicketsTable.currency] = request.currency        // 
                     it[TicketsTable.description] = request.description
                     it[uploadedAt] = System.currentTimeMillis()
+                    // 🆕 Сохраняем данные чека
+                    it[TicketsTable.receiptPath] = receiptFilePath
+                    it[TicketsTable.receiptOriginalName] = receiptOriginalName
+                    it[TicketsTable.receiptFileType] = receiptFileType
                 }
                 //  Автоматически создаём расход "Билет" от имени COMPANY (если есть сумма)
                 if (request.amount > 0.0) {
