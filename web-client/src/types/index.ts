@@ -131,7 +131,7 @@ export interface RolePermissionDto {
 export interface SalaryComponentDto {
   id: string;
   userId: string;
-  type: 'FIXED' | 'HOURLY' | 'PIECE' | 'BONUS';
+  type: 'FIXED' | 'HOURLY' | 'PIECE' | 'BONUS' | 'PENALTY' | 'MARGIN_PERCENT';
   amount: number;
   projectId: string | null;
   ratePerHour: number | null;
