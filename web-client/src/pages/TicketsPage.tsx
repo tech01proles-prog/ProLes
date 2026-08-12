@@ -4,10 +4,12 @@ import api from '../api/client';
 import type { TicketDto, ProjectDto, UserDto } from '../types';
 import { formatDateTime, formatFileSize, formatMoney, readFileAsBase64 } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
+import { useToast } from '../components/Toast/ToastContext';
 
 export function TicketsPage() {
   const [user, setUser] = useState<UserDto | null>(null);
   const { can, loading: permLoading } = usePermissions();
+  const { addToast } = useToast();
   const [tab, setTab] = useState<'my' | 'all'>('my');
   const [myTickets, setMyTickets] = useState<TicketDto[]>([]);
   const [allTickets, setAllTickets] = useState<TicketDto[]>([]);
@@ -164,8 +166,9 @@ export function TicketsPage() {
       setSelectedReceiptFile(null);
       setForm({ projectId: '', description: '', sendToAccountant: false, accountantEmail: '', recipientIds: [], amount: '', currency: 'RUB' });
       await loadData();
+      addToast('Билет успешно загружен и отправлен в Telegram', 'success');
     } catch (err) {
-      alert('Ошибка загрузки билета');
+      addToast('Ошибка загрузки билета', 'error');
     } finally {
       setUploading(false);
     }
@@ -174,12 +177,14 @@ export function TicketsPage() {
   const handleMarkViewed = async (ticketId: string) => {
     await api.post(`/tickets/${ticketId}/view`);
     await loadData();
+    addToast('Билет отмечен как просмотренный', 'success');
   };
 
   const handleDelete = async (ticketId: string) => {
     if (!confirm('Удалить билет?')) return;
     await api.delete(`/tickets/${ticketId}`);
     await loadData();
+    addToast('Билет успешно удален', 'success');
   };
 
   const toggleRecipient = (uid: string) => {

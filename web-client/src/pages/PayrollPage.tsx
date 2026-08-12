@@ -8,17 +8,21 @@ import type {
 import { generateUUID, formatMoney, monthName } from '../lib/utils';
 import { exportPayrollToExcel, exportPayrollToPdf, exportMySalaryToExcel, exportMySalaryToPdf } from '../lib/export';
 import { usePermissions } from '../hooks/usePermissions';
+import { useToast } from '../components/Toast/ToastContext';
 
 const COMPONENT_TYPES = {
   FIXED: { label: '💼 Фикс', color: 'bg-blue-100 text-blue-700 border-blue-200' },
   HOURLY: { label: '⏱ Почасовая', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
   PIECE: { label: '🔨 Сдельная', color: 'bg-orange-100 text-orange-700 border-orange-200' },
   BONUS: { label: '🎁 Бонус', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  PENALTY: { label: '⚠️ Штраф', color: 'bg-red-100 text-red-700 border-red-200' },
+  MARGIN_PERCENT: { label: '% от маржи', color: 'bg-purple-100 text-purple-700 border-purple-200' },
 };
 
 export function PayrollPage() {
   const [user, setUser] = useState<UserDto | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isManager, setIsManager] = useState(false);
   const [tab, setTab] = useState<'my' | 'all'>('my');
 
   // Личные данные
@@ -58,6 +62,7 @@ export function PayrollPage() {
   const [saving, setSaving] = useState(false);
 
   const { can } = usePermissions();
+  const { addToast } = useToast();
 
   useEffect(() => {
     const stored = localStorage.getItem('proles_user');
@@ -66,6 +71,7 @@ export function PayrollPage() {
         const u = JSON.parse(stored);
         setUser(u);
         setIsAdmin(['admin', 'director', 'superadmin'].includes(u.role));
+        setIsManager(u.role === 'manager');
       } catch {}
     }
   }, []);
@@ -187,8 +193,9 @@ export function PayrollPage() {
       setForm({ type: 'HOURLY', amount: '', projectId: '', ratePerHour: '', ratePerUnit: '', description: '', effectiveFrom: new Date().toISOString().slice(0, 10) });
       if (tab === 'my') await loadMyData();
       else await loadAdminData();
+      addToast(`Компонент зарплаты "${COMPONENT_TYPES[payload.type].label}" успешно ${editingComponentId ? 'обновлен' : 'добавлен'}`, 'success');
     } catch (err) {
-      alert('Ошибка сохранения компонента');
+      addToast('Ошибка сохранения компонента зарплаты', 'error');
     } finally {
       setSaving(false);
     }
@@ -214,12 +221,14 @@ export function PayrollPage() {
     await api.delete(`/payroll/components/${id}`);
     if (tab === 'my') await loadMyData();
     else await loadAdminData();
+    addToast('Компонент зарплаты успешно удален', 'success');
   };
 
   const handleUpdateStatus = async (recordId: string, status: string) => {
     await api.put(`/payroll/records/${recordId}/status`, { status });
     await loadAdminData();
     await loadMyData();
+    addToast(`Статус записи зарплаты успешно обновлен на "${status === 'PAID' ? 'Оплачено' : 'В обработке'}"`, 'success');
   };
 
   return (
@@ -333,35 +342,52 @@ export function PayrollPage() {
                   <div className="proles-modal-body">
                     <div className="proles-modal-section">
                       <div className="proles-modal-section-title">Тип компонента</div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {Object.entries(COMPONENT_TYPES).map(([key, cfg]) => (
-                          <button
-                            key={key}
-                            onClick={() => setForm({ ...form, type: key as any })}
-                            style={{
-                              padding: '0.75rem',
-                              borderRadius: '0.75rem',
-                              border: form.type === key ? '2px solid #10b981' : '2px solid #e2e8f0',
-                              background: form.type === key ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)' : 'transparent',
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              transition: 'all 0.15s',
-                              textAlign: 'left',
-                              color: form.type === key ? '#047857' : '#64748b'
-                            }}
-                          >
-                            {cfg.label}
-                          </button>
-                        ))}
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                        {Object.entries(COMPONENT_TYPES).map(([key, cfg]) => {
+                          // 🔐 MARGIN_PERCENT доступен только менеджерам и админам
+                          const isMarginPercent = key === 'MARGIN_PERCENT';
+                          const canSelectMargin = isAdmin || isManager;
+                          
+                          if (isMarginPercent && !canSelectMargin) return null;
+                          
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => setForm({ ...form, type: key as any })}
+                              style={{
+                                padding: '0.75rem',
+                                borderRadius: '0.75rem',
+                                border: form.type === key ? '2px solid #10b981' : '2px solid #e2e8f0',
+                                background: form.type === key ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)' : 'transparent',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: canSelectMargin || !isMarginPercent ? 'pointer' : 'not-allowed',
+                                transition: 'all 0.15s',
+                                textAlign: 'left',
+                                color: form.type === key ? '#047857' : '#64748b',
+                                opacity: isMarginPercent && !canSelectMargin ? 0.5 : 1
+                              }}
+                              disabled={isMarginPercent && !canSelectMargin}
+                              title={isMarginPercent && !canSelectMargin ? 'Доступно только менеджерам' : ''}
+                            >
+                              {cfg.label}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                     <div className="proles-modal-section">
                       <div className="proles-modal-section-title">Параметры</div>
                       <div className="proles-modal-grid">
-                        {(form.type === 'FIXED' || form.type === 'BONUS') && (
+                        {(form.type === 'FIXED' || form.type === 'BONUS' || form.type === 'PENALTY') && (
                           <div className="proles-input-group" style={{ gridColumn: 'span 2' }}>
-                            <label>{form.type === 'FIXED' ? 'Фиксированная сумма' : 'Сумма бонуса'}</label>
+                            <label>{form.type === 'FIXED' ? 'Фиксированная сумма' : form.type === 'PENALTY' ? 'Сумма штрафа' : 'Сумма бонуса'}</label>
+                            <input type="number" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="input" />
+                          </div>
+                        )}
+                        {form.type === 'MARGIN_PERCENT' && (
+                          <div className="proles-input-group" style={{ gridColumn: 'span 2' }}>
+                            <label>% от маржи</label>
                             <input type="number" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="input" />
                           </div>
                         )}
