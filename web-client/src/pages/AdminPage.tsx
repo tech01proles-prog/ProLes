@@ -4,6 +4,7 @@ import api from '../api/client';
 import type { UserDto, RoleDto, RolePermissionDto, UserEffectivePermissionDto, TimeEntryDto, ExpenseDto, IncomeDto, BusinessTripDto } from '../types';
 import { generateUUID, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
+import { useToast } from '../components/Toast/ToastContext';
 import { createPortal } from 'react-dom';
 
 // ═══════════════════════════════════════════════════════
@@ -35,6 +36,7 @@ const ROLE_COLORS: Record<string, string> = {
 export function AdminPage() {
   const navigate = useNavigate();
   const { can, refresh: refreshPerms, loading: permLoading } = usePermissions();
+  const { addToast } = useToast();
 
   // 🔍 Отладка
   console.log('permLoading:', permLoading);
@@ -195,7 +197,10 @@ export function AdminPage() {
       setShowCreateForm(false);
       setCreateForm({ firstName: '', lastName: '', middleName: '', login: '', position: '', role: 'employee', newPassword: '' });
       await loadUsers();
-    } catch (err) { alert('Ошибка создания'); }
+      addToast('Сотрудник успешно создан', 'success');
+    } catch (err) { 
+      addToast('Ошибка создания сотрудника', 'error'); 
+    }
     finally { setSaving(false); }
   };
 
@@ -234,8 +239,9 @@ export function AdminPage() {
       await api.put('/users', payload);
       setEditingEmployee(null);
       await loadUsers();
+      addToast(`Данные сотрудника ${editForm.lastName} ${editForm.firstName} успешно обновлены`, 'success');
     } catch (err) {
-      alert('Ошибка сохранения');
+      addToast('Ошибка сохранения данных сотрудника', 'error');
     } finally {
       setEditSaving(false);
     }
@@ -246,6 +252,7 @@ export function AdminPage() {
     if (!confirm('Удалить сотрудника? ВСЕ данные будут удалены!')) return;
     await api.delete('/users', { params: { userId: id } });
     await loadUsers();
+    addToast('Сотрудник успешно удален', 'success');
   };
 
   const handleSaveOverrides = async () => {
@@ -264,7 +271,10 @@ export function AdminPage() {
       await api.put(`/rbac/users/${overrideUser.id}/permissions`, dataToSave);
       await refreshPerms();
       setOverrideUser(null);
-    } catch (err) { alert('Ошибка сохранения'); }
+      addToast(`Права пользователя ${overrideUser.lastName} ${overrideUser.firstName} успешно изменены`, 'success');
+    } catch (err) { 
+      addToast('Ошибка сохранения прав пользователя', 'error'); 
+    }
     finally { setOverrideSaving(false); }
   };
 
@@ -291,7 +301,10 @@ export function AdminPage() {
       await refreshPerms();
       setEditingRole(null);
       await loadRoles();
-    } catch (err) { alert('Ошибка сохранения роли'); }
+      addToast(`Права роли "${PERMISSION_LABELS[editingRole.name] || editingRole.name}" успешно обновлены`, 'success');
+    } catch (err) { 
+      addToast('Ошибка сохранения роли', 'error'); 
+    }
     finally { setRoleSaving(false); }
   };
 

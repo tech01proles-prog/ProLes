@@ -8,6 +8,7 @@ import type {
 import { generateUUID, formatMoney, monthName } from '../lib/utils';
 import { exportPayrollToExcel, exportPayrollToPdf, exportMySalaryToExcel, exportMySalaryToPdf } from '../lib/export';
 import { usePermissions } from '../hooks/usePermissions';
+import { useToast } from '../components/Toast/ToastContext';
 
 const COMPONENT_TYPES = {
   FIXED: { label: '💼 Фикс', color: 'bg-blue-100 text-blue-700 border-blue-200' },
@@ -61,6 +62,7 @@ export function PayrollPage() {
   const [saving, setSaving] = useState(false);
 
   const { can } = usePermissions();
+  const { addToast } = useToast();
 
   useEffect(() => {
     const stored = localStorage.getItem('proles_user');
@@ -191,8 +193,9 @@ export function PayrollPage() {
       setForm({ type: 'HOURLY', amount: '', projectId: '', ratePerHour: '', ratePerUnit: '', description: '', effectiveFrom: new Date().toISOString().slice(0, 10) });
       if (tab === 'my') await loadMyData();
       else await loadAdminData();
+      addToast(`Компонент зарплаты "${COMPONENT_TYPES[payload.type].label}" успешно ${editingComponentId ? 'обновлен' : 'добавлен'}`, 'success');
     } catch (err) {
-      alert('Ошибка сохранения компонента');
+      addToast('Ошибка сохранения компонента зарплаты', 'error');
     } finally {
       setSaving(false);
     }
@@ -218,12 +221,14 @@ export function PayrollPage() {
     await api.delete(`/payroll/components/${id}`);
     if (tab === 'my') await loadMyData();
     else await loadAdminData();
+    addToast('Компонент зарплаты успешно удален', 'success');
   };
 
   const handleUpdateStatus = async (recordId: string, status: string) => {
     await api.put(`/payroll/records/${recordId}/status`, { status });
     await loadAdminData();
     await loadMyData();
+    addToast(`Статус записи зарплаты успешно обновлен на "${status === 'PAID' ? 'Оплачено' : 'В обработке'}"`, 'success');
   };
 
   return (
