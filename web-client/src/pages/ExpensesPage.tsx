@@ -40,6 +40,7 @@ export function ExpensesPage() {
   const [filterUser, setFilterUser] = useState(searchParams.get('userId') || 'all');
   const [filterProject, setFilterProject] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [toOnly, setToOnly] = useState(false); // 🆕 Режим "Только ТО"
   
   // Автоматически переключаем на 'all' если в URL есть userId или scope=all
   useEffect(() => {
@@ -95,11 +96,17 @@ export function ExpensesPage() {
   const expenses = effectiveScope === 'all' ? allExpenses : myExpenses;
   const myCount = myExpenses.length;
   const allCount = allExpenses.length;
+  
+  // 🆕 Фильтрация по роли "employee" (ТО)
+  const employeeUsers = users.filter(u => u.role === 'employee');
+  const employeeUserIds = new Set(employeeUsers.map(u => u.id));
+  
   const filtered = expenses
     .filter(e => effectiveScope !== 'all' || filterUser === 'all' || e.userId === filterUser)
     .filter(e => effectiveScope !== 'all' || filterProject === 'all' || e.projectId === filterProject)
     .filter(e => effectiveScope !== 'all' || filterType === 'all' || e.type === filterType)
     .filter(e => e.date >= dateFrom && e.date <= dateTo)
+    .filter(e => !toOnly || effectiveScope === 'all' && employeeUserIds.has(e.userId)) // 🆕 Только ТО
     .sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
       return sortField === 'date' ? a.date.localeCompare(b.date) * dir : (a.amount - b.amount) * dir;
@@ -163,6 +170,29 @@ export function ExpensesPage() {
 
       {/* 🎯 Мои / Все */}
       <ScopeTabs scope={effectiveScope} onChange={setScope} canViewAll={canViewAll} myCount={myCount} allCount={allCount} />
+
+      {/* 🔧 Переключатель "Только ТО" */}
+      {effectiveScope === 'all' && (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setToOnly(!toOnly)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
+              toOnly 
+                ? 'bg-emerald-600 text-white shadow-md' 
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-emerald-300'
+            }`}
+          >
+            <span>🔧</span>
+            <span>Только расходы ТО</span>
+            {toOnly && <span className="text-xs bg-emerald-500 text-white px-2 py-0.5 rounded-full">{employeeUsers.length}</span>}
+          </button>
+          {toOnly && (
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Показаны расходы {employeeUsers.length} сотрудников тех. отдела
+            </span>
+          )}
+        </div>
+      )}
 
       {/* 🌲 PROLES MODAL: Новый расход */}
       {showForm && createPortal(
