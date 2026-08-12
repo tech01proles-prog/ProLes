@@ -126,7 +126,8 @@ data class TicketUploadRequest(
     val amount: Double = 0.0,        // 
     val currency: String = "RUB",     // 
     val receiptBase64: String? = null,  // 🆕 Чек (опционально)
-    val receiptFileName: String? = null  // 🆕 Имя файла чека
+    val receiptFileName: String? = null,  // 🆕 Имя файла чека
+    val receiptFileType: String? = null  // 🆕 Тип файла чека
 )
 
 @Serializable
