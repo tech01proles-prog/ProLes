@@ -2566,6 +2566,21 @@ fun Route.dataRoutes() {
                         }
                     }.trim()
                     com.proles.server.config.TelegramService.sendMessage(telegramMsg)
+                    
+                    // 🆕 Отправка файла билета в Telegram
+                    if (fileBytes.isNotEmpty()) {
+                        val caption = buildString {
+                            appendLine("<b>🎫 БИЛЕТ (ФАЙЛ)</b>")
+                            appendLine()
+                            appendLine("<b>👤 Загрузил:</b> $senderName")
+                            appendLine("<b>📁 Проект:</b> $projectName")
+                            appendLine("<b>📄 Файл:</b> ${request.fileName}")
+                            if (request.amount > 0.0) {
+                                appendLine("<b>💰 Стоимость:</b> ${"%.2f".format(request.amount)} ${request.currency}")
+                            }
+                        }.trim()
+                        com.proles.server.config.TelegramService.sendFile(fileBytes, request.fileName, caption)
+                    }
                 } catch (e: Exception) {
                     println("⚠️ Telegram notification failed: ${e.message}")
                 }
