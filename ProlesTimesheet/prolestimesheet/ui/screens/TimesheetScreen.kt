@@ -116,6 +116,7 @@ fun TimesheetScreen(
 
     var selectedProject by remember { mutableStateOf<Project?>(null) }
     var hours by remember { mutableStateOf("") }
+    var comment by remember { mutableStateOf("") }
     var totalH by remember { mutableStateOf("") }
     var selectedCountry by remember { mutableStateOf("RF") }
     var showProjectDropdown by remember { mutableStateOf(false) }
@@ -139,6 +140,7 @@ fun TimesheetScreen(
     fun clearAll() {
         selectedProject = null
         hours = ""
+        comment = ""
         totalH = ""
         selectedCountry = "RF"
     }
@@ -356,7 +358,18 @@ fun TimesheetScreen(
                         }
                     }
 
-                    Spacer(Modifier.height(2.dp))
+                    Spacer(Modifier.height(8.dp))
+
+                    // Поле комментария
+                    OutlinedTextField(
+                        value = comment,
+                        onValueChange = { comment = it },
+                        label = { Text("Комментарий") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 2
+                    )
+
+                    Spacer(Modifier.height(8.dp))
 
                     Button(
                         onClick = {
@@ -365,7 +378,8 @@ fun TimesheetScreen(
                                     selectedProject!!.id,
                                     selectedProject!!.name,
                                     hours.toFloatOrNull() ?: 0f,
-                                    selectedCountry
+                                    selectedCountry,
+                                    comment
                                 )
                             }
                             clearAll()
