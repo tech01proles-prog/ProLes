@@ -1,5 +1,11 @@
 package com.example.prolestimesheet.ui.screens
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -50,6 +56,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -73,12 +80,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.scale
 import com.example.prolestimesheet.model.DayOff
 import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.model.TimeEntry
@@ -87,6 +96,7 @@ import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.todayIn
+import java.io.ByteArrayOutputStream
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
@@ -101,6 +111,7 @@ fun TimesheetScreen(
     onRequestVacation: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val projects by viewModel.projects.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
     val entries by viewModel.entries.collectAsState()
@@ -735,11 +746,97 @@ fun TimesheetScreen(
         var amount by remember { mutableStateOf("") }
         var name by remember { mutableStateOf("") }
         var currency by remember { mutableStateOf("RUB") }
+        var comment by remember { mutableStateOf("") }
 
         // 🆕 Состояния для смены проекта в диалоге
         var dialogProjectId by remember { mutableStateOf(selectedProject?.id ?: "") }
         var dialogProjectName by remember { mutableStateOf(selectedProject?.name ?: "") }
         var showProjectPicker by remember { mutableStateOf(false) }
+
+        // 📸 Состояния для загрузки фото чека
+        var currentPhotoExpenseId by remember { mutableStateOf<String?>(null) }
+        var showPhotoSourceDialog by remember { mutableStateOf(false) }
+        var uploadingPhoto by remember { mutableStateOf(false) }
+
+        // 📷 Лаунчер камеры
+        val cameraLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicturePreview()
+        ) { bitmap: Bitmap? ->
+            val expenseId = currentPhotoExpenseId
+            currentPhotoExpenseId = null
+            if (bitmap != null && expenseId != null) {
+                processPhoto(bitmap, expenseId)
+                uploadingPhoto = false
+            } else if (bitmap == null) {
+                Toast.makeText(context, "Съёмка отменена", Toast.LENGTH_SHORT).show()
+                uploadingPhoto = false
+            }
+        }
+
+        // 🖼️ Лаунчер галереи (современный Photo Picker для Android 13+)
+        val galleryLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.PickVisualMedia()
+        ) { uri ->
+            val expenseId = currentPhotoExpenseId
+            currentPhotoExpenseId = null
+            if (uri != null && expenseId != null) {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val bitmap = BitmapFactory.decodeStream(inputStream)
+                    inputStream?.close()
+                    if (bitmap != null) {
+                        processPhoto(bitmap, expenseId)
+                        uploadingPhoto = false
+                    } else {
+                        Toast.makeText(context, "❌ Не удалось загрузить фото", Toast.LENGTH_SHORT).show()
+                        uploadingPhoto = false
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "❌ Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                    uploadingPhoto = false
+                }
+            } else if (uri == null) {
+                Toast.makeText(context, "Выбор отменён", Toast.LENGTH_SHORT).show()
+                uploadingPhoto = false
+            }
+        }
+
+        // 🖼️ Fallback для старых Android (< 13)
+        val legacyGalleryLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent()
+        ) { uri ->
+            val expenseId = currentPhotoExpenseId
+            currentPhotoExpenseId = null
+            if (uri != null && expenseId != null) {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val bitmap = BitmapFactory.decodeStream(inputStream)
+                    inputStream?.close()
+                    if (bitmap != null) {
+                        processPhoto(bitmap, expenseId)
+                        uploadingPhoto = false
+                    } else {
+                        Toast.makeText(context, "❌ Не удалось загрузить фото", Toast.LENGTH_SHORT).show()
+                        uploadingPhoto = false
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "❌ Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                    uploadingPhoto = false
+                }
+            }
+        }
+
+        // 🔥 Общая функция обработки фото
+        fun processPhoto(bitmap: Bitmap, expenseId: String) {
+            val stream = ByteArrayOutputStream()
+            val scaledBitmap = scaleBitmapIfNeeded(bitmap, maxWidth = 1024)
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, stream)
+            val bytes = stream.toByteArray()
+            Toast.makeText(context, "📤 Фото отправлено (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
+            // Сохраняем байты во временной переменной или сразу передаём в viewModel
+            // Для простоты - вызываем viewModel.uploadReceiptPhoto
+            viewModel.uploadReceiptPhoto(expenseId, bytes)
+        }
 
         AlertDialog(
             onDismissRequest = { showExpenseDialog = false },
@@ -841,6 +938,44 @@ fun TimesheetScreen(
                             }
                         }
                     }
+
+                    // 📸 Кнопка добавления фото чека
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                    ) {
+                        if (uploadingPhoto) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text("Загрузка фото...", style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            OutlinedButton(
+                                onClick = {
+                                    currentPhotoExpenseId = "temp_expense_${System.currentTimeMillis()}"
+                                    showPhotoSourceDialog = true
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("📷 Фото чека")
+                            }
+                        }
+                    }
+
+                    // 🔽 Поле комментария
+                    OutlinedTextField(
+                        value = comment,
+                        onValueChange = { comment = it },
+                        label = { Text("Комментарий (опционально)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        singleLine = false
+                    )
                 }
             },
             confirmButton = {
@@ -856,7 +991,8 @@ fun TimesheetScreen(
                                     type = expenseType,
                                     name = if (expenseType == "OTHER") name else "",
                                     amount = amount.toDouble(),
-                                    currency = currency
+                                    currency = currency,
+                                    comment = comment
                                 )
                                 showExpenseDialog = false
                             }
@@ -871,6 +1007,53 @@ fun TimesheetScreen(
                 TextButton(onClick = { showExpenseDialog = false }) { Text("Отмена") }
             }
         )
+
+        // 📸 Диалог выбора источника фото
+        if (showPhotoSourceDialog) {
+            AlertDialog(
+                onDismissRequest = { showPhotoSourceDialog = false },
+                title = { Text("Добавить фото чека") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                showPhotoSourceDialog = false
+                                uploadingPhoto = true
+                                cameraLauncher.launch(null)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.CameraAlt, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("📷 Сделать фото")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                showPhotoSourceDialog = false
+                                uploadingPhoto = true
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                    galleryLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                } else {
+                                    legacyGalleryLauncher.launch("image/*")
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.PhotoLibrary, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("🖼️ Выбрать из галереи")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showPhotoSourceDialog = false }) {
+                        Text("Отмена")
+                    }
+                }
+            )
+        }
 
         // 🆕 Диалог выбора проекта
         if (showProjectPicker) {
