@@ -1,31 +1,35 @@
+```gitignore
 # Dependencies
 node_modules/
-.pnpm-store/
 
 # Build outputs
 dist/
 build/
 .next/
 .nuxt/
-out/
-
-# Logs
-*.log
+public/dist/
+release/
 
 # Environment variables
+.env
 .env.local
 .env.*
 !.env.example
 
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
+*.tmp
 
-# OS
-.DS_Store
-Thumbs.db
+# Logs
+*.log
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
 
 # Python
 __pycache__/
@@ -40,15 +44,14 @@ pip-log.txt
 pip-delete-this-directory.txt
 .tox/
 .coverage
-.coverage.*
-.cache
+.cache/
 nosetests.xml
 coverage.xml
 *.cover
-*.sqlite
-*.sqlite3
-.pytest_cache/
+*.log
+.git/
 .mypy_cache/
+.pytest_cache/
 .hypothesis/
 
 # Node.js
@@ -56,67 +59,124 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 node_modules/
-jspm_packages/
-web-client/node_modules/
-web-client/dist/
-web-client/build/
-web-client/.next/
-web-client/.nuxt/
-web-client/out/
-web-client/.env.local
-web-client/.env.*
-!web-client/.env.example
-web-client/.vscode/
-web-client/.idea/
-web-client/*.log
-web-client/*.tmp
-web-client/*.swp
-web-client/__pycache__/
-web-client/*.pyc
-web-client/*.pyo
-web-client/*.pyd
-web-client/env/
-web-client/venv/
-web-client/.venv/
-web-client/.pytest_cache/
-web-client/.mypy_cache/
-web-client/.hypothesis/
-web-client/.coverage
-web-client/coverage/
-web-client/htmlcov/
-web-client/.nyc_output/
-web-client/nyc_output/
-web-client/.babel_cache/
-web-client/node/
-web-client/bower_components/
-web-client/.npm/
-web-client/.yarn/
-web-client/yarn.lock
-web-client/package-lock.json
-web-client/pnpm-lock.yaml
-web-client/npm-shrinkwrap.json
-web-client/.node-gyp/
-web-client/node_modules_build/
-web-client/.cache/
-web-client/tmp/
-web-client/temp/
-web-client/logs/
-web-client/.history/
-web-client/.serverless/
-web-client/.fusebox/
-web-client/.webpack/
-web-client/.parcel-cache/
-web-client/.vercel/
-web-client/.netlify/
-web-client/.github/
-web-client/.gitlab/
-web-client/.circleci/
-web-client/.travis.yml
-web-client/appveyor.yml
-web-client/circle.yml
-web-client/.gitattributes
-web-client/.gitignore
-web-client/.prettierignore
-web-client/.eslintignore
-web-client/.stylelintignore
-web-client/.vscode/settings.json
+dist/
+logs
+*.log
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+next-env.d.ts
+.next/
+out/
+.next
+coverage/
+junit.xml
+*.lcov
+!node_modules/*/node_modules/
+
+# TypeScript
+*.tsbuildinfo
+*.bak
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Web-specific
+public/build/
+public/dist/
+public/release/
+static/css/
+static/js/
+static/media/
+*.min.css
+*.min.js
+.svelte-kit/
+.craftos/
+.vercel/
+.now/
+
+# General
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.temp
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+ehthumbs.db
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+.DocumentRevisions-V100
+.FBCIndex
+.savedState
+.CFUserTextEncoding
+.hg
+.svn
+.git
+!.gitkeep
+```
+
+```gitignore
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+.nuxt/
+public/dist/
+release/
+
+# Environment variables
+.env
+.env.local
+.env.*
+!.env.example
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# TypeScript
+*.tsbuildinfo
+
+# Web-specific
+public/build/
+public/dist/
+public/release/
+static/css/
+static/js/
+static/media/
+*.min.css
+*.min.js
+.svelte-kit/
+.craftos/
+.vercel/
+.now/
+
+# General
+.DS_Store
+Thumbs.db
+```
