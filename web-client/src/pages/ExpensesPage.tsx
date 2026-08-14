@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
-import type { IncomeDto, ProjectDto, UserDto } from '../types';
+import type { IncomeDto, ExpenseDto, ProjectDto, UserDto } from '../types';
 import { generateUUID, formatDate, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import { ScopeTabs } from '../components/ScopeTabs';
@@ -13,8 +13,31 @@ const INCOME_TYPES = [
   { key: 'CASH', label: 'Наличными', icon: '💵', color: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900' },
 ];
 
-// Тип хранится в поле name (в DTO нет отдельного поля type)
-const findType = (key: string) => INCOME_TYPES.find(t => t.key === key);
+const EXPENSE_TYPES = [
+  { key: 'HOUSEHOLD', label: 'Хоз.нужды', icon: '🏠' },
+  { key: 'CARD', label: 'По карте', icon: '💳' },
+  { key: 'CASH', label: 'Наличными', icon: '💵' },
+  { key: 'TRANSFER', label: 'Перевод', icon: '💸' },
+  { key: 'OTHER', label: 'Прочее', icon: '📦' },
+];
+
+const findIncomeType = (key: string) => INCOME_TYPES.find(t => t.key === key);
+const findExpenseType = (key: string) => EXPENSE_TYPES.find(t => t.key === key);
+
+interface CombinedEntry {
+  id: string;
+  type: 'INCOME' | 'EXPENSE';
+  userId: string;
+  userName?: string;
+  projectId: string;
+  projectName: string;
+  date: string;
+  category: string;
+  amount: number;
+  currency: string;
+  comment: string;
+  hasReceipt?: boolean;
+}
 
 export function ExpensesPage() {
   const [searchParams] = useSearchParams();
@@ -27,15 +50,18 @@ export function ExpensesPage() {
 
   const [myIncomes, setMyIncomes] = useState<IncomeDto[]>([]);
   const [allIncomes, setAllIncomes] = useState<IncomeDto[]>([]);
+  const [myExpenses, setMyExpenses] = useState<ExpenseDto[]>([]);
+  const [allExpenses, setAllExpenses] = useState<ExpenseDto[]>([]);
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [users, setUsers] = useState<UserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
-  const [sortField, setSortField] = useState<'date' | 'amount'>('date');
+  const [sortField, setSortField] = useState<'date' | 'amount' | 'type'>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [filterUser, setFilterUser] = useState(searchParams.get('userId') || 'all');
   const [filterType, setFilterType] = useState('all');
+  const [filterEntryType, setFilterEntryType] = useState<'all' | 'INCOME' | 'EXPENSE'>('all');
   
   // Автоматически переключаем на 'all' если в URL есть userId или scope=all
   useEffect(() => {
@@ -63,6 +89,7 @@ export function ExpensesPage() {
     amount: '',
     currency: 'RUB',
     date: new Date().toISOString().slice(0, 10),
+    comment: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -74,14 +101,18 @@ export function ExpensesPage() {
   const loadData = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [myIncRes, allIncRes, projRes, usersRes] = await Promise.allSettled([
+    const [myIncRes, allIncRes, myExpRes, allExpRes, projRes, usersRes] = await Promise.allSettled([
       api.get<IncomeDto[]>(`/incomes?userId=${user.id}`),
       canViewAll ? api.get<IncomeDto[]>('/incomes/all') : Promise.resolve({ data: [] }),
+      api.get<ExpenseDto[]>(`/expenses?userId=${user.id}`),
+      canViewAll ? api.get<ExpenseDto[]>('/expenses/all') : Promise.resolve({ data: [] }),
       api.get<ProjectDto[]>('/projects'),
       canViewAll ? api.get<UserDto[]>('/users') : Promise.resolve({ data: [] }),
     ]);
     setMyIncomes(myIncRes.status === 'fulfilled' ? myIncRes.value.data : []);
     setAllIncomes(allIncRes.status === 'fulfilled' ? allIncRes.value.data : []);
+    setMyExpenses(myExpRes.status === 'fulfilled' ? myExpRes.value.data : []);
+    setAllExpenses(allExpRes.status === 'fulfilled' ? allExpRes.value.data : []);
     setProjects(projRes.status === 'fulfilled' ? projRes.value.data.filter(p => p.isActive) : []);
     setUsers(usersRes.status === 'fulfilled' ? usersRes.value.data : []);
     setLoading(false);
@@ -90,18 +121,62 @@ export function ExpensesPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const incomes = effectiveScope === 'all' ? allIncomes : myIncomes;
-  const myCount = myIncomes.length;
-  const allCount = allIncomes.length;
-  const filtered = incomes
-    .filter(i => effectiveScope !== 'all' || filterUser === 'all' || i.userId === filterUser)
-    .filter(i => effectiveScope !== 'all' || filterType === 'all' || i.name === filterType)
-    .filter(i => i.date >= dateFrom && i.date <= dateTo)
+  const expenses = effectiveScope === 'all' ? allExpenses : myExpenses;
+  const myCount = myIncomes.length + myExpenses.length;
+  const allCount = allIncomes.length + allExpenses.length;
+
+  // Объединяем доходы и расходы в одну таблицу
+  const combinedEntries: CombinedEntry[] = [
+    ...incomes.map(i => ({
+      id: i.id,
+      type: 'INCOME' as const,
+      userId: i.userId,
+      projectId: i.projectId,
+      projectName: i.projectName,
+      date: i.date,
+      category: findIncomeType(i.name)?.label || i.name,
+      amount: i.amount,
+      currency: i.currency,
+      comment: i.comment || '',
+    })),
+    ...expenses.map(e => ({
+      id: e.id,
+      type: 'EXPENSE' as const,
+      userId: e.userId,
+      projectId: e.projectId,
+      projectName: e.projectName,
+      date: e.date,
+      category: findExpenseType(e.type)?.label || e.type,
+      amount: e.amount,
+      currency: e.currency,
+      comment: e.comment || '',
+      hasReceipt: e.receiptSubmitted || e.hasReceiptPhoto,
+    })),
+  ];
+
+  const filtered = combinedEntries
+    .filter(entry => effectiveScope !== 'all' || filterUser === 'all' || entry.userId === filterUser)
+    .filter(entry => filterEntryType === 'all' || entry.type === filterEntryType)
+    .filter(entry => filterType === 'all' || entry.category === filterType)
+    .filter(entry => entry.date >= dateFrom && entry.date <= dateTo)
     .sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
-      return sortField === 'date' ? a.date.localeCompare(b.date) * dir : (a.amount - b.amount) * dir;
+      if (sortField === 'date') return a.date.localeCompare(b.date) * dir;
+      if (sortField === 'amount') return (a.amount - b.amount) * dir;
+      if (sortField === 'type') return a.type.localeCompare(b.type) * dir;
+      return 0;
     });
 
-  const totalAmount = filtered.reduce((s, i) => s + i.amount, 0);
+  // Расчет сальдо: доходы минус расходы (в валютах)
+  const saldoByCurrency = filtered.reduce((acc, entry) => {
+    if (!acc[entry.currency]) acc[entry.currency] = 0;
+    if (entry.type === 'INCOME') {
+      acc[entry.currency] += entry.amount;
+    } else {
+      acc[entry.currency] -= entry.amount;
+    }
+    return acc;
+  }, {} as Record<string, number>);
 
   const handleCreate = async () => {
     if (!user || !form.amount) return;
@@ -113,40 +188,67 @@ export function ExpensesPage() {
         projectId: form.projectId || null,
         projectName: projects.find(p => p.id === form.projectId)?.name || '',
         date: form.date,
-        name: form.type, // сохраняем ключ типа
+        name: form.type,
         amount: parseFloat(form.amount),
         currency: form.currency,
+        comment: form.comment,
       });
       setShowForm(false);
-      setForm({ ...form, projectId: '', amount: '' });
+      setForm({ ...form, projectId: '', amount: '', comment: '' });
       await loadData();
     } catch { alert('Ошибка создания дохода'); }
     finally { setSaving(false); }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Удалить доход?')) return;
-    await api.delete('/incomes', { params: { incomeId: id } });
+  const handleDelete = async (id: string, type: 'INCOME' | 'EXPENSE') => {
+    if (type === 'INCOME') {
+      if (!confirm('Удалить доход?')) return;
+      await api.delete('/incomes', { params: { incomeId: id } });
+    } else {
+      if (!confirm('Удалить расход?')) return;
+      await api.delete('/expenses', { params: { expenseId: id } });
+    }
     await loadData();
   };
 
-  const toggleSort = (field: 'date' | 'amount') => {
+  const toggleSort = (field: 'date' | 'amount' | 'type') => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('desc'); }
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Заголовок и Сальдо */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">💵 Доходы</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">📊 Доходы и Расходы</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {filtered.length} записей • Итого: <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatMoney(totalAmount)}</span>
+            {filtered.length} записей за период с {formatDate(dateFrom)} по {formatDate(dateTo)}
           </p>
         </div>
         <button onClick={() => setShowForm(!showForm)} className="btn-primary px-5 py-2.5 shadow-indigo-200 shadow-md">
           {showForm ? '✕ Закрыть' : '＋ Новый доход'}
         </button>
+      </div>
+
+      {/* Сальдо по валютам */}
+      <div className="card p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border-indigo-200 dark:border-indigo-800">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-lg font-bold text-indigo-700 dark:text-indigo-300">💰 Сальдо</span>
+          <span className="text-xs text-indigo-500 dark:text-indigo-400">(Доходы − Расходы)</span>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          {Object.entries(saldoByCurrency).map(([currency, amount]) => (
+            <div key={currency} className="flex items-baseline gap-2">
+              <span className={`text-2xl font-bold ${amount >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                {amount >= 0 ? '+' : ''}{formatMoney(amount, currency)}
+              </span>
+            </div>
+          ))}
+          {Object.keys(saldoByCurrency).length === 0 && (
+            <span className="text-slate-400 dark:text-slate-500">Нет данных за выбранный период</span>
+          )}
+        </div>
       </div>
 
       <ScopeTabs scope={effectiveScope} onChange={setScope} canViewAll={canViewAll} myCount={myCount} allCount={allCount} />
@@ -271,71 +373,106 @@ export function ExpensesPage() {
 
         {/* Остальные фильтры — только в режиме «Все» */}
         {effectiveScope === 'all' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <select value={filterUser} onChange={(e) => setFilterUser(e.target.value)} className="input bg-white dark:bg-slate-900">
               <option value="all">Все сотрудники</option>
               {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
+            <select value={filterEntryType} onChange={(e) => setFilterEntryType(e.target.value as 'all' | 'INCOME' | 'EXPENSE')} className="input bg-white dark:bg-slate-900">
+              <option value="all">Все типы записей</option>
+              <option value="INCOME">📈 Доходы</option>
+              <option value="EXPENSE">📉 Расходы</option>
+            </select>
             <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input bg-white dark:bg-slate-900">
-              <option value="all">Все типы</option>
-              {INCOME_TYPES.map(t => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
+              <option value="all">Все категории</option>
+              {[...INCOME_TYPES, ...EXPENSE_TYPES].map(t => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
             </select>
           </div>
         )}
       </div>
 
       {/* Сортировка */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button onClick={() => toggleSort('date')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${sortField === 'date' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>
           📅 Дата {sortField === 'date' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
         </button>
         <button onClick={() => toggleSort('amount')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${sortField === 'amount' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>
           💰 Сумма {sortField === 'amount' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
         </button>
+        <button onClick={() => toggleSort('type')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${sortField === 'type' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>
+          🏷 Тип {sortField === 'type' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+        </button>
       </div>
 
-      {/* Список */}
+      {/* Таблица */}
       {loading ? (
         <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>
       ) : filtered.length === 0 ? (
         <div className="card p-12 text-center border-dashed border-2 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
-          <div className="text-5xl mb-4 opacity-50">💵</div>
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Нет доходов</h3>
+          <div className="text-5xl mb-4 opacity-50">📊</div>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Нет записей</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Измените параметры фильтра или добавьте новую запись</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map(income => {
-            const type = findType(income.name);
-            const userName = effectiveScope === 'all' ? users.find(u => u.id === income.userId)?.name : null;
-            return (
-              <div key={income.id} className="card p-4 md:p-5 group hover:shadow-md transition-all animate-fade-in">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      {type ? (
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${type.color}`}>
-                          {type.icon} {type.label}
+        <div className="card overflow-hidden animate-fade-in">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Дата</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Тип</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Проект</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Сотрудник</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Категория</th>
+                  <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">Сумма</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Валюта</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Комментарий</th>
+                  <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(entry => {
+                  const userName = effectiveScope === 'all' ? users.find(u => u.id === entry.userId)?.name : null;
+                  // Цвет фона: доходы - белый, расходы с чеком - зеленоватый, без чека - красноватый
+                  let rowBgClass = 'bg-white dark:bg-slate-900';
+                  if (entry.type === 'EXPENSE') {
+                    rowBgClass = entry.hasReceipt 
+                      ? 'bg-emerald-50 dark:bg-emerald-950/20' 
+                      : 'bg-red-50 dark:bg-red-950/20';
+                  }
+                  return (
+                    <tr key={entry.id} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${rowBgClass}`}>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{formatDate(entry.date)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${entry.type === 'INCOME' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'}`}>
+                          {entry.type === 'INCOME' ? '📈 Доход' : '📉 Расход'}
                         </span>
-                      ) : (
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{income.name}</span>
-                      )}
-                      <span className="text-xs text-slate-400">{formatDate(income.date)}</span>
-                      {userName && <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">👤 {userName}</span>}
-                    </div>
-                    <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
-                      {income.projectName || 'Без проекта'}
-                    </div>
-                  </div>
-                  <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 flex-shrink-0">
-                    +{formatMoney(income.amount, income.currency)}
-                  </div>
-                </div>
-                <div className="flex items-center justify-end pt-3 mt-2 border-t border-slate-100 dark:border-slate-800">
-                  <button onClick={() => handleDelete(income.id)} className="text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-all">🗑</button>
-                </div>
-              </div>
-            );
-          })}
+                      </td>
+                      <td className="px-4 py-3 text-slate-900 dark:text-slate-100 font-medium">{entry.projectName || '—'}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{userName || '—'}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{entry.category}</td>
+                      <td className={`px-4 py-3 text-right font-bold ${entry.type === 'INCOME' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {entry.type === 'INCOME' ? '+' : '-'}{entry.amount.toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{entry.currency}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400 max-w-xs truncate" title={entry.comment}>
+                        {entry.comment || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button 
+                          onClick={() => handleDelete(entry.id, entry.type)}
+                          className="text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 px-2 py-1 rounded-lg transition-all opacity-0 hover:opacity-100"
+                          title="Удалить"
+                        >
+                          🗑
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
