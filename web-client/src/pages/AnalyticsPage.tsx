@@ -12,7 +12,43 @@ export function AnalyticsPage() {
   const [users, setUsers] = useState<UserDto[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [period, setPeriod] = useState<'week' | 'month' | 'year'>('month');
+  // Переключение по месяцам
+  const now = new Date();
+  const [currentMonth, setCurrentMonth] = useState({
+    year: now.getFullYear(),
+    month: now.getMonth(),
+  });
+
+  const monthNames = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ];
+
+  const handlePrevMonth = () => {
+    setCurrentMonth(prev => {
+      if (prev.month === 0) {
+        return { year: prev.year - 1, month: 11 };
+      }
+      return { ...prev, month: prev.month - 1 };
+    });
+  };
+
+  const handleNextMonth = () => {
+    setCurrentMonth(prev => {
+      if (prev.month === 11) {
+        return { year: prev.year + 1, month: 0 };
+      }
+      return { ...prev, month: prev.month + 1 };
+    });
+  };
+
+  const handleToday = () => {
+    setCurrentMonth({ year: now.getFullYear(), month: now.getMonth() });
+  };
+
+  // Дата начала и конца выбранного месяца
+  const monthStart = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-01`;
+  const monthEnd = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-31`;
 
   useEffect(() => {
     (async () => {
@@ -31,17 +67,9 @@ export function AnalyticsPage() {
     })();
   }, []);
 
-  // Фильтрация по периоду
-  const cutoffDate = useMemo(() => {
-    const d = new Date();
-    if (period === 'week') d.setDate(d.getDate() - 7);
-    else if (period === 'month') d.setDate(1);
-    else if (period === 'year') { d.setMonth(0); d.setDate(1); }
-    return d.toISOString().slice(0, 10);
-  }, [period]);
-
-  const periodEntries = useMemo(() => entries.filter(e => e.date >= cutoffDate), [entries, cutoffDate]);
-  const periodExpenses = useMemo(() => expenses.filter(e => e.date >= cutoffDate), [expenses, cutoffDate]);
+  // Фильтрация по выбранному месяцу
+  const periodEntries = useMemo(() => entries.filter(e => e.date >= monthStart && e.date <= monthEnd), [entries, monthStart, monthEnd]);
+  const periodExpenses = useMemo(() => expenses.filter(e => e.date >= monthStart && e.date <= monthEnd), [expenses, monthStart, monthEnd]);
 
   // KPI
   const totalHours = periodEntries.reduce((s, e) => s + e.hours, 0);
@@ -116,15 +144,33 @@ export function AnalyticsPage() {
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">📊 Аналитика</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Аналитика</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Подробный обзор эффективности команды</p>
         </div>
-        <div className="flex bg-white dark:bg-slate-900 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
-          {(['week', 'month', 'year'] as const).map(p => (
-            <button key={p} onClick={() => setPeriod(p)} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${period === p ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-500 dark:text-slate-400'}`}>
-              {p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Год'}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
+          <button 
+            onClick={handlePrevMonth}
+            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Предыдущий месяц"
+          >
+            ←
+          </button>
+          <span className="px-3 py-1.5 text-sm font-bold text-slate-900 dark:text-slate-100 min-w-[140px] text-center">
+            {monthNames[currentMonth.month]} {currentMonth.year}
+          </span>
+          <button 
+            onClick={handleNextMonth}
+            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Следующий месяц"
+          >
+            →
+          </button>
+          <button 
+            onClick={handleToday}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ml-2"
+          >
+            Сегодня
+          </button>
         </div>
       </div>
 

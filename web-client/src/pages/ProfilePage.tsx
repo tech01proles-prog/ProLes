@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
-import type { UserDto } from '../types';
+import type { UserDto, ExpenseDto, IncomeDto } from '../types';
+import { formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 
 export function ProfilePage() {
+  const navigate = useNavigate();
   const [user, setUser] = useState<UserDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -14,6 +17,7 @@ export function ProfilePage() {
   // (обычно это админ, но в будущем можно дать сотрудникам право редактировать себя)
   const canEditProfile = !permLoading && can('employees', 'edit');
   const isSuperAdmin = !permLoading && can('permissions', 'delete');
+  const canViewAll = !permLoading && can('expenses_all', 'view');
 
   const [form, setForm] = useState({
     firstName: '',
@@ -27,6 +31,26 @@ export function ProfilePage() {
     confirmPassword: '',
   });
   const [changingPassword, setChangingPassword] = useState(false);
+
+  // Финансовые данные
+  const [expenses, setExpenses] = useState<ExpenseDto[]>([]);
+  const [incomes, setIncomes] = useState<IncomeDto[]>([]);
+  const [financialLoading, setFinancialLoading] = useState(true);
+
+  // Фильтр по месяцу для финансов
+  const now = new Date();
+  const [currentMonth, setCurrentMonth] = useState({
+    year: now.getFullYear(),
+    month: now.getMonth(),
+  });
+
+  const monthStart = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-01`;
+  const monthEnd = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-31`;
+
+  const monthNames = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ];
 
   useEffect(() => {
     const stored = localStorage.getItem('proles_user');
@@ -44,6 +68,49 @@ export function ProfilePage() {
     }
     setLoading(false);
   }, []);
+
+  // Загрузка финансовых данных
+  useEffect(() => {
+    if (!user) return;
+    
+    const loadFinancials = async () => {
+      setFinancialLoading(true);
+      try {
+        const userId = user.id;
+        const [expRes, incRes] = await Promise.allSettled([
+          api.get<ExpenseDto[]>(`/expenses?userId=${userId}&dateFrom=${monthStart}&dateTo=${monthEnd}`),
+          api.get<IncomeDto[]>(`/incomes?userId=${userId}&dateFrom=${monthStart}&dateTo=${monthEnd}`),
+        ]);
+        
+        let expData = expRes.status === 'fulfilled' ? expRes.value.data : [];
+        let incData = incRes.status === 'fulfilled' ? incRes.value.data : [];
+        
+        // Если есть право view all, загружаем все данные для сотрудника
+        if (canViewAll) {
+          const [allExpRes, allIncRes] = await Promise.allSettled([
+            api.get<ExpenseDto[]>(`/expenses/all?dateFrom=${monthStart}&dateTo=${monthEnd}&userId=${userId}`),
+            api.get<IncomeDto[]>(`/incomes/all?dateFrom=${monthStart}&dateTo=${monthEnd}&userId=${userId}`),
+          ]);
+          if (allExpRes.status === 'fulfilled') expData = allExpRes.value.data;
+          if (allIncRes.status === 'fulfilled') incData = allIncRes.value.data;
+        }
+        
+        setExpenses(expData);
+        setIncomes(incData);
+      } catch (err) {
+        console.error('Ошибка загрузки финансовых данных:', err);
+      } finally {
+        setFinancialLoading(false);
+      }
+    };
+
+    loadFinancials();
+  }, [user, currentMonth, canViewAll]);
+
+  // Расчет сальдо
+  const totalIncome = useMemo(() => incomes.reduce((sum, inc) => sum + inc.amount, 0), [incomes]);
+  const totalExpense = useMemo(() => expenses.reduce((sum, exp) => sum + exp.amount, 0), [expenses]);
+  const saldo = totalIncome - totalExpense;
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -94,6 +161,24 @@ export function ProfilePage() {
     }
   };
 
+  const handlePrevMonth = () => {
+    setCurrentMonth(prev => {
+      if (prev.month === 0) {
+        return { year: prev.year - 1, month: 11 };
+      }
+      return { ...prev, month: prev.month - 1 };
+    });
+  };
+
+  const handleNextMonth = () => {
+    setCurrentMonth(prev => {
+      if (prev.month === 11) {
+        return { year: prev.year + 1, month: 0 };
+      }
+      return { ...prev, month: prev.month + 1 };
+    });
+  };
+
   if (loading || !user) {
     return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
   }
@@ -101,7 +186,7 @@ export function ProfilePage() {
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">👤 Профиль</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Профиль</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Настройки аккаунта и безопасности</p>
       </div>
 
@@ -153,7 +238,7 @@ export function ProfilePage() {
             </div>
             <div className="flex justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
               <button onClick={handleSaveProfile} disabled={saving} className="btn-primary px-6 py-2.5">
-                {saving ? '⏳...' : '💾 Сохранить профиль'}
+                {saving ? '⏳...' : 'Сохранить профиль'}
               </button>
             </div>
           </>
@@ -184,11 +269,75 @@ export function ProfilePage() {
         )}
       </div>
 
+      {/* Финансы: Доходы, Расходы, Сальдо */}
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <span className="w-1.5 h-5 bg-emerald-500 rounded-full"></span>
+            Финансы ({monthNames[currentMonth.month]} {currentMonth.year})
+          </h3>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handlePrevMonth}
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Предыдущий месяц"
+            >
+              ←
+            </button>
+            <button 
+              onClick={() => setCurrentMonth({ year: now.getFullYear(), month: now.getMonth() })}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              Сегодня
+            </button>
+            <button 
+              onClick={handleNextMonth}
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Следующий месяц"
+            >
+              →
+            </button>
+          </div>
+        </div>
+
+        {financialLoading ? (
+          <div className="flex justify-center py-8"><div className="animate-spin text-2xl">⏳</div></div>
+        ) : (
+          <>
+            {/* Карточки с итогами */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900">
+                <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1">Доходы</div>
+                <div className="text-xl font-black text-emerald-700 dark:text-emerald-300">{formatMoney(totalIncome)}</div>
+              </div>
+              <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900">
+                <div className="text-xs font-bold text-red-600 dark:text-red-400 uppercase mb-1">Расходы</div>
+                <div className="text-xl font-black text-red-700 dark:text-red-300">{formatMoney(totalExpense)}</div>
+              </div>
+              <div className={`p-4 rounded-xl border ${saldo >= 0 ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900' : 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900'}`}>
+                <div className={`text-xs font-bold uppercase mb-1 ${saldo >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>Сальдо</div>
+                <div className={`text-xl font-black ${saldo >= 0 ? 'text-blue-700 dark:text-blue-300' : 'text-orange-700 dark:text-orange-300'}`}>{formatMoney(saldo)}</div>
+              </div>
+            </div>
+
+            {/* Список операций */}
+            <div className="space-y-2">
+              <button 
+                onClick={() => navigate(`/expenses?userId=${user.id}&dateFrom=${monthStart}&dateTo=${monthEnd}`)}
+                className="w-full text-left text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline py-2"
+              >
+                Показать все операции →
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Смена пароля — доступна всем */}
       <div className="card p-6">
         <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
           <span className="w-1.5 h-5 bg-red-500 rounded-full"></span>
-          🔒 Смена пароля
+          Смена пароля
         </h3>
         <div className="space-y-4 max-w-md">
           <div className="space-y-1.5">
@@ -200,7 +349,7 @@ export function ProfilePage() {
             <input type="password" placeholder="Повторите пароль" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className="input" />
           </div>
           <button onClick={handleChangePassword} disabled={changingPassword || !passwordForm.newPassword} className="btn-danger px-5 py-2.5">
-            {changingPassword ? '⏳...' : '🔑 Изменить пароль'}
+            {changingPassword ? '⏳...' : 'Изменить пароль'}
           </button>
         </div>
       </div>
@@ -210,7 +359,7 @@ export function ProfilePage() {
         <div className="card p-6 bg-slate-50/50 dark:bg-slate-900/50">
           <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-3 text-sm flex items-center gap-2">
             <span className="w-1.5 h-5 bg-purple-500 rounded-full"></span>
-            ℹ️ Системная информация (только superadmin)
+            Системная информация (только superadmin)
           </h3>
           <div className="space-y-2 text-sm">
             <div>
