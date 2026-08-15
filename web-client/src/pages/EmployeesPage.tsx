@@ -553,13 +553,13 @@ export function EmployeesPage() {
                     const year = now.getFullYear();
                     const month = String(now.getMonth() + 1).padStart(2, '0');
                     setProfileUser(null); 
-                    navigate(`/incomes?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31&scope=all`); 
+                    navigate(`/expenses?userId=${profileUser.id}&dateFrom=${year}-${month}-01&dateTo=${year}-${month}-31&scope=all`); 
                   }}
                   className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 transition-all text-left"
                 >
-                  <span className="text-lg">💵</span>
+                  <span className="text-lg">💸</span>
                   <div className="text-xs">
-                    <div className="font-bold text-slate-900 dark:text-slate-100">Доходы</div>
+                    <div className="font-bold text-slate-900 dark:text-slate-100">Расходы/Доходы</div>
                     <div className="text-[10px] text-slate-500">Текущий месяц</div>
                   </div>
                 </button>
