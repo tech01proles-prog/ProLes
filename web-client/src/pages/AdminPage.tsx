@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
-import type { UserDto, RoleDto, RolePermissionDto, UserEffectivePermissionDto, TimeEntryDto, ExpenseDto, IncomeDto, BusinessTripDto } from '../types';
+import type { UserDto, RoleDto, RolePermissionDto, UserEffectivePermissionDto, TimeEntryDto, ExpenseDto, BusinessTripDto } from '../types';
 import { generateUUID, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../components/Toast/ToastContext';
@@ -150,10 +150,9 @@ export function AdminPage() {
         const dateFrom = `${statsMonth}-01`;
         const dateTo = `${statsMonth}-${String(daysInMonth).padStart(2, '0')}`;
 
-        const [hoursRes, expensesRes, incomesRes, tripsRes] = await Promise.allSettled([
+        const [hoursRes, expensesRes, tripsRes] = await Promise.allSettled([
           api.get<TimeEntryDto[]>(`/entries?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
           api.get<ExpenseDto[]>(`/expenses?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
-          api.get<IncomeDto[]>(`/incomes?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
           api.get<BusinessTripDto[]>(`/business-trips?userId=${profileUser.id}&dateFrom=${dateFrom}&dateTo=${dateTo}`),
         ]);
 
@@ -161,12 +160,9 @@ export function AdminPage() {
         const expenses = expensesRes.status === 'fulfilled'
           ? expensesRes.value.data.reduce((sum, e) => sum + e.amount, 0)
           : 0;
-        const incomes = incomesRes.status === 'fulfilled'
-          ? incomesRes.value.data.reduce((sum, i) => sum + i.amount, 0)
-          : 0;
         const trips = tripsRes.status === 'fulfilled' ? tripsRes.value.data.length : 0;
 
-        setProfileStats({ hours, expenses, incomes, trips });
+        setProfileStats({ hours, expenses, incomes: 0, trips });
       } catch (err) {
         console.error('Ошибка загрузки статистики:', err);
         setProfileStats({ hours: 0, expenses: 0, incomes: 0, trips: 0 });
@@ -819,7 +815,7 @@ export function AdminPage() {
                   <div className="text-2xl mb-1">💵</div>
                   <div className="text-xs text-slate-500">Доходы</div>
                   <div className="font-bold text-slate-900 dark:text-slate-100">
-                    {statsLoading ? '⏳' : profileStats ? formatMoney(profileStats.incomes) : '—'}
+                    —
                   </div>
                 </div>
                 <div className="card p-3 text-center">
