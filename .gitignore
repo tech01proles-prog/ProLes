@@ -5,35 +5,30 @@ node_modules/
 # Build artifacts
 dist/
 build/
-*.js
-*.ts
-*.tsx
+target/
 
-# Logs and temp files
+# Logs
 *.log
-*.tmp
 
-# Environment
+# Environment variables
 .env
 .env.local
 *.env.*
 
-# Editors
+# Editor/IDE files
 .vscode/
 .idea/
+*.swp
+*.swo
+*.tmp
 
-# Python
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# OS
+# System files
 .DS_Store
 Thumbs.db
 
@@ -60,4 +55,5 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
+
 ```
