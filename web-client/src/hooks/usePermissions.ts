@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api/client';
 
 type Permission = {
@@ -54,7 +54,7 @@ export function usePermissions() {
       });
   }, []);
 
-  const can = (permission: string, action: 'view' | 'create' | 'edit' | 'delete'): boolean => {
+  const can = useCallback((permission: string, action: 'view' | 'create' | 'edit' | 'delete'): boolean => {
     console.log(`🔍 can('${permission}', '${action}') called`);
     console.log(`🔍 Current permissions state:`, permissions);
     console.log(`🔍 Looking for permission '${permission}' in:`, Object.keys(permissions));
@@ -71,9 +71,9 @@ export function usePermissions() {
     const result = perm[key] || false;
     console.log(`✅ Result: ${result}`);
     return result;
-  };
+  }, [permissions]);
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     sessionStorage.removeItem(CACHE_KEY);
     setLoading(true);
     api.get('/rbac/my-permissions')
@@ -85,7 +85,7 @@ export function usePermissions() {
         }));
       })
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   return { permissions, loading, can, refresh };
 }
