@@ -6,73 +6,34 @@ node_modules/
 dist/
 build/
 *.js.map
-*.tsbuildinfo
-target/
-
-# Logs
-*.log
+*.ts.map
 
 # Environment variables
 .env
 .env.local
 *.env.*
 
-# Editor/IDE files
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-venv/
-.venv/
-.env
-.envrc
-.pytest_cache/
-.coverage
-htmlcov/
-.mypy_cache/
-.hypothesis/
+# Logs
+*.log
 
-# Coverage reports
+# Coverage
 coverage/
-*.lcov
+htmlcov/
+.coverage
 
 # Temporary files
 *.tmp
 *.temp
-*~
 
 # OS generated files
 # System files
 .DS_Store
 Thumbs.db
-
-# Compiled files
-*.o
-*.obj
-*.a
-*.lib
-*.so
-*.dylib
-*.dll
-*.exe
-*.out
-
-# Archives
-*.zip
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.gz
-*.rar
-*.7z
-*.tar.zst
-
 ```

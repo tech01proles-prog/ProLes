@@ -12,7 +12,7 @@ export function ProjectDetailPage() {
   const [expenses, setExpenses] = useState<ExpenseDto[]>([]);
   const [incomes, setIncomes] = useState<IncomeDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'hours' | 'expenses' | 'incomes'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'hours' | 'expenses'>('overview');
 
   useEffect(() => {
     if (!projectId) return;
@@ -115,9 +115,9 @@ export function ProjectDetailPage() {
           <div className="text-[10px] text-orange-500 mt-0.5">{expenses.length} записей</div>
         </div>
         <div className="card p-4 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 border-emerald-100 dark:border-emerald-900">
-          <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase">Доходы</div>
-          <div className="text-2xl font-black text-emerald-900 dark:text-emerald-100 mt-1">{formatMoney(stats.totalIncomes)}</div>
-          <div className="text-[10px] text-emerald-500 mt-0.5">{incomes.length} записей</div>
+          <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase">Расходы/Доходы</div>
+          <div className="text-2xl font-black text-emerald-900 dark:text-emerald-100 mt-1">{formatMoney(stats.totalIncomes - stats.totalExpenses)}</div>
+          <div className="text-[10px] text-emerald-500 mt-0.5">Сальдо проекта</div>
         </div>
         <div className={`card p-4 border ${profit >= 0 ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-green-100 dark:border-green-900' : 'bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 border-red-100 dark:border-red-900'}`}>
           <div className={`text-xs font-bold uppercase ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>Прибыль</div>
@@ -171,10 +171,7 @@ export function ProjectDetailPage() {
           ⏱ Часы ({entries.length})
         </button>
         <button onClick={() => setActiveTab('expenses')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'expenses' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-600 dark:text-slate-400'}`}>
-          💸 Расходы ({expenses.length})
-        </button>
-        <button onClick={() => setActiveTab('incomes')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'incomes' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-600 dark:text-slate-400'}`}>
-          💵 Доходы ({incomes.length})
+          💸 Расходы/Доходы ({expenses.length + incomes.length})
         </button>
       </div>
 
@@ -206,33 +203,6 @@ export function ProjectDetailPage() {
                       </div>
                       <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          {/* Доходы по типам */}
-          <div className="card p-5">
-            <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-5 bg-emerald-500 rounded-full"></span>
-              Доходы по типам
-            </h3>
-            {Object.keys(stats.incomesByType).length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-sm">Нет доходов</div>
-            ) : (
-              <div className="space-y-3">
-                {Object.entries(stats.incomesByType).sort((a, b) => b[1] - a[1]).map(([type, amount]) => {
-                  const pct = (amount / stats.totalIncomes) * 100;
-                  return (
-                    <div key={type}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{type}</span>
-                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatMoney(amount)}</span>
-                      </div>
-                      <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   );
@@ -314,30 +284,6 @@ export function ProjectDetailPage() {
                 }`}>
                   {formatMoney(exp.amount, exp.currency)}
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {activeTab === 'incomes' && (
-        <div className="space-y-2">
-          {incomes.length === 0 ? (
-            <div className="card p-12 text-center text-slate-400">
-              <div className="text-4xl mb-2">💵</div>
-              <p>Нет доходов по этому проекту</p>
-            </div>
-          ) : (
-            incomes.sort((a, b) => b.date.localeCompare(a.date)).map(inc => (
-              <div key={inc.id} className="card p-4 flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold text-slate-400">{formatDate(inc.date)}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">{inc.name}</span>
-                  </div>
-                  <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{inc.projectName || 'Без проекта'}</div>
-                </div>
-                <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 flex-shrink-0 ml-4">+{formatMoney(inc.amount, inc.currency)}</div>
               </div>
             ))
           )}

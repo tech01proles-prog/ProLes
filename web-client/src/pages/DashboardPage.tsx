@@ -20,8 +20,7 @@ interface QuickAction {
 
 const ALL_QUICK_ACTIONS: QuickAction[] = [
   { id: 'add_hours', label: 'Добавить часы', desc: 'Запись времени', icon: '⏰', route: '/timesheet', permission: 'projects', action: 'create', gradient: 'from-blue-500 to-cyan-400' },
-  { id: 'add_expense', label: 'Добавить расход', desc: 'Финансы проекта', icon: '💰', route: '/expenses', permission: 'expenses_all', action: 'create', gradient: 'from-orange-500 to-amber-400' },
-  { id: 'add_income', label: 'Добавить доход', desc: 'Поступления', icon: '💵', route: '/incomes', permission: 'expenses_all', action: 'create', gradient: 'from-emerald-500 to-green-400' },
+  { id: 'add_expense', label: 'Добавить расход/доход', desc: 'Финансы проекта', icon: '💸', route: '/expenses', permission: 'expenses_all', action: 'create', gradient: 'from-orange-500 to-amber-400' },
   { id: 'new_trip', label: 'Новая командировка', desc: 'Оформить поездку', icon: '✈️', route: '/trips', permission: 'business_trips_all', action: 'create', gradient: 'from-violet-500 to-purple-400' },
   { id: 'request_vacation', label: 'Запросить отпуск', desc: 'Заявка на отдых', icon: '🏖', route: '/vacations', gradient: 'from-teal-500 to-cyan-400' },
   { id: 'upload_ticket', label: 'Загрузить билет', desc: 'Документы', icon: '🎫', route: '/tickets', permission: 'tickets', action: 'create', gradient: 'from-pink-500 to-rose-400' },
