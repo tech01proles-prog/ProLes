@@ -32,6 +32,7 @@ interface CombinedEntry {
   projectId: string;
   projectName: string;
   date: string;
+  name: string;
   category: string;
   amount: number;
   currency: string;
@@ -134,7 +135,8 @@ export function ExpensesPage() {
       projectId: i.projectId,
       projectName: i.projectName,
       date: i.date,
-      category: findIncomeType(i.name)?.label || i.name,
+      name: findIncomeType(i.name)?.label || i.name,
+      category: i.name,
       amount: i.amount,
       currency: i.currency,
       comment: i.comment || '',
@@ -146,6 +148,7 @@ export function ExpensesPage() {
       projectId: e.projectId,
       projectName: e.projectName,
       date: e.date,
+      name: e.name || findExpenseType(e.type)?.label || e.type,
       category: findExpenseType(e.type)?.label || e.type,
       amount: e.amount,
       currency: e.currency,
@@ -423,7 +426,7 @@ export function ExpensesPage() {
                   <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Тип</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Проект</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Сотрудник</th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Категория</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Название</th>
                   <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">Сумма</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Валюта</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Комментарий</th>
@@ -450,7 +453,7 @@ export function ExpensesPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-900 dark:text-slate-100 font-medium">{entry.projectName || '—'}</td>
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{userName || '—'}</td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{entry.category}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{entry.name}</td>
                       <td className={`px-4 py-3 text-right font-bold ${entry.type === 'INCOME' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                         {entry.type === 'INCOME' ? '+' : '-'}{entry.amount.toFixed(2)}
                       </td>
