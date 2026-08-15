@@ -7,7 +7,6 @@ import { TimesheetPage } from './pages/TimesheetPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { ExpensesPage } from './pages/ExpensesPage';
-import { IncomesPage } from './pages/IncomesPage';
 import { TripsPage } from './pages/TripsPage';
 import { VacationsPage } from './pages/VacationsPage';
 import { TicketsPage } from './pages/TicketsPage';
@@ -34,7 +33,6 @@ function App() {
             <Route path="/timesheet" element={<TimesheetPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/expenses" element={<ExpensesPage />} />
-            <Route path="/incomes" element={<IncomesPage />} />
             <Route path="/trips" element={<TripsPage />} />
             <Route path="/vacations" element={<VacationsPage />} />
             <Route path="/tickets" element={<TicketsPage />} />
