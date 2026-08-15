@@ -1,10 +1,12 @@
-```
+```gitignore
 # Dependencies
 node_modules/
 
-# Build artifacts
+# Build outputs
 dist/
 build/
+*.js.map
+*.tsbuildinfo
 target/
 
 # Logs
@@ -27,33 +29,50 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
+venv/
+.venv/
+.env
+.envrc
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.hypothesis/
 
+# Coverage reports
+coverage/
+*.lcov
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# OS generated files
 # System files
 .DS_Store
 Thumbs.db
 
-# Compressed files
+# Compiled files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+
+# Archives
 *.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
 *.tar.gz
 *.tar.bz2
 *.tar.xz
+*.gz
+*.rar
+*.7z
 *.tar.zst
 
 ```
