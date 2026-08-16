@@ -176,7 +176,7 @@ export function AdminPage() {
     };
 
     loadStats();
-  }, [profileUser, statsMonth, can]);
+  }, [profileUser, statsMonth]);
 
   // ═══════════════════════════════════════════════════════
   // ✏️ Действия
