@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, Sector } fro
 import api from '../api/client';
 import type { ExpenseDto, UserDto } from '../types';
 import { formatMoney } from '../lib/utils';
+import './AnalyticsPage.css';
 
 // ═══════════════════════════════════════════════════════
 // 🎨 Цветовая палитра (зеленые тона + акценты)
@@ -211,10 +212,13 @@ export function AnalyticsPage() {
     const ex = mx + (cos >= 0 ? 1 : -1) * 22;
     const ey = my;
     const textAnchor = cos >= 0 ? 'start' : 'end';
+    // Отображаем валюту из первого расхода проекта/сотрудника
+    const originalCurrency = payload.expenses?.[0]?.currency || 'RUB';
     const value = convertToRub ? payload.totalRub : payload.total;
+    const displayCurrency = convertToRub ? 'RUB' : originalCurrency;
 
     return (
-      <g>
+      <g className="pie-sector">
         {/* Основной сектор с 3D тенью */}
         <Sector
           cx={cx}
@@ -238,13 +242,19 @@ export function AnalyticsPage() {
           opacity={0.3}
           style={{ transform: `translate(${cos * 4}px, ${sin * 4}px)` }}
         />
-        {/* Линия-выноска */}
-        <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" strokeWidth={2} />
+        {/* Линия-выноска с анимацией */}
+        <path 
+          d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} 
+          stroke={fill} 
+          fill="none" 
+          strokeWidth={2} 
+          className="callout-line"
+        />
         {/* Кружок на конце выноски */}
         <circle cx={ex} cy={ey} r={3} fill={fill} />
         {/* Текст с суммой */}
         <text x={ex + (cos >= 0 ? 12 : -12)} y={ey} textAnchor={textAnchor} fill="#374151" fontSize={14} fontWeight={600}>
-          {formatMoney(Math.round(value), convertToRub ? 'RUB' : 'USD')}
+          {formatMoney(Math.round(value), displayCurrency)}
         </text>
         {/* Название проекта/сотрудника */}
         <text x={ex + (cos >= 0 ? 12 : -12)} y={ey + 18} textAnchor={textAnchor} fill="#6b7280" fontSize={12}>
@@ -265,6 +275,11 @@ export function AnalyticsPage() {
   const chartData: ChartDataItem[] = drillLevel === 'projects' 
     ? projectData.map((p, i) => ({ ...p, name: p.projectName, fill: COLORS[i % COLORS.length] }))
     : employeeData.map((e, i) => ({ ...e, name: e.userName, fill: COLORS[i % COLORS.length] }));
+
+  // ═══════════════════════════════════════════════════════
+  // 🎭 Ключ для анимации при смене уровня
+  // ═══════════════════════════════════════════════════════
+  const chartKey = `${drillLevel}-${selectedProject?.projectId || ''}-${selectedEmployee?.userId || ''}`;
 
   return (
     <div className="p-6 space-y-6">
@@ -312,12 +327,12 @@ export function AnalyticsPage() {
           ═══════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Круговая диаграмма */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 chart-container">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             {drillLevel === 'projects' ? 'По проектам' : 'По сотрудникам'}
           </h2>
           
-          <div className="h-80">
+          <div className="h-80" key={chartKey}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -345,6 +360,7 @@ export function AnalyticsPage() {
                     <Cell 
                       key={`cell-${index}`} 
                       fill={entry.fill}
+                      className="pie-sector"
                       style={{ 
                         filter: highlightedExpenseId && drillLevel === 'details'
                           ? entry.expenses?.some((e: ExpenseDto) => e.id === highlightedExpenseId)
@@ -356,9 +372,11 @@ export function AnalyticsPage() {
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value: any) => [
-                    formatMoney(Math.round(Number(value)), convertToRub ? 'RUB' : expenses[0]?.currency || 'RUB'),
-                  ]}
+                  formatter={(value: any) => {
+                    return [
+                      formatMoney(Math.round(Number(value)), 'RUB'),
+                    ];
+                  }}
                   contentStyle={{
                     backgroundColor: 'rgba(255, 255, 255, 0.95)',
                     border: 'none',
@@ -382,8 +400,13 @@ export function AnalyticsPage() {
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center">
             <p className="text-sm text-gray-500 dark:text-gray-400">Общая сумма</p>
             <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-              {formatMoney(Math.round(totalAmount), convertToRub ? 'RUB' : 'USD')}
+              {formatMoney(Math.round(totalAmount), convertToRub ? 'RUB' : 'RUB')}
             </p>
+            {!convertToRub && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                (в рублях по курсу)
+              </p>
+            )}
           </div>
         </div>
 
@@ -399,7 +422,7 @@ export function AnalyticsPage() {
             {displayExpenses.length === 0 ? (
               <p className="text-gray-500 dark:text-gray-400 text-center py-8">Нет данных</p>
             ) : (
-              displayExpenses.map((exp) => {
+              displayExpenses.map((exp, idx) => {
                 const amountRub = exp.amount * (EXCHANGE_RATES[exp.currency] || 1);
                 const displayAmount = convertToRub ? amountRub : exp.amount;
                 const isHighlighted = highlightedExpenseId === exp.id;
@@ -412,11 +435,12 @@ export function AnalyticsPage() {
                         setHighlightedExpenseId(exp.id);
                       }
                     }}
-                    className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                    className={`expense-item p-4 rounded-xl border transition-all cursor-pointer ${
                       isHighlighted
-                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-md'
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-md highlighted'
                         : 'border-gray-200 dark:border-gray-700 hover:border-emerald-300 dark:hover:border-emerald-600'
                     }`}
+                    style={{ animationDelay: `${idx * 0.05}s` }}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
