@@ -180,8 +180,8 @@ export function AnalyticsPage() {
         ? employeeData 
         : selectedEmployee?.expenses || [];
     
-    return data.reduce((sum, item: any) => sum + (convertToRub ? item.totalRub : item.total), 0);
-  }, [drillLevel, projectData, employeeData, selectedEmployee, convertToRub]);
+    return data.reduce((sum, item: any) => sum + item.totalRub, 0);
+  }, [drillLevel, projectData, employeeData, selectedEmployee]);
 
   // ═══════════════════════════════════════════════════════
   // 🔙 Навигация назад
@@ -400,7 +400,7 @@ export function AnalyticsPage() {
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center">
             <p className="text-sm text-gray-500 dark:text-gray-400">Общая сумма</p>
             <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-              {formatMoney(Math.round(totalAmount), convertToRub ? 'RUB' : 'RUB')}
+              {formatMoney(Math.round(totalAmount), 'RUB')}
             </p>
             {!convertToRub && (
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
