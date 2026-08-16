@@ -42,6 +42,7 @@ sealed class Screen(val title: String, val icon: ImageVector) {
     object AdminTickets : Screen("Билеты", Icons.Default.UploadFile)
     object AdminProjectExpenses : Screen("Расходы по проектам", Icons.Default.AttachMoney)
     object EmployeeStats : Screen("Моя статистика", Icons.Default.Analytics)
+    object ExpensesIncomesList : Screen("Расходы/Доходы", Icons.Default.MonetizationOn)
 }
 
 @Composable
@@ -178,7 +179,8 @@ fun MainScreen(
                     onNavigateToMyTrips = { navigateTo(Screen.BusinessTrips) },
                     onNavigateToNotifications = { navigateTo(Screen.Notifications) },
                     onNavigateToMyTickets = { navigateTo(Screen.MyTickets) },  // 🆕
-                    onNavigateToStats = { navigateTo(Screen.EmployeeStats) }  // 🆕 Статистика сотрудника
+                    onNavigateToStats = { navigateTo(Screen.EmployeeStats) },  // 🆕 Статистика сотрудника
+                    onNavigateToExpensesIncomes = { navigateTo(Screen.ExpensesIncomesList) }  // 🆕 Расходы/Доходы
                 )
 
                 Screen.Admin -> AdminManagementScreen(
@@ -284,6 +286,11 @@ fun MainScreen(
                 Screen.EmployeeStats -> EmployeeStatsScreen(
                     viewModel = viewModel,
                     userId = user?.id ?: "",
+                    onBack = { goBack() }
+                )
+                
+                Screen.ExpensesIncomesList -> ExpensesIncomesListScreen(
+                    viewModel = viewModel,
                     onBack = { goBack() }
                 )
             }
