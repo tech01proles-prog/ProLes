@@ -46,9 +46,11 @@ import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BeachAccess
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Train
 import androidx.compose.material3.AlertDialog
@@ -165,6 +167,19 @@ fun TimesheetScreen(
     // - Будний день + запись в day_offs = выходной
     // - Выходной (сб/вс) + запись в day_offs = РАБОЧИЙ (исключение)
     val isCurrentlyDayOff = if (isWeekend) !isUserDayOff else isUserDayOff
+
+    // 🔥 Общая функция обработки фото
+    fun processPhoto(bitmap: Bitmap, expenseId: String) {
+        val stream = ByteArrayOutputStream()
+        val scaledBitmap = scaleBitmapIfNeeded(bitmap, maxWidth = 1024)
+        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, stream)
+        val bytes = stream.toByteArray()
+        Toast.makeText(context, "📤 Фото отправлено (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
+        // Сохраняем байты во временной переменной или сразу передаём в viewModel
+        // Для простоты - вызываем viewModel.uploadReceiptPhoto
+        viewModel.uploadReceiptPhoto(expenseId, bytes)
+    }
+
 
     Scaffold(
         modifier = modifier,
@@ -826,17 +841,6 @@ fun TimesheetScreen(
             }
         }
 
-        // 🔥 Общая функция обработки фото
-        fun processPhoto(bitmap: Bitmap, expenseId: String) {
-            val stream = ByteArrayOutputStream()
-            val scaledBitmap = scaleBitmapIfNeeded(bitmap, maxWidth = 1024)
-            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, stream)
-            val bytes = stream.toByteArray()
-            Toast.makeText(context, "📤 Фото отправлено (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
-            // Сохраняем байты во временной переменной или сразу передаём в viewModel
-            // Для простоты - вызываем viewModel.uploadReceiptPhoto
-            viewModel.uploadReceiptPhoto(expenseId, bytes)
-        }
 
         AlertDialog(
             onDismissRequest = { showExpenseDialog = false },
