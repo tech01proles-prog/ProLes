@@ -1,359 +1,461 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, Sector } from 'recharts';
 import api from '../api/client';
-import type { TimeEntryDto, ExpenseDto, ProjectDto, UserDto } from '../types';
+import type { ExpenseDto, UserDto } from '../types';
 import { formatMoney } from '../lib/utils';
 
+// ═══════════════════════════════════════════════════════
+// 🎨 Цветовая палитра (зеленые тона + акценты)
+// ═══════════════════════════════════════════════════════
+const COLORS = [
+  '#10b981', // emerald-500
+  '#34d399', // emerald-400
+  '#6ee7b7', // emerald-300
+  '#a7f3d0', // emerald-200
+  '#059669', // emerald-600
+  '#047857', // emerald-700
+  '#06b6d4', // cyan-500
+  '#3b82f6', // blue-500
+  '#8b5cf6', // violet-500
+  '#f59e0b', // amber-500
+];
+
+// ═══════════════════════════════════════════════════════
+// 💱 Курсы валют (можно заменить на API)
+// ═══════════════════════════════════════════════════════
+const EXCHANGE_RATES: Record<string, number> = {
+  RUB: 1,
+  USD: 92,
+  EUR: 100,
+  BYN: 28,
+};
+
+interface ProjectExpense {
+  projectId: string;
+  projectName: string;
+  total: number;
+  totalRub: number;
+  expenses: ExpenseDto[];
+}
+
+interface EmployeeExpense {
+  userId: string;
+  userName: string;
+  total: number;
+  totalRub: number;
+  expenses: ExpenseDto[];
+}
+
+interface ChartDataItem {
+  name: string;
+  fill: string;
+  total: number;
+  totalRub: number;
+  expenses: ExpenseDto[];
+  projectId?: string;
+  projectName?: string;
+  userId?: string;
+  userName?: string;
+}
+
+type DrillLevel = 'projects' | 'employees' | 'details';
+
 export function AnalyticsPage() {
-  const navigate = useNavigate();
-  const [entries, setEntries] = useState<TimeEntryDto[]>([]);
   const [expenses, setExpenses] = useState<ExpenseDto[]>([]);
-  const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [users, setUsers] = useState<UserDto[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Переключение по месяцам
-  const now = new Date();
-  const [currentMonth, setCurrentMonth] = useState({
-    year: now.getFullYear(),
-    month: now.getMonth(),
-  });
-
-  const monthNames = [
-    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
-  ];
-
-  const handlePrevMonth = () => {
-    setCurrentMonth(prev => {
-      if (prev.month === 0) {
-        return { year: prev.year - 1, month: 11 };
-      }
-      return { ...prev, month: prev.month - 1 };
-    });
-  };
-
-  const handleNextMonth = () => {
-    setCurrentMonth(prev => {
-      if (prev.month === 11) {
-        return { year: prev.year + 1, month: 0 };
-      }
-      return { ...prev, month: prev.month + 1 };
-    });
-  };
-
-  const handleToday = () => {
-    setCurrentMonth({ year: now.getFullYear(), month: now.getMonth() });
-  };
-
-  // Дата начала и конца выбранного месяца
-  const monthStart = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-01`;
-  const monthEnd = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-31`;
+  const [convertToRub, setConvertToRub] = useState(false);
+  
+  // ═══════════════════════════════════════════════════════
+  // 📊 Состояние навигации по уровням детализации
+  // ═══════════════════════════════════════════════════════
+  const [drillLevel, setDrillLevel] = useState<DrillLevel>('projects');
+  const [selectedProject, setSelectedProject] = useState<ProjectExpense | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeExpense | null>(null);
+  const [highlightedExpenseId, setHighlightedExpenseId] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const [e, ex, p, u] = await Promise.allSettled([
-        api.get<TimeEntryDto[]>('/entries/all'),
-        api.get<ExpenseDto[]>('/expenses/all'),
-        api.get<ProjectDto[]>('/projects'),
-        api.get<UserDto[]>('/users'),
-      ]);
-      setEntries(e.status === 'fulfilled' ? e.value.data : []);
-      setExpenses(ex.status === 'fulfilled' ? ex.value.data : []);
-      setProjects(p.status === 'fulfilled' ? p.value.data : []);
-      setUsers(u.status === 'fulfilled' ? u.value.data : []);
-      setLoading(false);
-    })();
+    loadData();
   }, []);
 
-  // Фильтрация по выбранному месяцу
-  const periodEntries = useMemo(() => entries.filter(e => e.date >= monthStart && e.date <= monthEnd), [entries, monthStart, monthEnd]);
-  const periodExpenses = useMemo(() => expenses.filter(e => e.date >= monthStart && e.date <= monthEnd), [expenses, monthStart, monthEnd]);
+  async function loadData() {
+    try {
+      const userStr = localStorage.getItem('proles_user');
+      if (!userStr) return;
 
-  // KPI
-  const totalHours = periodEntries.reduce((s, e) => s + e.hours, 0);
-  const totalExpensesAmount = periodExpenses.reduce((s, e) => s + e.amount, 0);
-  const activeProjectsCount = projects.filter(p => p.isActive).length;
-  const employeesCount = users.length;
+      const [expensesRes, usersRes] = await Promise.all([
+        api.get<ExpenseDto[]>('/expenses/all'),
+        api.get<UserDto[]>('/users'),
+      ]);
 
-  // Топ проектов по часам
-  const projectHours = useMemo(() => {
-    const map = new Map<string, { name: string; hours: number }>();
-    periodEntries.forEach(e => {
-      const name = e.projectName || projects.find(p => p.id === e.projectId)?.name || 'Без проекта';
-      const cur = map.get(e.projectId) || { name, hours: 0 };
-      cur.hours += e.hours;
-      map.set(e.projectId, cur);
+      setExpenses(expensesRes.data);
+      setUsers(usersRes.data);
+    } catch (err) {
+      console.error('Ошибка загрузки:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 💰 Агрегация данных по проектам
+  // ═══════════════════════════════════════════════════════
+  const projectData = useMemo(() => {
+    const map = new Map<string, ProjectExpense>();
+    
+    expenses.forEach((exp) => {
+      if (!map.has(exp.projectId)) {
+        map.set(exp.projectId, {
+          projectId: exp.projectId,
+          projectName: exp.projectName,
+          total: 0,
+          totalRub: 0,
+          expenses: [],
+        });
+      }
+      const proj = map.get(exp.projectId)!;
+      proj.total += exp.amount;
+      proj.totalRub += exp.amount * (EXCHANGE_RATES[exp.currency] || 1);
+      proj.expenses.push(exp);
     });
-    return [...map.values()].sort((a, b) => b.hours - a.hours).slice(0, 10);
-  }, [periodEntries, projects]);
 
-  // Топ сотрудников по часам
-  const userHours = useMemo(() => {
-    const map = new Map<string, { name: string; hours: number }>();
-    periodEntries.forEach(e => {
-      const name = users.find(u => u.id === e.userId)?.name || 'Неизвестный';
-      const cur = map.get(e.userId) || { name, hours: 0 };
-      cur.hours += e.hours;
-      map.set(e.userId, cur);
+    return Array.from(map.values())
+      .filter((p) => p.total > 0)
+      .sort((a, b) => b.totalRub - a.totalRub);
+  }, [expenses]);
+
+  // ═══════════════════════════════════════════════════════
+  // 👥 Агрегация данных по сотрудникам внутри проекта
+  // ═══════════════════════════════════════════════════════
+  const employeeData = useMemo(() => {
+    if (!selectedProject) return [];
+
+    const map = new Map<string, EmployeeExpense>();
+    
+    selectedProject.expenses.forEach((exp) => {
+      const user = users.find((u) => u.id === exp.userId);
+      const userName = user ? `${user.lastName} ${user.firstName}` : 'Неизвестный';
+      
+      if (!map.has(exp.userId)) {
+        map.set(exp.userId, {
+          userId: exp.userId,
+          userName,
+          total: 0,
+          totalRub: 0,
+          expenses: [],
+        });
+      }
+      const emp = map.get(exp.userId)!;
+      emp.total += exp.amount;
+      emp.totalRub += exp.amount * (EXCHANGE_RATES[exp.currency] || 1);
+      emp.expenses.push(exp);
     });
-    return [...map.values()].sort((a, b) => b.hours - a.hours).slice(0, 10);
-  }, [periodEntries, users]);
 
-  // Расходы по типам
-  const expensesByType = useMemo(() => {
-    const map = new Map<string, number>();
-    periodExpenses.forEach(e => {
-      map.set(e.type, (map.get(e.type) || 0) + e.amount);
-    });
-    return [...map.entries()].sort((a, b) => b[1] - a[1]);
-  }, [periodExpenses]);
+    return Array.from(map.values())
+      .filter((e) => e.total > 0)
+      .sort((a, b) => b.totalRub - a.totalRub);
+  }, [selectedProject, users]);
 
-  // Часы по дням недели
-  const hoursByWeekday = useMemo(() => {
-    const days = [0, 0, 0, 0, 0, 0, 0]; // Пн..Вс
-    periodEntries.forEach(e => {
-      const d = new Date(e.date).getDay();
-      const idx = d === 0 ? 6 : d - 1;
-      days[idx] += e.hours;
-    });
-    return days;
-  }, [periodEntries]);
+  // ═══════════════════════════════════════════════════════
+  // 📋 Список расходов для отображения
+  // ═══════════════════════════════════════════════════════
+  const displayExpenses = useMemo(() => {
+    if (drillLevel === 'details' && selectedEmployee) {
+      return selectedEmployee.expenses;
+    }
+    if (drillLevel === 'employees' && selectedProject) {
+      return selectedProject.expenses;
+    }
+    return expenses;
+  }, [drillLevel, selectedProject, selectedEmployee, expenses]);
 
-  const formatHours = (h: number) => {
-    const hrs = Math.floor(h); const mins = Math.round((h - hrs) * 60);
-    return mins > 0 ? `${hrs}ч ${mins}м` : `${hrs}ч`;
+  // ═══════════════════════════════════════════════════════
+  // 🧮 Общая сумма
+  // ═══════════════════════════════════════════════════════
+  const totalAmount = useMemo(() => {
+    const data = drillLevel === 'projects' 
+      ? projectData 
+      : drillLevel === 'employees' 
+        ? employeeData 
+        : selectedEmployee?.expenses || [];
+    
+    return data.reduce((sum, item: any) => sum + (convertToRub ? item.totalRub : item.total), 0);
+  }, [drillLevel, projectData, employeeData, selectedEmployee, convertToRub]);
+
+  // ═══════════════════════════════════════════════════════
+  // 🔙 Навигация назад
+  // ═══════════════════════════════════════════════════════
+  function handleBack() {
+    if (drillLevel === 'details') {
+      setDrillLevel('employees');
+      setSelectedEmployee(null);
+      setHighlightedExpenseId(null);
+    } else if (drillLevel === 'employees') {
+      setDrillLevel('projects');
+      setSelectedProject(null);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 🍕 Кастомный активный сектор (3D эффект)
+  // ═══════════════════════════════════════════════════════
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload } = props;
+    const RADIAN = Math.PI / 180;
+    const cos = Math.cos(-RADIAN * midAngle);
+    const sin = Math.sin(-RADIAN * midAngle);
+    const sx = cx + (outerRadius + 10) * cos;
+    const sy = cy + (outerRadius + 10) * sin;
+    const mx = cx + (outerRadius + 30) * cos;
+    const my = cy + (outerRadius + 30) * sin;
+    const ex = mx + (cos >= 0 ? 1 : -1) * 22;
+    const ey = my;
+    const textAnchor = cos >= 0 ? 'start' : 'end';
+    const value = convertToRub ? payload.totalRub : payload.total;
+
+    return (
+      <g>
+        {/* Основной сектор с 3D тенью */}
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+          style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}
+        />
+        {/* Вынесенный сектор для эффекта 3D */}
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius - 2}
+          outerRadius={outerRadius + 8}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+          opacity={0.3}
+          style={{ transform: `translate(${cos * 4}px, ${sin * 4}px)` }}
+        />
+        {/* Линия-выноска */}
+        <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" strokeWidth={2} />
+        {/* Кружок на конце выноски */}
+        <circle cx={ex} cy={ey} r={3} fill={fill} />
+        {/* Текст с суммой */}
+        <text x={ex + (cos >= 0 ? 12 : -12)} y={ey} textAnchor={textAnchor} fill="#374151" fontSize={14} fontWeight={600}>
+          {formatMoney(Math.round(value), convertToRub ? 'RUB' : 'USD')}
+        </text>
+        {/* Название проекта/сотрудника */}
+        <text x={ex + (cos >= 0 ? 12 : -12)} y={ey + 18} textAnchor={textAnchor} fill="#6b7280" fontSize={12}>
+          {payload.name}
+        </text>
+      </g>
+    );
   };
 
-  const EXPENSE_TYPE_LABELS: Record<string, string> = {
-    CONTRACTORS: '👷 Подрядчики', MATERIALS: '🧱 Материалы', EQUIPMENT: '🔧 Оборудование',
-    TRANSPORT: '🚚 Транспорт Доп.', ROAD: '🚗 Транспорт', MANAGER_COMMISSION: '💼 Комиссия',
-    FINES: '⚠️ Штрафы', CREDIT: '🏦 Кредит', OTHER: '📦 Другое',
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+      </div>
+    );
+  }
 
-  const weekdayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-  const maxWeekdayHours = Math.max(...hoursByWeekday, 1);
-  const maxProjectHours = projectHours[0]?.hours || 1;
-  const maxUserHours = userHours[0]?.hours || 1;
-  const maxExpenseType = expensesByType[0]?.[1] || 1;
-
-  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
+  const chartData: ChartDataItem[] = drillLevel === 'projects' 
+    ? projectData.map((p, i) => ({ ...p, name: p.projectName, fill: COLORS[i % COLORS.length] }))
+    : employeeData.map((e, i) => ({ ...e, name: e.userName, fill: COLORS[i % COLORS.length] }));
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div className="p-6 space-y-6">
+      {/* ═══════════════════════════════════════════════════════
+          📌 Заголовок и управление
+          ═══════════════════════════════════════════════════════ */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Аналитика</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Подробный обзор эффективности команды</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {drillLevel === 'projects' && 'Распределение затрат по проектам'}
+            {drillLevel === 'employees' && `Затраты по проекту: ${selectedProject?.projectName}`}
+            {drillLevel === 'details' && `Расходы: ${selectedEmployee?.userName}`}
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {displayExpenses.length} записей
+          </p>
         </div>
-        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
-          <button 
-            onClick={handlePrevMonth}
-            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label="Предыдущий месяц"
-          >
-            ←
-          </button>
-          <span className="px-3 py-1.5 text-sm font-bold text-slate-900 dark:text-slate-100 min-w-[140px] text-center">
-            {monthNames[currentMonth.month]} {currentMonth.year}
-          </span>
-          <button 
-            onClick={handleNextMonth}
-            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label="Следующий месяц"
-          >
-            →
-          </button>
-          <button 
-            onClick={handleToday}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ml-2"
-          >
-            Сегодня
-          </button>
+
+        <div className="flex items-center gap-3">
+          {/* Кнопка "Назад" */}
+          {drillLevel !== 'projects' && (
+            <button
+              onClick={handleBack}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700"
+            >
+              ← Назад
+            </button>
+          )}
+
+          {/* Переключатель конвертации */}
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={convertToRub}
+              onChange={(e) => setConvertToRub(e.target.checked)}
+              className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+            />
+            Конвертировать в ₽
+          </label>
         </div>
       </div>
 
-      {/* KPI Карточки */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div onClick={() => navigate('/hours-calendar')} className="card p-5 cursor-pointer hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all group">
-          <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase mb-2">⏱ Всего часов</div>
-          <div className="text-3xl font-black text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{formatHours(totalHours)}</div>
-          <div className="text-[10px] text-slate-400 mt-1">за период → Календарь</div>
-        </div>
-        <div onClick={() => navigate('/expenses')} className="card p-5 cursor-pointer hover:shadow-md hover:border-orange-300 dark:hover:border-orange-700 transition-all group">
-          <div className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase mb-2">💸 Расходы</div>
-          <div className="text-3xl font-black text-slate-900 dark:text-slate-100 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
-            {totalExpensesAmount > 0 ? `${(totalExpensesAmount / 1000).toFixed(0)}K ₽` : '—'}
+      {/* ═══════════════════════════════════════════════════════
+          📊 Основная диаграмма
+          ═══════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Круговая диаграмма */}
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            {drillLevel === 'projects' ? 'По проектам' : 'По сотрудникам'}
+          </h2>
+          
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  outerRadius={100}
+                  innerRadius={60}
+                  paddingAngle={2}
+                  dataKey={convertToRub ? 'totalRub' : 'total'}
+                  nameKey="name"
+                  activeShape={renderActiveShape}
+                  onClick={(data: any) => {
+                    if (drillLevel === 'projects') {
+                      setSelectedProject(data.payload);
+                      setDrillLevel('employees');
+                    } else if (drillLevel === 'employees') {
+                      setSelectedEmployee(data.payload);
+                      setDrillLevel('details');
+                    }
+                  }}
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.fill}
+                      style={{ 
+                        filter: highlightedExpenseId && drillLevel === 'details'
+                          ? entry.expenses?.some((e: ExpenseDto) => e.id === highlightedExpenseId)
+                            ? 'brightness(1.2) drop-shadow(0 4px 8px rgba(0,0,0,0.4))'
+                            : 'brightness(0.7) grayscale(0.5)'
+                          : undefined
+                      }}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value: any) => [
+                    formatMoney(Math.round(Number(value)), convertToRub ? 'RUB' : expenses[0]?.currency || 'RUB'),
+                  ]}
+                  contentStyle={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+                    padding: '16px',
+                  }}
+                />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={40}
+                  formatter={(value) => (
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{value}</span>
+                  )}
+                />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
-          <div className="text-[10px] text-slate-400 mt-1">за период → Список</div>
-        </div>
-        <div onClick={() => navigate('/projects')} className="card p-5 cursor-pointer hover:shadow-md hover:border-green-300 dark:hover:border-green-700 transition-all group">
-          <div className="text-xs font-bold text-green-600 dark:text-green-400 uppercase mb-2">📁 Проекты</div>
-          <div className="text-3xl font-black text-slate-900 dark:text-slate-100 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">{activeProjectsCount}</div>
-          <div className="text-[10px] text-slate-400 mt-1">активных → Список</div>
-        </div>
-        <div onClick={() => navigate('/admin')} className="card p-5 cursor-pointer hover:shadow-md hover:border-purple-300 dark:hover:border-purple-700 transition-all group">
-          <div className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase mb-2">👥 Сотрудники</div>
-          <div className="text-3xl font-black text-slate-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">{employeesCount}</div>
-          <div className="text-[10px] text-slate-400 mt-1">в системе → Доступы</div>
-        </div>
-      </div>
 
-      {/* Топ проектов + Топ сотрудников */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Топ проектов */}
-        <div className="card p-5">
-          <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-            <span className="w-1.5 h-5 bg-indigo-500 rounded-full"></span>
-            🏆 Топ проектов по часам
-          </h3>
-          {projectHours.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-sm">Нет данных за период</div>
-          ) : (
-            <div className="space-y-3">
-              {projectHours.map((p, i) => {
-                const pct = (p.hours / maxProjectHours) * 100;
+          {/* Итого */}
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Общая сумма</p>
+            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+              {formatMoney(Math.round(totalAmount), convertToRub ? 'RUB' : 'USD')}
+            </p>
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════
+            📋 Детальный список расходов
+            ═══════════════════════════════════════════════════════ */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 overflow-hidden">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            {drillLevel === 'details' ? 'Расходы сотрудника' : 'Все расходы'}
+          </h2>
+          
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+            {displayExpenses.length === 0 ? (
+              <p className="text-gray-500 dark:text-gray-400 text-center py-8">Нет данных</p>
+            ) : (
+              displayExpenses.map((exp) => {
+                const amountRub = exp.amount * (EXCHANGE_RATES[exp.currency] || 1);
+                const displayAmount = convertToRub ? amountRub : exp.amount;
+                const isHighlighted = highlightedExpenseId === exp.id;
+
                 return (
-                  <div key={i}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-bold text-slate-400 w-5">#{i + 1}</span>
-                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{p.name}</span>
+                  <div
+                    key={exp.id}
+                    onClick={() => {
+                      if (drillLevel === 'details') {
+                        setHighlightedExpenseId(exp.id);
+                      }
+                    }}
+                    className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                      isHighlighted
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-md'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-emerald-300 dark:hover:border-emerald-600'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-white truncate">
+                          {exp.name}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {new Date(exp.date).toLocaleDateString('ru-RU', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                          })}
+                        </p>
+                        {drillLevel !== 'details' && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                            {users.find(u => u.id === exp.userId)?.name || 'Неизвестный'}
+                          </p>
+                        )}
+                        {exp.comment && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 line-clamp-2">
+                            {exp.comment}
+                          </p>
+                        )}
                       </div>
-                      <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap ml-2">{formatHours(p.hours)}</span>
-                    </div>
-                    <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Топ сотрудников */}
-        <div className="card p-5">
-          <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-            <span className="w-1.5 h-5 bg-emerald-500 rounded-full"></span>
-            👥 Топ сотрудников по часам
-          </h3>
-          {userHours.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-sm">Нет данных за период</div>
-          ) : (
-            <div className="space-y-3">
-              {userHours.map((u, i) => {
-                const pct = (u.hours / maxUserHours) * 100;
-                return (
-                  <div key={i}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-bold text-slate-400 w-5">#{i + 1}</span>
-                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{u.name}</span>
+                      <div className="text-right">
+                        <p className={`font-bold ${isHighlighted ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-white'}`}>
+                          {formatMoney(Math.round(displayAmount), convertToRub ? 'RUB' : exp.currency)}
+                        </p>
+                        {convertToRub && exp.currency !== 'RUB' && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
+                            {formatMoney(exp.amount, exp.currency)}
+                          </p>
+                        )}
                       </div>
-                      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap ml-2">{formatHours(u.hours)}</span>
-                    </div>
-                    <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Распределение по дням недели + Расходы по типам */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Часы по дням недели */}
-        <div className="card p-5">
-          <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-            <span className="w-1.5 h-5 bg-blue-500 rounded-full"></span>
-            📆 Распределение по дням недели
-          </h3>
-          <div className="flex items-end gap-2 h-40">
-            {hoursByWeekday.map((hours, i) => {
-              const pct = (hours / maxWeekdayHours) * 100;
-              const isWknd = i >= 5;
-              return (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                    {hours > 0 ? formatHours(hours) : '—'}
-                  </div>
-                  <div className="flex-1 w-full flex items-end">
-                    <div className={`w-full rounded-t transition-all ${isWknd ? 'bg-red-400 dark:bg-red-600' : 'bg-gradient-to-t from-blue-500 to-indigo-400'}`}
-                      style={{ height: `${pct}%`, minHeight: hours > 0 ? '4px' : '0' }} />
-                  </div>
-                  <div className={`text-xs font-semibold ${isWknd ? 'text-red-500' : 'text-slate-600 dark:text-slate-400'}`}>
-                    {weekdayNames[i]}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Расходы по типам */}
-        <div className="card p-5">
-          <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-            <span className="w-1.5 h-5 bg-orange-500 rounded-full"></span>
-            💸 Расходы по типам
-          </h3>
-          {expensesByType.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-sm">Нет расходов за период</div>
-          ) : (
-            <div className="space-y-3">
-              {expensesByType.map(([type, amount]) => {
-                const pct = (amount / maxExpenseType) * 100;
-                return (
-                  <div key={type}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{EXPENSE_TYPE_LABELS[type] || type}</span>
-                      <span className="text-sm font-bold text-orange-600 dark:text-orange-400 whitespace-nowrap ml-2">{formatMoney(amount)}</span>
-                    </div>
-                    <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Сводка */}
-      <div className="card p-5 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/20 dark:to-violet-950/20 border-indigo-200 dark:border-indigo-900">
-        <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-3 flex items-center gap-2">
-          <span className="w-1.5 h-5 bg-indigo-500 rounded-full"></span>
-          📊 Сводка за период
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Среднее в день</div>
-            <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {periodEntries.length > 0 ? formatHours(totalHours / new Set(periodEntries.map(e => e.date)).size) : '—'}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Уникальных проектов</div>
-            <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {new Set(periodEntries.map(e => e.projectId)).size}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Активных сотрудников</div>
-            <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {new Set(periodEntries.map(e => e.userId)).size}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Средний расход</div>
-            <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {periodExpenses.length > 0 ? formatMoney(totalExpensesAmount / periodExpenses.length) : '—'}
-            </div>
+              })
+            )}
           </div>
         </div>
       </div>
