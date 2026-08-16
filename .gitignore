@@ -1,1 +1,46 @@
-Nothing should be ignored since the changes only include source code files (.ts, .tsx) without any build artifacts, dependencies, or temporary files.
+```
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Editors
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+.env
+
+# Build outputs
+dist/
+build/
+target/
+*.min.js
+*.min.css
+
+# Testing
+.coverage
+coverage/
+htmlcov/
+.nyc_output/
+.pytest_cache/
+.mypy_cache/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+```
