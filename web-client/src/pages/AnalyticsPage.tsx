@@ -184,6 +184,40 @@ export function AnalyticsPage() {
   }, [drillLevel, projectData, employeeData, selectedEmployee]);
 
   // ═══════════════════════════════════════════════════════
+  // 💱 Суммы по валютам (для отображения без конвертации)
+  // ═══════════════════════════════════════════════════════
+  const currencyTotals = useMemo(() => {
+    const data = drillLevel === 'projects' 
+      ? projectData 
+      : drillLevel === 'employees' 
+        ? employeeData 
+        : selectedEmployee?.expenses || [];
+    
+    const totals: Record<string, number> = {};
+    
+    // Проходим по всем расходам и суммируем по валютам
+    data.forEach((item: any) => {
+      if (item.expenses) {
+        // Это проект или сотрудник - проходим по его расходам
+        item.expenses.forEach((exp: ExpenseDto) => {
+          if (!totals[exp.currency]) {
+            totals[exp.currency] = 0;
+          }
+          totals[exp.currency] += exp.amount;
+        });
+      } else if (item.currency) {
+        // Это отдельный расход
+        if (!totals[item.currency]) {
+          totals[item.currency] = 0;
+        }
+        totals[item.currency] += item.amount;
+      }
+    });
+    
+    return totals;
+  }, [drillLevel, projectData, employeeData, selectedEmployee]);
+
+  // ═══════════════════════════════════════════════════════
   // 🔙 Навигация назад
   // ═══════════════════════════════════════════════════════
   function handleBack() {
@@ -399,13 +433,18 @@ export function AnalyticsPage() {
           {/* Итого */}
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center">
             <p className="text-sm text-gray-500 dark:text-gray-400">Общая сумма</p>
-            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-              {formatMoney(Math.round(totalAmount), 'RUB')}
-            </p>
-            {!convertToRub && (
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                (в рублях по курсу)
+            {convertToRub ? (
+              <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                {formatMoney(Math.round(totalAmount), 'RUB')}
               </p>
+            ) : (
+              <div className="flex flex-wrap justify-center gap-3 mt-2">
+                {Object.entries(currencyTotals).map(([currency, amount]) => (
+                  <p key={currency} className="text-xl font-bold text-gray-900 dark:text-white">
+                    {formatMoney(Math.round(amount), currency)}
+                  </p>
+                ))}
+              </div>
             )}
           </div>
         </div>
