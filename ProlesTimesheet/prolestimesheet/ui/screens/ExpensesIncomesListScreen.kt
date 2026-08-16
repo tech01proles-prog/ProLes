@@ -21,9 +21,22 @@ import com.example.prolestimesheet.model.Expense
 import com.example.prolestimesheet.model.Income
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
 import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import java.time.YearMonth
+
+// Объединённая модель для расходов и доходов
+private data class ExpenseIncomeItem(
+    val id: String,
+    val isExpense: Boolean,
+    val date: LocalDate,
+    val amount: Double,
+    val currency: String,
+    val name: String,
+    val projectName: String?,
+    val userId: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,18 +71,6 @@ fun ExpensesIncomesListScreen(
         val itemMonth = YearMonth.of(it.date.year, it.date.monthNumber)
         itemMonth == selectedYearMonth && (user?.role in listOf("admin", "director", "superadmin") || it.userId == user?.id)
     }
-    
-    // Объединяем в один список с общим типом данных
-    data class ExpenseIncomeItem(
-        val id: String,
-        val isExpense: Boolean,
-        val date: java.time.LocalDate,
-        val amount: Double,
-        val currency: String,
-        val name: String,
-        val projectName: String?,
-        val userId: String
-    )
     
     val combinedList = mutableListOf<ExpenseIncomeItem>()
     
@@ -400,14 +401,3 @@ private fun MonthPickerDialog(
         }
     )
 }
-
-private data class ExpenseIncomeItem(
-    val id: String,
-    val isExpense: Boolean,
-    val date: java.time.LocalDate,
-    val amount: Double,
-    val currency: String,
-    val name: String,
-    val projectName: String?,
-    val userId: String
-)
