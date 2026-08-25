@@ -5,7 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -36,6 +38,19 @@ private data class ExpenseIncomeItem(
     val name: String,
     val projectName: String?,
     val userId: String
+)
+
+// Справочник типов расходов
+private val EXPENSE_TYPE_LABELS = mapOf(
+    "CONTRACTORS" to ("Подрядчики" to "👷"),
+    "MATERIALS" to ("Материалы" to "🧱"),
+    "EQUIPMENT" to ("Оборудование" to "🔧"),
+    "TRANSPORT" to ("Транспорт Доп." to "🚚"),
+    "ROAD" to ("Транспорт" to "🚗"),
+    "MANAGER_COMMISSION" to ("Комиссия менеджеру" to "💼"),
+    "FINES" to ("Штрафы" to "⚠️"),
+    "CREDIT" to ("Кредит" to "🏦"),
+    "OTHER" to ("Другое" to "📦")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -123,6 +138,8 @@ fun ExpensesIncomesListScreen(
     val totalIncomes = filteredIncomes.sumOf { it.amount }
     val balance = totalIncomes - totalExpenses
     
+    var showAddExpenseDialog by remember { mutableStateOf(false) }
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -148,6 +165,14 @@ fun ExpensesIncomesListScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAddExpenseDialog = true },
+                containerColor = Color(0xFFC62828)
+            ) {
+                Icon(Icons.Default.Add, "Добавить расход")
+            }
         }
     ) { padding ->
         Column(
@@ -282,6 +307,27 @@ fun ExpensesIncomesListScreen(
                 onDismiss = { showMonthPicker = false }
             )
         }
+        
+        // Диалог добавления расхода
+        if (showAddExpenseDialog) {
+            AddExpenseDialog(
+                defaultDate = today,
+                onDismiss = { showAddExpenseDialog = false },
+                onSave = { type, name, amount, currency, comment ->
+                    viewModel.addExpense(
+                        projectId = "",
+                        projectName = null,
+                        date = today,
+                        type = type,
+                        name = name,
+                        amount = amount,
+                        currency = currency,
+                        comment = comment
+                    )
+                    showAddExpenseDialog = false
+                }
+            )
+        }
     }
 }
 
@@ -399,5 +445,121 @@ private fun MonthPickerDialog(
                 Text("Отмена")
             }
         }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddExpenseDialog(
+    defaultDate: LocalDate,
+    onDismiss: () -> Unit,
+    onSave: (type: String, name: String, amount: Double, currency: String, comment: String) -> Unit
+) {
+    var selectedType by remember { mutableStateOf("OTHER") }
+    var name by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    var currency by remember { mutableStateOf("RUB") }
+    var comment by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("➕ Новый расход") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Тип расхода
+                Text("Тип расхода", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+                var typeExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = typeExpanded,
+                    onExpandedChange = { typeExpanded = !typeExpanded }
+                ) {
+                    val currentLabel = EXPENSE_TYPE_LABELS[selectedType]?.let { "${it.second} ${it.first}" } ?: selectedType
+                    OutlinedTextField(
+                        value = currentLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(typeExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(expanded = typeExpanded, onDismissRequest = { typeExpanded = false }) {
+                        EXPENSE_TYPE_LABELS.forEach { (key, value) ->
+                            val (label, icon) = value
+                            DropdownMenuItem(
+                                text = { Text("$icon $label") },
+                                onClick = {
+                                    selectedType = key
+                                    typeExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Название (опционально)
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Название (опционально)") },
+                    placeholder = { Text("Например: Цемент 50 мешков") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                // Сумма + валюта
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = amount,
+                        onValueChange = {
+                            if (it.isEmpty() || it.all { c -> c.isDigit() || c == '.' || c == ',' }) {
+                                amount = it.replace(',', '.')
+                            }
+                        },
+                        label = { Text("Сумма *") },
+                        modifier = Modifier.weight(2f),
+                        singleLine = true
+                    )
+                    var curExpanded by remember { mutableStateOf(false) }
+                    Box(Modifier.weight(1f)) {
+                        OutlinedButton(
+                            onClick = { curExpanded = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(currency) }
+                        DropdownMenu(expanded = curExpanded, onDismissRequest = { curExpanded = false }) {
+                            listOf("RUB", "BYN", "USD", "EUR").forEach { cur ->
+                                DropdownMenuItem(
+                                    text = { Text(cur) },
+                                    onClick = { currency = cur; curExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Комментарий
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it },
+                    label = { Text("Комментарий") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 3
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val amountValue = amount.toDoubleOrNull() ?: 0.0
+                    if (amountValue > 0) {
+                        onSave(selectedType, name, amountValue, currency, comment)
+                    }
+                },
+                enabled = (amount.toDoubleOrNull() ?: 0.0) > 0
+            ) { Text("Добавить") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
     )
 }
