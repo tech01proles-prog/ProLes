@@ -100,12 +100,14 @@ fun ProfileScreen(
     onNavigateToNotifications: () -> Unit,
     onNavigateToMyTickets: () -> Unit,  // 🆕
     onNavigateToStats: () -> Unit,  // 🆕 Статистика сотрудника
+    onNavigateToExpensesIncomes: () -> Unit,  // 🆕 Расходы/Доходы
     modifier: Modifier = Modifier
 ) {
     val scroll = rememberScrollState()
     // 🆕 Получаем актуальный профиль с сервера
     val freshProfile = viewModel.getFreshProfile(user?.id) ?: user
     val expenses by viewModel.expenses.collectAsState()
+    val incomes by viewModel.incomes.collectAsState()
 
     Column(
         modifier = modifier
@@ -264,17 +266,17 @@ fun ProfileScreen(
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        // Строка 1: Расходы + Командировки
+        // Строка 1: Расходы/Доходы + Командировки
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             NavigationTile(
-                title = "Расходы",
-                subtitle = "${userExpenses.size} записей",
+                title = "Расходы/Доходы",
+                subtitle = "${userExpenses.size + incomes.filter { it.userId == user?.id }.size} записей",
                 emoji = "💰",
                 gradientColors = listOf(Color(0xFFB3E5FC), Color(0xFF81D4FA)),
-                onClick = onNavigateToMyExpenses,
+                onClick = onNavigateToExpensesIncomes,
                 modifier = Modifier.weight(1f)
             )
             NavigationTile(

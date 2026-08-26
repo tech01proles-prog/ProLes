@@ -27,6 +27,7 @@ import java.io.ByteArrayOutputStream
 import androidx.core.graphics.scale
 import androidx.activity.result.PickVisualMediaRequest
 import android.graphics.BitmapFactory
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -446,7 +447,7 @@ private fun ExpenseRow(
 }
 
 // 🔹 Вспомогательная функция масштабирования битмапа
-private fun scaleBitmapIfNeeded(bitmap: Bitmap, maxWidth: Int): Bitmap {
+fun scaleBitmapIfNeeded(bitmap: Bitmap, maxWidth: Int): Bitmap {
     return if (bitmap.width > maxWidth) {
         val ratio = maxWidth.toFloat() / bitmap.width.toFloat()
         val newHeight = (bitmap.height * ratio).toInt()
