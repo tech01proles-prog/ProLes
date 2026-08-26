@@ -12,6 +12,17 @@ const TRIP_TYPES = {
   COMPLETION: { label: '✅ Завершение', color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900' },
 };
 
+// 🆕 Интерфейс для модального окна просмотра командировки
+interface TripDetailModalProps {
+  trip: BusinessTripDto;
+  user: UserDto | null;
+  allUsers: UserDto[];
+  isAdmin: boolean;
+  canEdit: boolean;
+  onClose: () => void;
+  onSave: (updatedTrip: Partial<BusinessTripDto>) => Promise<void>;
+}
+
 export function TripsPage() {
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState<UserDto | null>(null);
@@ -56,6 +67,12 @@ export function TripsPage() {
     notes: '',
   });
   const [saving, setSaving] = useState(false);
+
+  // 🆕 Состояние для модального окна просмотра командировки
+  const [selectedTrip, setSelectedTrip] = useState<BusinessTripDto | null>(null);
+  const [showTripDetail, setShowTripDetail] = useState(false);
+  const [editingPerDiemRate, setEditingPerDiemRate] = useState<number>(750);
+  const [savingPerDiem, setSavingPerDiem] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('proles_user');
@@ -131,6 +148,52 @@ export function TripsPage() {
     if (!confirm('Удалить командировку?')) return;
     await api.delete('/business-trips', { params: { tripId: id } });
     await loadData();
+  };
+
+  // 🆕 Открыть модальное окно просмотра командировки
+  const handleOpenTripDetail = (trip: BusinessTripDto) => {
+    setSelectedTrip(trip);
+    setEditingPerDiemRate(trip.perDiemRate || 750);
+    setShowTripDetail(true);
+  };
+
+  // 🆕 Сохранить измененный размер суточных
+  const handleSavePerDiemRate = async () => {
+    if (!selectedTrip) return;
+    setSavingPerDiem(true);
+    try {
+      const updatedTrip: Partial<BusinessTripDto> = {
+        ...selectedTrip,
+        perDiemRate: editingPerDiemRate,
+      };
+      await api.put('/business-trips', updatedTrip);
+      await loadData();
+      setShowTripDetail(false);
+      setSelectedTrip(null);
+    } catch (err) {
+      alert('Ошибка сохранения размера суточных');
+      console.error(err);
+    } finally {
+      setSavingPerDiem(false);
+    }
+  };
+
+  // 🆕 Вычислить количество дней в командировке
+  const calculateTripDays = (trip: BusinessTripDto): number => {
+    const now = new Date();
+    const tripDate = new Date(trip.date);
+    
+    // Если командировка завершена (COMPLETION), считаем дни от даты начала до даты завершения
+    if (trip.type === 'COMPLETION') {
+      const diffTime = Math.abs(tripDate.getTime() - new Date(trip.createdAt).getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return Math.max(1, diffDays);
+    }
+    
+    // Для активных командировок (DEPARTURE, TRANSFER) считаем дни от даты начала до сегодня
+    const diffTime = Math.abs(now.getTime() - tripDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(1, diffDays);
   };
 
   const toggleParticipant = (uid: string) => {

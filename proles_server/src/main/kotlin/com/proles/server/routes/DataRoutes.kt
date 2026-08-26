@@ -1507,6 +1507,7 @@ fun Route.dataRoutes() {
                         it[participants] = json.encodeToString(trip.participants)
                         it[transport] = trip.transport
                         it[notes] = trip.notes
+                    it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
                         it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints)
                         it[createdAt] = System.currentTimeMillis()
                         it[perDiemRate] = trip.perDiemRate
@@ -1535,6 +1536,7 @@ fun Route.dataRoutes() {
                             it[participants] = json.encodeToString(trip.participants)
                             it[transport] = trip.transport
                             it[notes] = trip.notes
+                    it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
                             it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints)
                             it[createdAt] = System.currentTimeMillis()
                         }
@@ -1559,6 +1561,7 @@ fun Route.dataRoutes() {
                                 it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints)
                                 if (trip.notes.isNotBlank()) {
                                     it[notes] = trip.notes
+                    it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
                                 }
                                 it[type] = "TRANSFER"
                             } else { // COMPLETION
@@ -1568,6 +1571,7 @@ fun Route.dataRoutes() {
                                 if (trip.city.isNotBlank()) it[city] = trip.city
                                 if (trip.transport.isNotBlank()) it[transport] = trip.transport
                                 if (trip.notes.isNotBlank()) it[notes] = trip.notes
+                    it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
                             }
                         }
 
@@ -1837,6 +1841,7 @@ fun Route.dataRoutes() {
                     it[participants] = json.encodeToString(trip.participants)
                     it[transport] = trip.transport
                     it[notes] = trip.notes
+                    it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
                 }
             }
             call.respond(HttpStatusCode.OK, trip)
