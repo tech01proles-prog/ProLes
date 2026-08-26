@@ -131,7 +131,8 @@ data class BusinessTripDto(
     val transport: String = "",
     val notes: String = "",
     val participants: List<String> = emptyList(),
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val perDiemRate: Double = 750.0  // 🆕 Размер суточных по умолчанию
 )
 
 // 🆕 DTO для уведомлений

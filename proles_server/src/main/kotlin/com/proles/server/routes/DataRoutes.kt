@@ -1476,7 +1476,8 @@ fun Route.dataRoutes() {
                             }.getOrDefault(emptyList()),
                             transport = row[BusinessTripsTable.transport],
                             notes = row[BusinessTripsTable.notes],
-                            createdAt = row[BusinessTripsTable.createdAt]
+                            createdAt = row[BusinessTripsTable.createdAt],
+                            perDiemRate = row[BusinessTripsTable.perDiemRate]
                         )
                     }
             }
@@ -1508,6 +1509,7 @@ fun Route.dataRoutes() {
                         it[notes] = trip.notes
                         it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints)
                         it[createdAt] = System.currentTimeMillis()
+                        it[perDiemRate] = trip.perDiemRate
                     }
                     Pair(trip.copy(id = id.toString()), false)
                 } else {

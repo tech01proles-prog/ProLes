@@ -94,6 +94,7 @@ export interface BusinessTripDto {
   transport: string;
   notes: string;
   createdAt: number;
+  perDiemRate: number;  // 🆕 Размер суточных
 }
 
 export interface NotificationDto {
