@@ -22,6 +22,7 @@ import com.proles.server.config.FirebaseService
 import io.ktor.server.http.content.staticFiles
 import com.proles.server.config.TelegramService
 import com.proles.server.model.Permission
+import com.proles.server.services.PerDiemService
 import java.util.UUID
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
@@ -69,6 +70,9 @@ fun Application.module() {
         initDefaultRoles()
 
     }
+
+    // 📒 Запуск сервиса автоматического начисления суточных
+    PerDiemService.startScheduler()
 
     install(ContentNegotiation) {
         json(Json { ignoreUnknownKeys = true; encodeDefaults = true })

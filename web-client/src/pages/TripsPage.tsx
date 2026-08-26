@@ -500,13 +500,177 @@ export function TripsPage() {
                     {trip.notes && <div className="italic">📝 {trip.notes}</div>}
                   </div>
                 )}
-                <div className="flex justify-end pt-2 mt-2 border-t border-slate-100 dark:border-slate-800">
-                  <button onClick={() => handleDelete(trip.id)} className="text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-all">🗑 Удалить</button>
+                <div className="flex justify-end pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 gap-2">
+                  <button 
+                    onClick={() => handleOpenTripDetail(trip)} 
+                    className="text-xs font-medium text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 px-2 py-1 rounded-lg transition-all"
+                  >
+                    📋 Открыть
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(trip.id)} 
+                    className="text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    🗑 Удалить
+                  </button>
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {/* 🆕 Модальное окно просмотра/редактирования командировки */}
+      {showTripDetail && selectedTrip && createPortal(
+        <div className="proles-modal-backdrop" onClick={() => !savingPerDiem && setShowTripDetail(false)}>
+          <div className="proles-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="proles-modal-header">
+              <div className="proles-modal-title">
+                <div className="proles-modal-icon">📋</div>
+                <div>
+                  <div>Командировка</div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 500, opacity: 0.85, marginTop: 2 }}>
+                    {TRIP_TYPES[selectedTrip.type as keyof typeof TRIP_TYPES]?.label || 'Просмотр'}
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setShowTripDetail(false)} className="proles-modal-close">✕</button>
+            </div>
+            <div className="proles-modal-body">
+              {/* Основная информация */}
+              <div className="proles-modal-section">
+                <div className="proles-modal-section-title">Основная информация</div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">Проект:</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.projectName}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">Сотрудник:</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      {allUsers.find(u => u.id === selectedTrip.userId)?.name || selectedTrip.userName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">Дата:</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{formatDate(selectedTrip.date)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">Город:</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.city || '—'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">Дней в командировке:</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{calculateTripDays(selectedTrip)} дн.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Суточные - редактирование для админов */}
+              {(isAdmin || (user?.role === 'superadmin')) && (
+                <div className="proles-modal-section">
+                  <div className="proles-modal-section-title">💰 Суточные</div>
+                  <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-emerald-800 dark:text-emerald-300">Размер суточных:</span>
+                      {editingPerDiemRate !== selectedTrip.perDiemRate ? (
+                        <input
+                          type="number"
+                          value={editingPerDiemRate}
+                          onChange={(e) => setEditingPerDiemRate(Number(e.target.value))}
+                          className="w-32 px-3 py-1.5 text-right font-bold text-lg border-2 border-emerald-300 dark:border-emerald-700 rounded-lg bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          step="1"
+                          min="0"
+                        />
+                      ) : (
+                        <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+                          {selectedTrip.perDiemRate} ₽/день
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+                      <span>ℹ️</span>
+                      <span>Изменение размера суточных применится только к будущим начислениям</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Маршрут */}
+              {selectedTrip.waypoints && selectedTrip.waypoints.length > 0 && (
+                <div className="proles-modal-section">
+                  <div className="proles-modal-section-title">🛣 Пункты следования</div>
+                  <div className="space-y-2">
+                    {selectedTrip.waypoints.map((wp, idx) => (
+                      <div key={idx} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                        <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-slate-200 dark:bg-slate-700 rounded-full text-xs font-bold text-slate-600 dark:text-slate-400">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1">
+                          <div className="font-medium text-slate-900 dark:text-slate-100">{wp.city}</div>
+                          {wp.address && <div className="text-xs text-slate-500 dark:text-slate-400">{wp.address}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Транспорт и участники */}
+              {(selectedTrip.transport || selectedTrip.participants.length > 0) && (
+                <div className="proles-modal-section">
+                  <div className="proles-modal-section-title">Детали поездки</div>
+                  <div className="space-y-2">
+                    {selectedTrip.transport && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-slate-500 dark:text-slate-400">🚗</span>
+                        <span className="text-slate-700 dark:text-slate-300">{selectedTrip.transport}</span>
+                      </div>
+                    )}
+                    {selectedTrip.participants.length > 0 && (
+                      <div>
+                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">👥 Участники:</div>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedTrip.participants.map(pid => {
+                            const participant = allUsers.find(u => u.id === pid);
+                            return (
+                              <span key={pid} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full text-xs font-medium">
+                                {participant?.name || 'Участник'}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Заметки */}
+              {selectedTrip.notes && (
+                <div className="proles-modal-section">
+                  <div className="proles-modal-section-title">📝 Заметки</div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                    {selectedTrip.notes}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="proles-modal-footer">
+              <button onClick={() => setShowTripDetail(false)} className="proles-btn-cancel">Закрыть</button>
+              {(isAdmin || user?.role === 'superadmin') && (
+                <button 
+                  onClick={handleSavePerDiemRate} 
+                  disabled={savingPerDiem || editingPerDiemRate === selectedTrip.perDiemRate}
+                  className="proles-btn-save"
+                >
+                  {savingPerDiem ? '⏳ Сохранение...' : '💾 Сохранить суточные'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
