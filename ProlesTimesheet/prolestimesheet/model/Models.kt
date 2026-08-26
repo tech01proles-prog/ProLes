@@ -137,6 +137,7 @@ data class Expense(
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
 data class Waypoint(
+    val id: String = UUID.randomUUID().toString(),
     val order: Int,
     val city: String,
     val address: String = ""

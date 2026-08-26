@@ -317,7 +317,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         return getTotalHoursForDate(date) + additionalHours <= 24f
     }
 
-    fun addEntry(projectId: String, projectName: String, hours: Float, country: String): AddEntryResult {
+    fun addEntry(projectId: String, projectName: String, hours: Float, country: String, comment: String): AddEntryResult {
         val currentUser = user.value ?: return AddEntryResult.Error("Пользователь не авторизован")
         val date = _selectedDate.value
 
@@ -343,7 +343,8 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
             projectName = projectName,
             date = date,
             hours = hours,
-            country = country
+            country = country,
+            comment = comment
         )
 
         // 🔥 НЕМЕДЛЕННОЕ оптимистичное обновление UI (синхронно, до launch)

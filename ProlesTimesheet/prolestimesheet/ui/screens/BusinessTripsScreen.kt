@@ -35,6 +35,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
