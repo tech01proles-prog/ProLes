@@ -57,6 +57,7 @@ export function ExpensesPage() {
   const [users, setUsers] = useState<UserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [formType, setFormType] = useState<'INCOME' | 'EXPENSE'>('INCOME');
 
   const [sortField, setSortField] = useState<'date' | 'amount' | 'type'>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -185,21 +186,35 @@ export function ExpensesPage() {
     if (!user || !form.amount) return;
     setSaving(true);
     try {
-      await api.post('/incomes', {
-        id: generateUUID(),
-        userId: user.id,
-        projectId: form.projectId || null,
-        projectName: projects.find(p => p.id === form.projectId)?.name || '',
-        date: form.date,
-        name: form.type,
-        amount: parseFloat(form.amount),
-        currency: form.currency,
-        comment: form.comment,
-      });
+      if (formType === 'INCOME') {
+        await api.post('/incomes', {
+          id: generateUUID(),
+          userId: user.id,
+          projectId: form.projectId || null,
+          projectName: projects.find(p => p.id === form.projectId)?.name || '',
+          date: form.date,
+          name: form.type,
+          amount: parseFloat(form.amount),
+          currency: form.currency,
+          comment: form.comment,
+        });
+      } else {
+        await api.post('/expenses', {
+          id: generateUUID(),
+          userId: user.id,
+          projectId: form.projectId || null,
+          projectName: projects.find(p => p.id === form.projectId)?.name || '',
+          date: form.date,
+          type: form.type,
+          amount: parseFloat(form.amount),
+          currency: form.currency,
+          comment: form.comment,
+        });
+      }
       setShowForm(false);
       setForm({ ...form, projectId: '', amount: '', comment: '' });
       await loadData();
-    } catch { alert('Ошибка создания дохода'); }
+    } catch { alert(`Ошибка создания ${formType === 'INCOME' ? 'дохода' : 'расхода'}`); }
     finally { setSaving(false); }
   };
 
@@ -229,9 +244,14 @@ export function ExpensesPage() {
             {filtered.length} записей за период с {formatDate(dateFrom)} по {formatDate(dateTo)}
           </p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary px-5 py-2.5 shadow-indigo-200 shadow-md">
-          {showForm ? '✕ Закрыть' : '＋ Новый доход'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => { setFormType('INCOME'); setShowForm(!showForm); }} className={`btn-primary px-5 py-2.5 shadow-md ${!showForm || formType === 'INCOME' ? 'shadow-indigo-200' : ''}`}>
+            {showForm && formType === 'INCOME' ? '✕ Закрыть' : '＋ Новый доход'}
+          </button>
+          <button onClick={() => { setFormType('EXPENSE'); setShowForm(true); }} className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-red-200 dark:shadow-red-900/30">
+            {showForm && formType === 'EXPENSE' ? '✕ Закрыть' : '－ Новый расход'}
+          </button>
+        </div>
       </div>
 
       {/* Сальдо по валютам */}
@@ -256,17 +276,17 @@ export function ExpensesPage() {
 
       <ScopeTabs scope={effectiveScope} onChange={setScope} canViewAll={canViewAll} myCount={myCount} allCount={allCount} />
 
-      {/* 🌲 PROLES MODAL: Новый доход */}
+      {/* 🌲 PROLES MODAL: Новый доход / Новый расход */}
       {showForm && createPortal(
         <div className="proles-modal-backdrop" onClick={() => !saving && setShowForm(false)}>
           <div className="proles-modal" onClick={(e) => e.stopPropagation()}>
             <div className="proles-modal-header">
               <div className="proles-modal-title">
-                <div className="proles-modal-icon">💵</div>
+                <div className="proles-modal-icon">{formType === 'INCOME' ? '💵' : '💸'}</div>
                 <div>
-                  <div>Новый доход</div>
+                  <div>{formType === 'INCOME' ? 'Новый доход' : 'Новый расход'}</div>
                   <div style={{ fontSize: '0.75rem', fontWeight: 500, opacity: 0.85, marginTop: 2 }}>
-                    Поступление по проекту
+                    {formType === 'INCOME' ? 'Поступление по проекту' : 'Списание средств'}
                   </div>
                 </div>
               </div>
@@ -277,9 +297,9 @@ export function ExpensesPage() {
                 <div className="proles-modal-section-title">Тип и проект</div>
                 <div className="proles-modal-grid">
                   <div className="proles-input-group">
-                    <label>Тип дохода</label>
+                    <label>{formType === 'INCOME' ? 'Тип дохода' : 'Тип расхода'}</label>
                     <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="input bg-white dark:bg-slate-900">
-                      {INCOME_TYPES.map(t => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
+                      {(formType === 'INCOME' ? INCOME_TYPES : EXPENSE_TYPES).map(t => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
                     </select>
                   </div>
                   <div className="proles-input-group">
@@ -296,7 +316,7 @@ export function ExpensesPage() {
                 </div>
               </div>
               <div className="proles-modal-section">
-                <div className="proles-modal-section-title">Сумма поступления</div>
+                <div className="proles-modal-section-title">{formType === 'INCOME' ? 'Сумма поступления' : 'Сумма расхода'}</div>
                 <div className="proles-modal-grid">
                   <div className="proles-input-group">
                     <label>Сумма *</label>
@@ -313,7 +333,7 @@ export function ExpensesPage() {
             </div>
             <div className="proles-modal-footer">
               <button onClick={() => setShowForm(false)} className="proles-btn-cancel">Отмена</button>
-              <button onClick={handleCreate} disabled={saving || !form.amount} className="proles-btn-save">
+              <button onClick={handleCreate} disabled={saving || !form.amount} className={`proles-btn-save ${formType === 'EXPENSE' ? 'bg-red-600 hover:bg-red-700' : ''}`}>
                 {saving ? '⏳ Сохранение...' : '💾 Сохранить'}
               </button>
             </div>
