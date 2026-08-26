@@ -14,10 +14,7 @@ const INCOME_TYPES = [
 ];
 
 const EXPENSE_TYPES = [
-  { key: 'HOUSEHOLD', label: 'Хоз.нужды', icon: '🏠' },
-  { key: 'CARD', label: 'По карте', icon: '💳' },
-  { key: 'CASH', label: 'Наличными', icon: '💵' },
-  { key: 'TRANSFER', label: 'Перевод', icon: '💸' },
+  { key: 'ROAD', label: 'Дорога', icon: '🚗' },
   { key: 'OTHER', label: 'Прочее', icon: '📦' },
 ];
 
@@ -87,11 +84,12 @@ export function ExpensesPage() {
 
   const [form, setForm] = useState({
     projectId: '',
-    type: 'CASH',
+    type: 'ROAD',
     amount: '',
     currency: 'RUB',
     date: new Date().toISOString().slice(0, 10),
     comment: '',
+    name: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -206,13 +204,14 @@ export function ExpensesPage() {
           projectName: projects.find(p => p.id === form.projectId)?.name || '',
           date: form.date,
           type: form.type,
+          name: form.type === 'ROAD' ? 'Дорога' : form.name,
           amount: parseFloat(form.amount),
           currency: form.currency,
           comment: form.comment,
         });
       }
       setShowForm(false);
-      setForm({ ...form, projectId: '', amount: '', comment: '' });
+      setForm({ ...form, projectId: '', amount: '', comment: '', name: '' });
       await loadData();
     } catch { alert(`Ошибка создания ${formType === 'INCOME' ? 'дохода' : 'расхода'}`); }
     finally { setSaving(false); }
@@ -313,6 +312,12 @@ export function ExpensesPage() {
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
+                  {formType === 'EXPENSE' && form.type === 'OTHER' && (
+                    <div className="proles-input-group" style={{ gridColumn: 'span 2' }}>
+                      <label>Название *</label>
+                      <input type="text" placeholder="Введите название расхода" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" />
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="proles-modal-section">
@@ -333,7 +338,7 @@ export function ExpensesPage() {
             </div>
             <div className="proles-modal-footer">
               <button onClick={() => setShowForm(false)} className="proles-btn-cancel">Отмена</button>
-              <button onClick={handleCreate} disabled={saving || !form.amount} className={`proles-btn-save ${formType === 'EXPENSE' ? 'bg-red-600 hover:bg-red-700' : ''}`}>
+              <button onClick={handleCreate} disabled={saving || !form.amount || (formType === 'EXPENSE' && form.type === 'OTHER' && !form.name)} className={`proles-btn-save ${formType === 'EXPENSE' ? 'bg-red-600 hover:bg-red-700' : ''}`}>
                 {saving ? '⏳ Сохранение...' : '💾 Сохранить'}
               </button>
             </div>
@@ -484,7 +489,7 @@ export function ExpensesPage() {
                       <td className="px-4 py-3 text-right">
                         <button 
                           onClick={() => handleDelete(entry.id, entry.type)}
-                          className="text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 px-2 py-1 rounded-lg transition-all opacity-0 hover:opacity-100"
+                          className="text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 px-2 py-1 rounded-lg transition-all"
                           title="Удалить"
                         >
                           🗑
