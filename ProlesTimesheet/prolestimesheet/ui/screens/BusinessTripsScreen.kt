@@ -537,14 +537,15 @@ fun TripDialog(
                 HorizontalDivider()
                 Text("💰 Размер суточных (руб/день)", style = MaterialTheme.typography.labelLarge)
                 OutlinedTextField(
-                    value = perDiemRate.toString(),
+                    value = if (perDiemRate == 0.0) "" else perDiemRate.toString().replace(",", "."),
                     onValueChange = { 
-                        perDiemRate = it.toDoubleOrNull() ?: 0.0 
+                        val cleaned = it.replace(",", ".")
+                        perDiemRate = cleaned.toDoubleOrNull() ?: 0.0 
                     },
                     placeholder = { Text("750") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
 
                 // 🆕 ПУНКТЫ СЛЕДОВАНИЯ (Drag-and-Drop интерфейс)
