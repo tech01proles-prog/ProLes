@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import com.example.prolestimesheet.model.BusinessTrip
 import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.model.User
@@ -349,6 +351,9 @@ fun TripDialog(
     var showProjectPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
 
+    // 🆕 Размер суточных
+    var perDiemRate by remember { mutableStateOf(trip?.perDiemRate ?: 750.0) }
+
     val formattedDate = "%02d.%02d.%04d".format(date.dayOfMonth, date.monthNumber, date.year)
 
     // 🔥 Активные участники предыдущей командировки (для TRANSFER можно их брать)
@@ -528,6 +533,20 @@ fun TripDialog(
                     maxLines = 3
                 )
 
+                // 🆕 РАЗМЕР СУТОЧНЫХ
+                HorizontalDivider()
+                Text("💰 Размер суточных (руб/день)", style = MaterialTheme.typography.labelLarge)
+                OutlinedTextField(
+                    value = perDiemRate.toString(),
+                    onValueChange = { 
+                        perDiemRate = it.toDoubleOrNull() ?: 0.0 
+                    },
+                    placeholder = { Text("750") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
                 // 🆕 ПУНКТЫ СЛЕДОВАНИЯ (Drag-and-Drop интерфейс)
                 HorizontalDivider()
                 Text("📍 Пункты следования", style = MaterialTheme.typography.labelLarge)
@@ -653,7 +672,8 @@ fun TripDialog(
                         participants = selectedParticipants.toList(),
                         transport = transport.trim(),
                         notes = notes.trim(),
-                        createdAt = trip?.createdAt ?: System.currentTimeMillis()
+                        createdAt = trip?.createdAt ?: System.currentTimeMillis(),
+                        perDiemRate = perDiemRate  // 🆕 Размер суточных
                     )
                     onConfirm(newTrip)
                 },

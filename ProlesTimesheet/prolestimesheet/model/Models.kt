@@ -157,7 +157,8 @@ data class BusinessTrip(
     val participants: List<String> = emptyList(),
     val transport: String = "",
     val notes: String = "",
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    val perDiemRate: Double = 750.0  // 🆕 Размер суточных
 )
 
 @SuppressLint("UnsafeOptInUsageError")
