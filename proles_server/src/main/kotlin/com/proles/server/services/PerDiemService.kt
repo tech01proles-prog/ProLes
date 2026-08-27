@@ -9,7 +9,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -38,9 +41,9 @@ object PerDiemService {
         CoroutineScope(Dispatchers.IO).launch {
             // Ждём до следующего 00:00
             val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-            val tomorrow = now.date.plusDays(1)
-            val nextRun = kotlinx.datetime.LocalDateTime(tomorrow, kotlinx.datetime.LocalTime(0, 0, 0))
-            val delayMillis = kotlin.time.Duration.between(now, nextRun).inWholeMilliseconds
+            val tomorrow = now.date.plus(1, DateTimeUnit.DAY)
+            val nextRun = LocalDateTime(tomorrow, LocalTime(0, 0, 0))
+            val delayMillis = now.until(nextRun, DateTimeUnit.MILLISECOND)
 
             println("⏰ PerDiemService: следующее выполнение через ${delayMillis / 1000 / 60} мин (в ${nextRun})")
             delay(delayMillis)
