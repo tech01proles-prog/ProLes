@@ -12,17 +12,6 @@ const TRIP_TYPES = {
   COMPLETION: { label: '✅ Завершение', color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900' },
 };
 
-// 🆕 Интерфейс для модального окна просмотра командировки
-interface TripDetailModalProps {
-  trip: BusinessTripDto;
-  user: UserDto | null;
-  allUsers: UserDto[];
-  isAdmin: boolean;
-  canEdit: boolean;
-  onClose: () => void;
-  onSave: (updatedTrip: Partial<BusinessTripDto>) => Promise<void>;
-}
-
 export function TripsPage() {
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState<UserDto | null>(null);
@@ -163,7 +152,7 @@ export function TripsPage() {
     setSavingPerDiem(true);
     try {
       const updatedTrip: Partial<BusinessTripDto> = {
-        ...selectedTrip,
+        id: selectedTrip.id,
         perDiemRate: editingPerDiemRate,
       };
       await api.put('/business-trips', updatedTrip);
@@ -548,7 +537,7 @@ export function TripsPage() {
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Сотрудник:</span>
                     <span className="font-semibold text-slate-900 dark:text-slate-100">
-                      {allUsers.find(u => u.id === selectedTrip.userId)?.name || selectedTrip.userName}
+                      {allUsers.find(u => u.id === selectedTrip.userId)?.name || 'Неизвестный'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
@@ -573,25 +562,30 @@ export function TripsPage() {
                   <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-sm font-medium text-emerald-800 dark:text-emerald-300">Размер суточных:</span>
-                      {editingPerDiemRate !== selectedTrip.perDiemRate ? (
-                        <input
-                          type="number"
-                          value={editingPerDiemRate}
-                          onChange={(e) => setEditingPerDiemRate(Number(e.target.value))}
-                          className="w-32 px-3 py-1.5 text-right font-bold text-lg border-2 border-emerald-300 dark:border-emerald-700 rounded-lg bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                          step="1"
-                          min="0"
-                        />
-                      ) : (
-                        <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
-                          {selectedTrip.perDiemRate} ₽/день
-                        </span>
-                      )}
+                      <input
+                        type="number"
+                        value={editingPerDiemRate}
+                        onChange={(e) => setEditingPerDiemRate(Number(e.target.value))}
+                        className="w-32 px-3 py-1.5 text-right font-bold text-lg border-2 border-emerald-300 dark:border-emerald-700 rounded-lg bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        step="1"
+                        min="0"
+                      />
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+                    <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 mb-3">
                       <span>ℹ️</span>
                       <span>Изменение размера суточных применится только к будущим начислениям</span>
                     </div>
+                    <button
+                      onClick={handleSavePerDiemRate}
+                      disabled={savingPerDiem || editingPerDiemRate === selectedTrip.perDiemRate}
+                      className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      {savingPerDiem ? (
+                        <>⏳ Сохранение...</>
+                      ) : (
+                        <>💾 Сохранить суточные</>
+                      )}
+                    </button>
                   </div>
                 </div>
               )}
@@ -658,15 +652,6 @@ export function TripsPage() {
             </div>
             <div className="proles-modal-footer">
               <button onClick={() => setShowTripDetail(false)} className="proles-btn-cancel">Закрыть</button>
-              {(isAdmin || user?.role === 'superadmin') && (
-                <button 
-                  onClick={handleSavePerDiemRate} 
-                  disabled={savingPerDiem || editingPerDiemRate === selectedTrip.perDiemRate}
-                  className="proles-btn-save"
-                >
-                  {savingPerDiem ? '⏳ Сохранение...' : '💾 Сохранить суточные'}
-                </button>
-              )}
             </div>
           </div>
         </div>,
