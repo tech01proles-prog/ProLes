@@ -8,12 +8,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import java.time.LocalDate
 import java.util.UUID
 import kotlin.time.Duration.Companion.days
 
@@ -34,13 +37,10 @@ object PerDiemService {
         
         CoroutineScope(Dispatchers.IO).launch {
             // Ждём до следующего 00:00
-            val now = LocalDate.now()
-            val tomorrow = now.plusDays(1)
-            val nextRun = java.time.LocalDateTime.of(tomorrow, java.time.LocalTime.MIDNIGHT)
-            val delayMillis = java.time.Duration.between(
-                java.time.LocalDateTime.now(),
-                nextRun
-            ).toMillis()
+            val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+            val tomorrow = now.date.plusDays(1)
+            val nextRun = kotlinx.datetime.LocalDateTime(tomorrow, kotlinx.datetime.LocalTime(0, 0, 0))
+            val delayMillis = kotlin.time.Duration.between(now, nextRun).inWholeMilliseconds
 
             println("⏰ PerDiemService: следующее выполнение через ${delayMillis / 1000 / 60} мин (в ${nextRun})")
             delay(delayMillis)
@@ -63,8 +63,7 @@ object PerDiemService {
         println("📒 PerDiemService: начало обработки суточных...")
         
         try {
-            val today = LocalDate.now()
-            val todayStr = today.toString()
+            val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
 
             val activeTrips = transaction {
                 BusinessTripsTable.selectAll()
@@ -118,7 +117,7 @@ object PerDiemService {
                     }
 
                     if (existingExpense != null) {
-                        println("⏭️ PerDiemService: пропуск для $userName - суточные за $todayStr уже начислены")
+                        println("⏭️ PerDiemService: пропуск для $userName - суточные за $today уже начислены")
                         skippedCount++
                         return@forEach
                     }
