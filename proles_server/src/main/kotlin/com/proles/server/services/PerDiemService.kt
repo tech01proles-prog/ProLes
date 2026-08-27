@@ -41,6 +41,9 @@ object PerDiemService {
     fun startScheduler() {
         println("⏰ PerDiemService: запуск планировщика...")
         
+        // Немедленно выполняем первый запуск при старте приложения
+        processPerDiems()
+        
         CoroutineScope(Dispatchers.IO).launch {
             // Ждём до следующего 00:00
             val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
@@ -51,13 +54,10 @@ object PerDiemService {
             println("⏰ PerDiemService: следующее выполнение через ${delayMillis / 1000 / 60} мин (в ${nextRun})")
             delay(delayMillis)
 
-            // Первый запуск
-            processPerDiems()
-
             // Затем каждые 24 часа
             while (true) {
-                delay(1.days.inWholeMilliseconds)
                 processPerDiems()
+                delay(1.days.inWholeMilliseconds)
             }
         }
     }

@@ -2,14 +2,21 @@
 # Gradle
 .gradle/
 build/
+!gradle/
+!gradlew
+!gradlew.bat
+
+# Kotlin
+*.class
+*.jar
+*.war
+*.ear
+*.kotlin_metadata
+*.kotlin_builtins
 
 # Dependencies
 .libs/
 lib/
-
-# IDE
-.idea/
-.vscode/
 
 # Logs
 *.log
@@ -17,7 +24,19 @@ lib/
 # Environment
 .env
 .env.local
-*.env.*
+.env.*
+!env.example
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.target/
 
 # OS
 .DS_Store
