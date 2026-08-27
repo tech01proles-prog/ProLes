@@ -14,12 +14,15 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toJavaLocalDateTime
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.time.Duration
 import java.util.UUID
 import kotlin.time.Duration.Companion.days
 
@@ -38,23 +41,23 @@ object PerDiemService {
     fun startScheduler() {
         println("⏰ PerDiemService: запуск планировщика...")
         
+        // Немедленно выполняем первый запуск при старте приложения
+        processPerDiems()
+        
         CoroutineScope(Dispatchers.IO).launch {
             // Ждём до следующего 00:00
             val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
             val tomorrow = now.date.plus(1, DateTimeUnit.DAY)
             val nextRun = LocalDateTime(tomorrow, LocalTime(0, 0, 0))
-            val delayMillis = now.until(nextRun, DateTimeUnit.MILLISECOND)
+            val delayMillis = Duration.between(now.toJavaLocalDateTime(), nextRun.toJavaLocalDateTime()).toMillis()
 
             println("⏰ PerDiemService: следующее выполнение через ${delayMillis / 1000 / 60} мин (в ${nextRun})")
             delay(delayMillis)
 
-            // Первый запуск
-            processPerDiems()
-
             // Затем каждые 24 часа
             while (true) {
-                delay(1.days.inWholeMilliseconds)
                 processPerDiems()
+                delay(1.days.inWholeMilliseconds)
             }
         }
     }

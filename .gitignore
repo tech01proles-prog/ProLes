@@ -1,41 +1,44 @@
 ```
-# Compiled and build artifacts
-*.class
-*.o
-*.obj
-*.out
+# Gradle
+.gradle/
 build/
-target/
+!gradle/
+!gradlew
+!gradlew.bat
+
+# Kotlin
+*.class
+*.jar
+*.war
+*.ear
+*.kotlin_metadata
+*.kotlin_builtins
 
 # Dependencies
-.gradle/
-.mypy_cache/
-.pytest_cache/
-__pycache__/
-node_modules/
-venv/
-.venv/
+.libs/
+lib/
 
-# Logs and temp files
+# Logs
 *.log
-*.tmp
-*.swp
 
 # Environment
 .env
 .env.local
-*.env.*
+.env.*
+!env.example
 
-# Editors
-.vscode/
+# IDE
 .idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.target/
 
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# System
+# OS
 .DS_Store
 Thumbs.db
 ```
