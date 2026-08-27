@@ -1,44 +1,27 @@
 ```
-# Gradle
-.gradle/
-build/
-!gradle/
-!gradlew
-!gradlew.bat
-
-# Kotlin
+# Kotlin/Android build artifacts
 *.class
 *.jar
 *.war
 *.ear
-*.kotlin_metadata
-*.kotlin_builtins
+*.apk
+*.aar
 
-# Dependencies
-.libs/
-lib/
+# Gradle
+.gradle/
+build/
 
-# Logs
-*.log
-
-# Environment
-.env
-.env.local
-.env.*
-!env.example
-
-# IDE
+# IntelliJ IDEA
 .idea/
 *.iml
-*.ipr
 *.iws
-.vscode/
-.settings/
-.project
-.classpath
-.target/
+*.ipr
 
-# OS
-.DS_Store
-Thumbs.db
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Local configuration
+local.properties
 ```
