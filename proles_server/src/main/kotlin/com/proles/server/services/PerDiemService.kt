@@ -111,7 +111,7 @@ object PerDiemService {
                         ExpensesTable.selectAll()
                             .where {
                                 (ExpensesTable.userId eq UUID.fromString(userId)) and
-                                    (ExpensesTable.date eq java.time.LocalDate.parse(todayStr)) and
+                                    (ExpensesTable.date eq LocalDate.parse(todayStr)) and
                                     (ExpensesTable.type eq PER_DIEM_TYPE)
                             }
                             .firstOrNull()
@@ -129,7 +129,7 @@ object PerDiemService {
                             it[ExpensesTable.id] = UUID.randomUUID()
                             it[ExpensesTable.userId] = UUID.fromString(userId)
                             it[ExpensesTable.projectId] = UUID.fromString(projectId)
-                            it[ExpensesTable.date] = java.time.LocalDate.parse(todayStr)
+                            it[ExpensesTable.date] = LocalDate.parse(todayStr)
                             it[ExpensesTable.type] = PER_DIEM_TYPE
                             it[ExpensesTable.name] = PER_DIEM_NAME
                             it[ExpensesTable.amount] = perDiemRate
