@@ -151,8 +151,9 @@ export function TripsPage() {
     if (!selectedTrip) return;
     setSavingPerDiem(true);
     try {
-      const updatedTrip: Partial<BusinessTripDto> = {
-        id: selectedTrip.id,
+      // Отправляем полную запись командировки с обновленным perDiemRate
+      const updatedTrip: BusinessTripDto = {
+        ...selectedTrip,
         perDiemRate: editingPerDiemRate,
       };
       await api.put('/business-trips', updatedTrip);
