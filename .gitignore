@@ -41,4 +41,13 @@ lib/
 # OS
 .DS_Store
 Thumbs.db
+
+# Compiled
+*.class
+*.jar
+*.war
+*.ear
+*.so
+*.dll
+*.exe
 ```
