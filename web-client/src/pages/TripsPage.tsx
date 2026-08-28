@@ -237,8 +237,10 @@ export function TripsPage() {
       
       // Создаем новые суточные для каждого дня в интервале
       const newExpenses = datesInRange.map(date => ({
+        id: crypto.randomUUID(),
         userId: selectedTrip.userId,
         projectId: selectedTrip.projectId,
+        projectName: selectedTrip.projectName || '',
         date: date,
         type: 'per_diem',
         name: 'Суточные',
