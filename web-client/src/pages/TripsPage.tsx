@@ -12,17 +12,6 @@ const TRIP_TYPES = {
   COMPLETION: { label: '✅ Завершение', color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900' },
 };
 
-// 🆕 Интерфейс для модального окна просмотра командировки
-interface TripDetailModalProps {
-  trip: BusinessTripDto;
-  user: UserDto | null;
-  allUsers: UserDto[];
-  isAdmin: boolean;
-  canEdit: boolean;
-  onClose: () => void;
-  onSave: (updatedTrip: Partial<BusinessTripDto>) => Promise<void>;
-}
-
 export function TripsPage() {
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState<UserDto | null>(null);
@@ -73,6 +62,15 @@ export function TripsPage() {
   const [showTripDetail, setShowTripDetail] = useState(false);
   const [editingPerDiemRate, setEditingPerDiemRate] = useState<number>(750);
   const [savingPerDiem, setSavingPerDiem] = useState(false);
+  
+  // 🆕 Состояние для модального окна перерасчета суточных
+  const [showPerDiemRecalc, setShowPerDiemRecalc] = useState(false);
+  const [recalcParams, setRecalcParams] = useState({
+    dateFrom: new Date().toISOString().slice(0, 10),
+    dateTo: new Date().toISOString().slice(0, 10),
+    rate: 750,
+  });
+  const [recalculating, setRecalculating] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('proles_user');
@@ -162,7 +160,8 @@ export function TripsPage() {
     if (!selectedTrip) return;
     setSavingPerDiem(true);
     try {
-      const updatedTrip: Partial<BusinessTripDto> = {
+      // Отправляем полную запись командировки с обновленным perDiemRate
+      const updatedTrip: BusinessTripDto = {
         ...selectedTrip,
         perDiemRate: editingPerDiemRate,
       };
@@ -175,6 +174,97 @@ export function TripsPage() {
       console.error(err);
     } finally {
       setSavingPerDiem(false);
+    }
+  };
+
+  // 🆕 Открыть модальное окно перерасчета суточных
+  const handleOpenPerDiemRecalc = (trip: BusinessTripDto) => {
+    setSelectedTrip(trip);
+    setRecalcParams({
+      dateFrom: trip.date,
+      dateTo: new Date().toISOString().slice(0, 10),
+      rate: trip.perDiemRate || 750,
+    });
+    setShowPerDiemRecalc(true);
+  };
+
+  // 🆕 Выполнить перерасчет суточных
+  const handlePerDiemRecalc = async () => {
+    if (!selectedTrip || !user) return;
+    
+    if (recalcParams.dateFrom > recalcParams.dateTo) {
+      alert('Дата начала должна быть раньше даты окончания');
+      return;
+    }
+    
+    setRecalculating(true);
+    try {
+      // Получаем все расходы пользователя за указанный период
+      const expensesRes = await api.get('/expenses', {
+        params: {
+          userId: selectedTrip.userId,
+          dateFrom: recalcParams.dateFrom,
+          dateTo: recalcParams.dateTo,
+        }
+      });
+      
+      const existingExpenses = expensesRes.data || [];
+      
+      // Создаем карту существующих суточных по датам
+      const existingPerDiemDates = new Set<string>();
+      existingExpenses.forEach((exp: any) => {
+        if (exp.category === 'per_diem' || exp.category === 'perdiem') {
+          existingPerDiemDates.add(exp.date);
+        }
+      });
+      
+      // Генерируем список дат в интервале
+      const datesInRange: string[] = [];
+      const currentDate = new Date(recalcParams.dateFrom);
+      const endDate = new Date(recalcParams.dateTo);
+      
+      while (currentDate <= endDate) {
+        datesInRange.push(currentDate.toISOString().slice(0, 10));
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      // Удаляем существующие суточные в этом интервале
+      const deletePromises = existingExpenses
+        .filter((exp: any) => exp.category === 'per_diem' || exp.category === 'perdiem')
+        .map((exp: any) => api.delete('/expenses', { params: { expenseId: exp.id } }));
+      
+      await Promise.all(deletePromises);
+      
+      // Создаем новые суточные для каждого дня в интервале
+      const newExpenses = datesInRange.map(date => ({
+        userId: selectedTrip.userId,
+        projectId: selectedTrip.projectId,
+        projectName: selectedTrip.projectName,
+        tripId: selectedTrip.id,
+        date: date,
+        category: 'per_diem',
+        amount: recalcParams.rate,
+        description: `Суточные (${recalcParams.rate} ₽)`,
+      }));
+      
+      // Отправляем новые суточные пачкой
+      for (const expense of newExpenses) {
+        try {
+          await api.post('/expenses', expense);
+        } catch (err: any) {
+          console.error(`Ошибка создания суточных на ${expense.date}:`, err.response?.data || err.message);
+        }
+      }
+      
+      alert(`✅ Перерасчет выполнен!\n\nПериод: ${recalcParams.dateFrom} — ${recalcParams.dateTo}\nСтавка: ${recalcParams.rate} ₽\nДобавлено дней: ${datesInRange.length}`);
+      
+      setShowPerDiemRecalc(false);
+      await loadData();
+    } catch (err) {
+      alert('Ошибка при перерасчете суточных');
+      console.error(err);
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -548,7 +638,7 @@ export function TripsPage() {
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Сотрудник:</span>
                     <span className="font-semibold text-slate-900 dark:text-slate-100">
-                      {allUsers.find(u => u.id === selectedTrip.userId)?.name || selectedTrip.userName}
+                      {allUsers.find(u => u.id === selectedTrip.userId)?.name || 'Неизвестный'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
@@ -569,29 +659,42 @@ export function TripsPage() {
               {/* Суточные - редактирование для админов */}
               {(isAdmin || (user?.role === 'superadmin')) && (
                 <div className="proles-modal-section">
-                  <div className="proles-modal-section-title">💰 Суточные</div>
+                  <div className="proles-modal-section-title flex items-center justify-between">
+                    <span>💰 Суточные</span>
+                    <button
+                      onClick={() => handleOpenPerDiemRecalc(selectedTrip)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white transition-all flex items-center gap-1"
+                    >
+                      🔄 Перерасчет
+                    </button>
+                  </div>
                   <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-sm font-medium text-emerald-800 dark:text-emerald-300">Размер суточных:</span>
-                      {editingPerDiemRate !== selectedTrip.perDiemRate ? (
-                        <input
-                          type="number"
-                          value={editingPerDiemRate}
-                          onChange={(e) => setEditingPerDiemRate(Number(e.target.value))}
-                          className="w-32 px-3 py-1.5 text-right font-bold text-lg border-2 border-emerald-300 dark:border-emerald-700 rounded-lg bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                          step="1"
-                          min="0"
-                        />
-                      ) : (
-                        <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
-                          {selectedTrip.perDiemRate} ₽/день
-                        </span>
-                      )}
+                      <input
+                        type="number"
+                        value={editingPerDiemRate}
+                        onChange={(e) => setEditingPerDiemRate(Number(e.target.value))}
+                        className="w-32 px-3 py-1.5 text-right font-bold text-lg border-2 border-emerald-300 dark:border-emerald-700 rounded-lg bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        step="1"
+                        min="0"
+                      />
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+                    <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 mb-3">
                       <span>ℹ️</span>
                       <span>Изменение размера суточных применится только к будущим начислениям</span>
                     </div>
+                    <button
+                      onClick={handleSavePerDiemRate}
+                      disabled={savingPerDiem || editingPerDiemRate === selectedTrip.perDiemRate}
+                      className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      {savingPerDiem ? (
+                        <>⏳ Сохранение...</>
+                      ) : (
+                        <>💾 Сохранить суточные</>
+                      )}
+                    </button>
                   </div>
                 </div>
               )}
@@ -658,15 +761,98 @@ export function TripsPage() {
             </div>
             <div className="proles-modal-footer">
               <button onClick={() => setShowTripDetail(false)} className="proles-btn-cancel">Закрыть</button>
-              {(isAdmin || user?.role === 'superadmin') && (
-                <button 
-                  onClick={handleSavePerDiemRate} 
-                  disabled={savingPerDiem || editingPerDiemRate === selectedTrip.perDiemRate}
-                  className="proles-btn-save"
-                >
-                  {savingPerDiem ? '⏳ Сохранение...' : '💾 Сохранить суточные'}
-                </button>
-              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 🆕 Модальное окно перерасчета суточных */}
+      {showPerDiemRecalc && selectedTrip && createPortal(
+        <div className="proles-modal-backdrop" onClick={() => !recalculating && setShowPerDiemRecalc(false)}>
+          <div className="proles-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="proles-modal-header">
+              <div className="proles-modal-title">
+                <div className="proles-modal-icon">🔄</div>
+                <div>
+                  <div>Перерасчет суточных</div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 500, opacity: 0.85, marginTop: 2 }}>
+                    Массовое начисление суточных за период
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setShowPerDiemRecalc(false)} className="proles-modal-close">✕</button>
+            </div>
+            <div className="proles-modal-body">
+              <div className="proles-modal-section">
+                <div className="proles-modal-section-title">Параметры перерасчета</div>
+                <div className="space-y-4">
+                  <div className="proles-modal-grid">
+                    <div className="proles-input-group">
+                      <label>Дата с *</label>
+                      <input
+                        type="date"
+                        value={recalcParams.dateFrom}
+                        onChange={(e) => setRecalcParams({ ...recalcParams, dateFrom: e.target.value })}
+                        className="input bg-white dark:bg-slate-900"
+                      />
+                    </div>
+                    <div className="proles-input-group">
+                      <label>Дата по *</label>
+                      <input
+                        type="date"
+                        value={recalcParams.dateTo}
+                        onChange={(e) => setRecalcParams({ ...recalcParams, dateTo: e.target.value })}
+                        className="input bg-white dark:bg-slate-900"
+                      />
+                    </div>
+                  </div>
+                  <div className="proles-input-group">
+                    <label>Ставка суточных (₽) *</label>
+                    <input
+                      type="number"
+                      value={recalcParams.rate}
+                      onChange={(e) => setRecalcParams({ ...recalcParams, rate: Number(e.target.value) })}
+                      className="input bg-white dark:bg-slate-900"
+                      step="1"
+                      min="0"
+                    />
+                  </div>
+                  <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+                      <span className="text-lg">⚠️</span>
+                      <div>
+                        <div className="font-semibold mb-1">Внимание!</div>
+                        <ul className="list-disc list-inside space-y-1 text-xs">
+                          <li>Все существующие суточные в указанном периоде будут удалены</li>
+                          <li>Суточные будут добавлены за каждый день периода</li>
+                          <li>Операция необратима</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="proles-modal-footer">
+              <button 
+                onClick={() => setShowPerDiemRecalc(false)} 
+                className="proles-btn-cancel"
+                disabled={recalculating}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handlePerDiemRecalc}
+                disabled={recalculating || recalcParams.rate <= 0}
+                className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white font-semibold rounded-lg transition-all flex items-center gap-2"
+              >
+                {recalculating ? (
+                  <>⏳ Перерасчет...</>
+                ) : (
+                  <>✅ Выполнить перерасчет</>
+                )}
+              </button>
             </div>
           </div>
         </div>,
