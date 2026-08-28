@@ -2,28 +2,23 @@
 # Dependencies
 node_modules/
 
-# Build artifacts
-dist/
-build/
-target/
-
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.py.class
 .Python
 env/
 venv/
 .venv/
 .ENV
 .python-version
-.python_history
-.pytest_cache/
-.mypy_cache/
-.coverage
-coverage/
+
+# Build outputs
+dist/
+build/
+*.min.js
+*.bundle.js
 
 # Logs
 *.log
@@ -32,24 +27,25 @@ coverage/
 .env
 .env.local
 .env.*
-!.env.example
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
 Thumbs.db
 
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
 # Temporary files
 *.tmp
 *.temp
-*.bak
-*.backup
 
 # Compressed files
 *.zip
