@@ -237,7 +237,7 @@ export function TripsPage() {
       
       // Создаем новые суточные для каждого дня в интервале
       const newExpenses = datesInRange.map(date => ({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         userId: selectedTrip.userId,
         projectId: selectedTrip.projectId,
         projectName: selectedTrip.projectName || '',
