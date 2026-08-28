@@ -2,10 +2,18 @@
 # Dependencies
 node_modules/
 
-# Build outputs
-dist/
-build/
-target/
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
 
 # Python
 __pycache__/
@@ -17,71 +25,29 @@ env/
 venv/
 .venv/
 .ENV
-.venv.bak/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git/modules/
-*.sublime-workspace
-.pytest_cache/
-.hypothesis/
-.coverage*
-.pyup.yml
-.isort.pickle
-.mypy_cache/
-.___jb_bak___/
-.___jb_old___/
+.python-version
 
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Build outputs
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
 
 # OS generated files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-Icon?
-apidoc/
-coverage/
-docs/_build/
-*.tmp
-*.temp
-
-# Environment variables
-.env
-.env.local
-.env.dev
-.env.test
-.env.production
-.env.staging
-.env.backup
-*.env
-.env-*
-
-
-# Editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
 Thumbs.db
 
-# Compressed files
+# Compression
 *.zip
 *.gz
 *.tar
@@ -104,14 +70,4 @@ Thumbs.db
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-
-# Test and coverage
-coverage/
-htmlcov/
-.coverage
-.nyc_output
-istanbul/
-.mocha
-.jest/
-jest/
 ```

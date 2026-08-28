@@ -213,7 +213,7 @@ export function TripsPage() {
       // Создаем карту существующих суточных по датам
       const existingPerDiemDates = new Set<string>();
       existingExpenses.forEach((exp: any) => {
-        if (exp.category === 'per_diem' || exp.category === 'perdiem') {
+        if (exp.type === 'per_diem' || exp.type === 'perdiem') {
           existingPerDiemDates.add(exp.date);
         }
       });
@@ -230,7 +230,7 @@ export function TripsPage() {
       
       // Удаляем существующие суточные в этом интервале
       const deletePromises = existingExpenses
-        .filter((exp: any) => exp.category === 'per_diem' || exp.category === 'perdiem')
+        .filter((exp: any) => exp.type === 'per_diem' || exp.type === 'perdiem')
         .map((exp: any) => api.delete('/expenses', { params: { expenseId: exp.id } }));
       
       await Promise.all(deletePromises);
@@ -239,12 +239,14 @@ export function TripsPage() {
       const newExpenses = datesInRange.map(date => ({
         userId: selectedTrip.userId,
         projectId: selectedTrip.projectId,
-        projectName: selectedTrip.projectName,
-        tripId: selectedTrip.id,
+        projectName: selectedTrip.projectName || '',
         date: date,
-        category: 'per_diem',
+        type: 'per_diem',
+        name: 'Суточные',
         amount: recalcParams.rate,
-        description: `Суточные (${recalcParams.rate} ₽)`,
+        currency: 'RUB',
+        comment: `Суточные (${recalcParams.rate} ₽)`,
+        receiptSubmitted: true,
       }));
       
       // Отправляем новые суточные пачкой
