@@ -239,13 +239,14 @@ export function TripsPage() {
       const newExpenses = datesInRange.map(date => ({
         userId: selectedTrip.userId,
         projectId: selectedTrip.projectId,
-        projectName: selectedTrip.projectName || '',
         date: date,
         type: 'per_diem',
+        name: 'Суточные',
         amount: recalcParams.rate,
         currency: 'RUB',
-        comment: `Суточные (${recalcParams.rate} ₽)`,
-        receiptSubmitted: true,
+        comment: `Автоматическое начисление суточных за командировку (${selectedTrip.type}) от ${selectedTrip.date}`,
+        receiptSubmitted: false,
+        hasReceiptPhoto: false,
       }));
       
       // Отправляем новые суточные пачкой
@@ -255,24 +256,6 @@ export function TripsPage() {
         } catch (err: any) {
           const errorMsg = err.response?.data || err.message;
           console.error(`Ошибка создания суточных на ${expense.date}:`, errorMsg);
-          // Пробуем альтернативный формат без projectName
-          if (errorMsg && typeof errorMsg === 'string' && errorMsg.includes('Failed to convert')) {
-            try {
-              const minimalExpense = {
-                userId: expense.userId,
-                projectId: expense.projectId,
-                date: expense.date,
-                type: expense.type,
-                amount: expense.amount,
-                currency: expense.currency,
-                comment: expense.comment,
-                receiptSubmitted: expense.receiptSubmitted,
-              };
-              await api.post('/expenses', minimalExpense);
-            } catch (retryErr: any) {
-              console.error(`Повторная ошибка для ${expense.date}:`, retryErr.response?.data || retryErr.message);
-            }
-          }
         }
       }
       
