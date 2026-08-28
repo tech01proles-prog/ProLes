@@ -237,20 +237,23 @@ export function TripsPage() {
       
       // Создаем новые суточные для каждого дня в интервале
       const newExpenses = datesInRange.map(date => ({
-        id: generateUUID(),
         userId: selectedTrip.userId,
         projectId: selectedTrip.projectId,
         projectName: selectedTrip.projectName,
+        tripId: selectedTrip.id,
         date: date,
         category: 'per_diem',
         amount: recalcParams.rate,
         description: `Суточные (${recalcParams.rate} ₽)`,
-        createdAt: Date.now(),
       }));
       
       // Отправляем новые суточные пачкой
       for (const expense of newExpenses) {
-        await api.post('/expenses', expense);
+        try {
+          await api.post('/expenses', expense);
+        } catch (err: any) {
+          console.error(`Ошибка создания суточных на ${expense.date}:`, err.response?.data || err.message);
+        }
       }
       
       alert(`✅ Перерасчет выполнен!\n\nПериод: ${recalcParams.dateFrom} — ${recalcParams.dateTo}\nСтавка: ${recalcParams.rate} ₽\nДобавлено дней: ${datesInRange.length}`);
