@@ -61,6 +61,7 @@ export function ExpensesPage() {
   const [filterUser, setFilterUser] = useState(searchParams.get('userId') || 'all');
   const [filterType, setFilterType] = useState('all');
   const [filterEntryType, setFilterEntryType] = useState<'all' | 'INCOME' | 'EXPENSE'>('all');
+  const [hidePerDiem, setHidePerDiem] = useState(false);
   
   // Автоматически переключаем на 'all' если в URL есть userId или scope=all
   useEffect(() => {
@@ -148,7 +149,7 @@ export function ExpensesPage() {
       projectName: e.projectName,
       date: e.date,
       name: e.name || findExpenseType(e.type)?.label || e.type,
-      category: findExpenseType(e.type)?.label || e.type,
+      category: e.type === 'PER_DIEM' || e.type === 'per_diem' || e.type === 'perdiem' ? 'per_diem' : (findExpenseType(e.type)?.label || e.type),
       amount: e.amount,
       currency: e.currency,
       comment: e.comment || '',
@@ -160,6 +161,7 @@ export function ExpensesPage() {
     .filter(entry => effectiveScope !== 'all' || filterUser === 'all' || entry.userId === filterUser)
     .filter(entry => filterEntryType === 'all' || entry.type === filterEntryType)
     .filter(entry => filterType === 'all' || entry.category === filterType)
+    .filter(entry => !hidePerDiem || entry.category !== 'per_diem')
     .filter(entry => entry.date >= dateFrom && entry.date <= dateTo)
     .sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
@@ -417,6 +419,20 @@ export function ExpensesPage() {
             </select>
           </div>
         )}
+        
+        {/* Галочка "Скрыть суточные" */}
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+          <input 
+            type="checkbox" 
+            id="hidePerDiem"
+            checked={hidePerDiem}
+            onChange={(e) => setHidePerDiem(e.target.checked)}
+            className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+          />
+          <label htmlFor="hidePerDiem" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+            🚫 Скрыть суточные
+          </label>
+        </div>
       </div>
 
       {/* Сортировка */}
