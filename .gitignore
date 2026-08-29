@@ -1,8 +1,22 @@
-```gitignore
+```
 # Dependencies
 node_modules/
 
-# Build outputs
+# Environment variables
+.env
+.env.local
+*.env.*
+
+# Logs
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
 dist/
 build/
 target/
@@ -16,66 +30,41 @@ __pycache__/
 env/
 venv/
 .venv/
-.ENV
-.ENV.*
-.env
-.env.*
-requirements.txt.bak
-
-# Logs
+.venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
 *.log
+.git/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# Node.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+node_modules/
+dist/
+build/
+.nyc_output
+coverage/
+*.lcov
+.npm
+.yarn-integrity
+.yarn/
+node_modules/
+
+# Temporary files
+*.tmp
+*.temp
 *~
-
-# OS
 .DS_Store
 Thumbs.db
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
-# Testing
-.pytest_cache/
-.mypy_cache/
-.nyc_output/
-coverage/
-
-# Environment variables
-.env
-.env.local
-.env.*
-!.env.example
-!.env.sample
-!.env.template
-
-# Compressed
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
 ```
