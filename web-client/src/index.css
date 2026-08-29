@@ -22,6 +22,11 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 234 89% 63%;
     --radius: 0.75rem;
+    /* Safe area insets for mobile devices */
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
   }
 
   /* 🌙 PROLES SYSTEM — Глубокая, контрастная тёмная тема */
@@ -264,6 +269,66 @@
 /* Анимации */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+
+/* ═══════════════════════════════════════════════════════════════
+   📱 Mobile safe area utilities for iOS PWA
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Bottom padding for safe area (home indicator on iPhone) */
+.pb-safe {
+  padding-bottom: var(--safe-area-inset-bottom, 0px);
+}
+
+/* Top padding for safe area (notch/dynamic island on iPhone) */
+.pt-safe {
+  padding-top: var(--safe-area-inset-top, 0px);
+}
+
+/* Left padding for safe area */
+.pl-safe {
+  padding-left: var(--safe-area-inset-left, 0px);
+}
+
+/* Right padding for safe area */
+.pr-safe {
+  padding-right: var(--safe-area-inset-right, 0px);
+}
+
+/* Margin variants */
+.mb-safe {
+  margin-bottom: var(--safe-area-inset-bottom, 0px);
+}
+
+.mt-safe {
+  margin-top: var(--safe-area-inset-top, 0px);
+}
+
+.ml-safe {
+  margin-left: var(--safe-area-inset-left, 0px);
+}
+
+.mr-safe {
+  margin-right: var(--safe-area-inset-right, 0px);
+}
+
+/* Height adjustments for fixed elements */
+.h-safe-bottom {
+  height: calc(100% + var(--safe-area-inset-bottom, 0px));
+}
+
+.h-safe-top {
+  height: calc(100% + var(--safe-area-inset-top, 0px));
+}
+
+/* Fixed positioning with safe area support */
+.fixed-safe-bottom {
+  bottom: var(--safe-area-inset-bottom, 0px);
+}
+
+.fixed-safe-top {
+  top: var(--safe-area-inset-top, 0px);
+}
+
 
 /* ═══════════════════════════════════════════════════════════════
 🌲 PROLES SYSTEM — Кастомные Select & Date Picker
