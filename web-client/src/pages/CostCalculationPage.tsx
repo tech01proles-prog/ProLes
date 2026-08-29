@@ -54,15 +54,15 @@ export function CostCalculationPage() {
       const [projRes, expRes, timeRes] = await Promise.allSettled([
         api.get<ProjectDto[]>('/projects'),
         api.get<ExpenseDto[]>('/expenses/all'),
-        api.get<TimeEntryDto[]>('/timesheet'),
+        api.get<TimeEntryDto[]>('/entries'),
       ]);
-      setProjects(projRes.status === 'fulfilled' ? projRes.value.data.filter(p => p.isActive) : []);
-      setExpenses(expRes.status === 'fulfilled' ? expRes.value.data : []);
-      setTimeEntries(timeRes.status === 'fulfilled' ? timeRes.value.data : []);
+      setProjects(projRes.status === 'fulfilled' ? (projRes.value.data || []).filter((p: ProjectDto) => p.isActive) : []);
+      setExpenses(expRes.status === 'fulfilled' ? (expRes.value.data || []) : []);
+      setTimeEntries(timeRes.status === 'fulfilled' ? (timeRes.value.data || []) : []);
       
       // Загружаем сохраненные ручные данные из проектов
       const manual: Record<string, { materials: number; transportToClient: number; contractors: number; creditPercent: number }> = {};
-      projRes.status === 'fulfilled' && projRes.value.data.forEach(p => {
+      projRes.status === 'fulfilled' && projRes.value.data.forEach((p: ProjectDto) => {
         manual[p.id] = {
           materials: (p as any).materials || 0,
           transportToClient: p.transportToClient || 0,
