@@ -259,8 +259,12 @@ export function CostCalculationPage() {
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-left font-semibold text-slate-700 dark:text-slate-300 min-w-[200px]">Проект</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[100px]">Материалы</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[80px]">Часы ТО</th>
-              <th colSpan={7} className="border border-slate-300 dark:border-slate-600 p-2 text-center font-semibold text-slate-700 dark:text-slate-300 bg-indigo-50 dark:bg-indigo-900/30">Затраты на реализацию</th>
-              <th colSpan={3} className="border border-slate-300 dark:border-slate-600 p-2 text-center font-semibold text-slate-700 dark:text-slate-300 bg-blue-50 dark:bg-blue-900/30">Транспорт</th>
+              <th colSpan={showExpensesDetail ? 6 : 1} className={`border border-slate-300 dark:border-slate-600 p-2 ${showExpensesDetail ? 'text-center' : 'text-right'} font-semibold text-slate-700 dark:text-slate-300 bg-indigo-50 dark:bg-indigo-900/30 cursor-pointer select-none`} onClick={() => setShowExpensesDetail(!showExpensesDetail)}>
+                Затраты на реализацию {showExpensesDetail ? '▼' : '▶'}
+              </th>
+              <th colSpan={showTransportDetail ? 2 : 1} className={`border border-slate-300 dark:border-slate-600 p-2 ${showTransportDetail ? 'text-center' : 'text-right'} font-semibold text-slate-700 dark:text-slate-300 bg-blue-50 dark:bg-blue-900/30 cursor-pointer select-none`} onClick={() => setShowTransportDetail(!showTransportDetail)}>
+                Транспорт {showTransportDetail ? '▼' : '▶'}
+              </th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">Транспорт до клиента</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">Услуги подрядчиков</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">% по кредиту</th>
@@ -269,17 +273,23 @@ export function CostCalculationPage() {
             {/* Заголовок - строка 2: Подколонки */}
             <tr className="bg-slate-50 dark:bg-slate-800/50">
               {/* Затраты на реализацию - подколонки */}
-              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[100px]">Расходы</th>
-              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[90px]">Хоз.нужды</th>
-              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[80px]">Авансы</th>
-              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[80px]">Билеты</th>
-              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[90px]">Проживание</th>
-              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[80px]">Иные</th>
-              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[100px] bg-indigo-100 dark:bg-indigo-900/50">Σ</th>
+              {showExpensesDetail && (
+                <>
+                  <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[100px]">Расходы</th>
+                  <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[90px]">Хоз.нужды</th>
+                  <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[80px]">Авансы</th>
+                  <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[80px]">Билеты</th>
+                  <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[90px]">Проживание</th>
+                  <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[80px]">Иные</th>
+                </>
+              )}
               {/* Транспорт - подколонки */}
-              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[110px]">Транспорт ТО</th>
-              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[80px]">Другое</th>
-              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[100px] bg-blue-100 dark:bg-blue-900/50">Σ</th>
+              {showTransportDetail && (
+                <>
+                  <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[110px]">Транспорт ТО</th>
+                  <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[80px]">Другое</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -325,18 +335,19 @@ export function CostCalculationPage() {
                   </td>
                   
                   {/* Затраты на реализацию - основная колонка (Σ) */}
-                  <td className="border border-slate-200 dark:border-slate-700 p-2 text-right bg-indigo-50/30 dark:bg-indigo-900/10">
-                    <button
-                      onClick={() => setShowExpensesDetail(!showExpensesDetail)}
-                      className="w-full text-right font-medium hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded px-1 py-0.5 flex items-center justify-end gap-1"
-                    >
-                      <span>{showExpensesDetail ? '▼' : '▶'}</span>
-                      <span className="tabular-nums">{formatMoney(row.expenses.total)}</span>
-                    </button>
-                  </td>
+                  {showExpensesDetail ? null : (
+                    <td className="border border-slate-200 dark:border-slate-700 p-2 text-right bg-indigo-50/30 dark:bg-indigo-900/10">
+                      <button
+                        onClick={() => setShowExpensesDetail(true)}
+                        className="w-full text-right font-medium hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded px-1 py-0.5 flex items-center justify-end gap-1"
+                      >
+                        <span>{formatMoney(row.expenses.total)}</span>
+                      </button>
+                    </td>
+                  )}
                   
                   {/* Скрытые колонки расходов */}
-                  {showExpensesDetail ? (
+                  {showExpensesDetail && (
                     <>
                       <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.expenses.employeeExpenses > 0 ? formatMoney(row.expenses.employeeExpenses) : '—'}</td>
                       <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.expenses.household > 0 ? formatMoney(row.expenses.household) : '—'}</td>
@@ -345,38 +356,25 @@ export function CostCalculationPage() {
                       <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.expenses.perDiem > 0 ? formatMoney(row.expenses.perDiem) : '—'}</td>
                       <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.expenses.other > 0 ? formatMoney(row.expenses.other) : '—'}</td>
                     </>
-                  ) : (
-                    <>
-                      <td className="border border-slate-200 dark:border-slate-700 p-2 text-right text-slate-400">—</td>
-                      <td className="border border-slate-200 dark:border-slate-700 p-2 text-right text-slate-400">—</td>
-                      <td className="border border-slate-200 dark:border-slate-700 p-2 text-right text-slate-400">—</td>
-                      <td className="border border-slate-200 dark:border-slate-700 p-2 text-right text-slate-400">—</td>
-                      <td className="border border-slate-200 dark:border-slate-700 p-2 text-right text-slate-400">—</td>
-                      <td className="border border-slate-200 dark:border-slate-700 p-2 text-right text-slate-400">—</td>
-                    </>
                   )}
                   
                   {/* Транспорт - основная колонка (Σ) */}
-                  <td className="border border-slate-200 dark:border-slate-700 p-2 text-right bg-blue-50/30 dark:bg-blue-900/10">
-                    <button
-                      onClick={() => setShowTransportDetail(!showTransportDetail)}
-                      className="w-full text-right font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded px-1 py-0.5 flex items-center justify-end gap-1"
-                    >
-                      <span>{showTransportDetail ? '▼' : '▶'}</span>
-                      <span className="tabular-nums">{formatMoney(row.transport.total)}</span>
-                    </button>
-                  </td>
+                  {showTransportDetail ? null : (
+                    <td className="border border-slate-200 dark:border-slate-700 p-2 text-right bg-blue-50/30 dark:bg-blue-900/10">
+                      <button
+                        onClick={() => setShowTransportDetail(true)}
+                        className="w-full text-right font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded px-1 py-0.5 flex items-center justify-end gap-1"
+                      >
+                        <span>{formatMoney(row.transport.total)}</span>
+                      </button>
+                    </td>
+                  )}
                   
                   {/* Скрытые колонки транспорта */}
-                  {showTransportDetail ? (
+                  {showTransportDetail && (
                     <>
                       <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.transport.techTransport > 0 ? formatMoney(row.transport.techTransport) : '—'}</td>
                       <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.transport.other > 0 ? formatMoney(row.transport.other) : '—'}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="border border-slate-200 dark:border-slate-700 p-2 text-right text-slate-400">—</td>
-                      <td className="border border-slate-200 dark:border-slate-700 p-2 text-right text-slate-400">—</td>
                     </>
                   )}
                   
@@ -474,16 +472,26 @@ export function CostCalculationPage() {
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-left">ИТОГО</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.materialsManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{totals.techHours.toFixed(1)}</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right bg-indigo-100 dark:bg-indigo-900/30">{formatMoney(totals.expensesTotal)}</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right text-slate-500">—</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right text-slate-500">—</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right text-slate-500">—</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right text-slate-500">—</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right text-slate-500">—</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right text-slate-500">—</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right bg-blue-100 dark:bg-blue-900/30">{formatMoney(totals.transportTotal)}</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right text-slate-500">—</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right text-slate-500">—</td>
+              {showExpensesDetail ? (
+                <>
+                  <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(projectData.reduce((sum, row) => sum + row.expenses.employeeExpenses, 0))}</td>
+                  <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(projectData.reduce((sum, row) => sum + row.expenses.household, 0))}</td>
+                  <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(projectData.reduce((sum, row) => sum + row.expenses.advances, 0))}</td>
+                  <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(projectData.reduce((sum, row) => sum + row.expenses.tickets, 0))}</td>
+                  <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(projectData.reduce((sum, row) => sum + row.expenses.perDiem, 0))}</td>
+                  <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(projectData.reduce((sum, row) => sum + row.expenses.other, 0))}</td>
+                </>
+              ) : (
+                <td className="border border-slate-300 dark:border-slate-600 p-2 text-right bg-indigo-100 dark:bg-indigo-900/30">{formatMoney(totals.expensesTotal)}</td>
+              )}
+              {showTransportDetail ? (
+                <>
+                  <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(projectData.reduce((sum, row) => sum + row.transport.techTransport, 0))}</td>
+                  <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(projectData.reduce((sum, row) => sum + row.transport.other, 0))}</td>
+                </>
+              ) : (
+                <td className="border border-slate-300 dark:border-slate-600 p-2 text-right bg-blue-100 dark:bg-blue-900/30">{formatMoney(totals.transportTotal)}</td>
+              )}
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.transportToClientManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.contractorsManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.creditPercentManual)}</td>
