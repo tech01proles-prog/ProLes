@@ -1,18 +1,56 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../api/client';
-import type { ProjectDto, ExpenseDto } from '../types';
+import type { ProjectDto, ExpenseDto, TimeEntryDto } from '../types';
 import { formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
+
+interface CostCalculationRow {
+  project: ProjectDto;
+  materials: number;
+  techHours: number;
+  // Затраты на реализацию (составляющие)
+  employeeExpenses: number;
+  householdExpenses: number;
+  advances: number;
+  tickets: number;
+  perDiem: number;
+  other: number;
+  totalImplementationCosts: number;
+  // Транспорт сверху (составляющие)
+  transportTech: number;
+  transportOther: number;
+  totalTransportOverhead: number;
+  // Остальные поля
+  transportToClientManual: number;
+  contractorsManual: number;
+  creditPercentManual: number;
+  // Итого
+  fullCost: number;
+}
+
+const EXPENSE_TYPES = {
+  MATERIALS: 'MATERIALS',
+  ROAD: 'ROAD',
+  HOUSEHOLD: 'HOUSEHOLD',
+  PER_DIEM: 'PER_DIEM',
+  CONTRACTORS: 'CONTRACTORS',
+  CREDIT: 'CREDIT',
+  OTHER: 'OTHER',
+};
 
 export function CostCalculationPage() {
   const { can, loading: permLoading } = usePermissions();
   const canView = !permLoading && can('cost_calculation', 'view');
+  const canEdit = !permLoading && can('cost_calculation', 'edit');
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [expenses, setExpenses] = useState<ExpenseDto[]>([]);
+  const [timeEntries, setTimeEntries] = useState<TimeEntryDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingProject, setEditingProject] = useState<ProjectDto | null>(null);
-  const [editForm, setEditForm] = useState({ productionCost: '', transportToClient: '', sellingPrice: '' });
+  const [editingCell, setEditingCell] = useState<{ projectId: string; field: string } | null>(null);
+  const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const [expandedImplementation, setExpandedImplementation] = useState<Set<string>>(new Set());
+  const [expandedTransport, setExpandedTransport] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!canView) return;
