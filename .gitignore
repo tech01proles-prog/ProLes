@@ -2,23 +2,19 @@
 # Dependencies
 node_modules/
 
-# Logs and temp files
-*.log
-*.tmp
-
-# Environment variables
+# Environment
 .env
 .env.local
 *.env.*
 
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
 # Editors
 .vscode/
 .idea/
-
-# Build outputs
-dist/
-build/
-target/
 
 # Python
 __pycache__/
@@ -26,54 +22,54 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-env/
 venv/
 .venv/
-.venv.bak/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
+.env
+.envrc
+.pytest_cache/
+.mypy_cache/
 .coverage
-.coverage.*
-.cache
-nosetests.xml
+htmlcov/
 coverage.xml
-*.cover
-*.log
-.git*
-!CHANGELOG.md
-!CONTRIBUTING.md
-!LICENSE
-!README.md
-*.pot
-*.po
-*~
-.pytest_cache/
-.hypothesis/
-.coverage*
-.eggs/
-egg-info/
-.installed.cfg
-lib/
-lib64/
-pip-wheel-metadata/
-wheels/
-share/python-wheels/
+
+# Build outputs
+dist/
+build/
 *.egg-info/
-.venv/
-venv/
-ENV/
-env/
-.Python
-.python-version
-.pytest_cache/
-.hypothesis/
-.coverage*
-.eggs/
-.egg-info/
-lib/
-lib64/
-pip-wheel-metadata/
-wheels/
-share/python-wheels/
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.o
+*.a
+*.obj
+
+# Compression
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+
+# OS generated
+.DS_Store
+Thumbs.db
 ```
