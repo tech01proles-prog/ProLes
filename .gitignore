@@ -1,4 +1,4 @@
-```gitignore
+```
 # Compiled and build artifacts
 *.pyc
 __pycache__/
@@ -26,10 +26,9 @@ target/
 *.log
 coverage/
 htmlcov/
-.mypy_cache/
-.pytest_cache/
+*.coverage
 
-# Editors
+# Editors and IDEs
 .vscode/
 .idea/
 *.swp
@@ -64,12 +63,54 @@ Thumbs.db
 *.tar.xz
 *.tar.zst
 
-# Gradle
-.gradle/
+# Python specific
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
 
-# Julia
+# Node.js specific
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Java specific
+*.class
+*.jar
+*.war
+.gradle/
+build/
+
+# C/C++ specific
+*.o
+*.a
+*.so
+*.dll
+*.exe
+*.out
+
+# Go specific
+*.o
+*.a
+*.so
+*.exe
+*.out
+vendor/
+
+# Ruby specific
+*.gem
+*.rbc
+.bundle/
+vendor/bundle/
+
+# Rust specific
+target/
+Cargo.lock
+
+# Julia specific
 julia-*/
 
-# Zig
+# Zig specific
 zig*/
 ```
