@@ -25,7 +25,6 @@ interface CostRow {
   transportToClientManual: number;
   contractorsManual: number;
   creditPercentManual: number;
-  implementationCostTotal: number;
   totalCost: number;
 }
 
@@ -37,7 +36,9 @@ export function CostCalculationPage() {
   const [expenses, setExpenses] = useState<ExpenseDto[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntryDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedRows, setExpandedRows] = useState<Record<string, { expenses: boolean; transport: boolean }>>({});
+  // Глобальное состояние раскрытия колонок для всей таблицы
+  const [showExpensesDetail, setShowExpensesDetail] = useState(false);
+  const [showTransportDetail, setShowTransportDetail] = useState(false);
   const [manualData, setManualData] = useState<Record<string, {
     materials: number;
     transportToClient: number;
@@ -127,10 +128,7 @@ export function CostCalculationPage() {
       const manual = manualData[project.id] || { materials: 0, transportToClient: 0, contractors: 0, creditPercent: 0 };
       
       // Затраты на реализацию = материалы + расходы + транспорт ТО
-      const implementationCostTotal = manual.materials + expensesTotal + transportTotal;
-      
-      // Полная себестоимость
-      const totalCost = implementationCostTotal + manual.transportToClient + manual.contractors + manual.creditPercent;
+      const totalCost = manual.materials + expensesTotal + transportTotal + manual.transportToClient + manual.contractors + manual.creditPercent;
       
       return {
         project,
@@ -153,7 +151,6 @@ export function CostCalculationPage() {
         transportToClientManual: manual.transportToClient,
         contractorsManual: manual.contractors,
         creditPercentManual: manual.creditPercent,
-        implementationCostTotal,
         totalCost,
       };
     });
@@ -168,7 +165,6 @@ export function CostCalculationPage() {
       transportToClientManual: acc.transportToClientManual + row.transportToClientManual,
       contractorsManual: acc.contractorsManual + row.contractorsManual,
       creditPercentManual: acc.creditPercentManual + row.creditPercentManual,
-      implementationCostTotal: acc.implementationCostTotal + row.implementationCostTotal,
       totalCost: acc.totalCost + row.totalCost,
     }), {
       materialsManual: 0,
@@ -178,20 +174,9 @@ export function CostCalculationPage() {
       transportToClientManual: 0,
       contractorsManual: 0,
       creditPercentManual: 0,
-      implementationCostTotal: 0,
       totalCost: 0,
     });
   }, [projectData]);
-
-  const toggleExpand = (projectId: string, section: 'expenses' | 'transport') => {
-    setExpandedRows(prev => ({
-      ...prev,
-      [projectId]: {
-        ...prev[projectId],
-        [section]: !prev[projectId]?.[section],
-      },
-    }));
-  };
 
   const handleCellEdit = (projectId: string, field: string, currentValue: number) => {
     if (!canEdit) return;
@@ -299,10 +284,6 @@ export function CostCalculationPage() {
           </thead>
           <tbody>
             {projectData.map((row) => {
-              const isExpanded = expandedRows[row.project.id];
-              const showExpenses = isExpanded?.expenses;
-              const showTransport = isExpanded?.transport;
-              
               return (
                 <tr key={row.project.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
                   {/* Проект */}
@@ -346,16 +327,16 @@ export function CostCalculationPage() {
                   {/* Затраты на реализацию - основная колонка (Σ) */}
                   <td className="border border-slate-200 dark:border-slate-700 p-2 text-right bg-indigo-50/30 dark:bg-indigo-900/10">
                     <button
-                      onClick={() => toggleExpand(row.project.id, 'expenses')}
+                      onClick={() => setShowExpensesDetail(!showExpensesDetail)}
                       className="w-full text-right font-medium hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded px-1 py-0.5 flex items-center justify-end gap-1"
                     >
-                      <span>{showExpenses ? '▼' : '▶'}</span>
+                      <span>{showExpensesDetail ? '▼' : '▶'}</span>
                       <span className="tabular-nums">{formatMoney(row.expenses.total)}</span>
                     </button>
                   </td>
                   
                   {/* Скрытые колонки расходов */}
-                  {showExpenses ? (
+                  {showExpensesDetail ? (
                     <>
                       <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.expenses.employeeExpenses > 0 ? formatMoney(row.expenses.employeeExpenses) : '—'}</td>
                       <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.expenses.household > 0 ? formatMoney(row.expenses.household) : '—'}</td>
@@ -378,16 +359,16 @@ export function CostCalculationPage() {
                   {/* Транспорт - основная колонка (Σ) */}
                   <td className="border border-slate-200 dark:border-slate-700 p-2 text-right bg-blue-50/30 dark:bg-blue-900/10">
                     <button
-                      onClick={() => toggleExpand(row.project.id, 'transport')}
+                      onClick={() => setShowTransportDetail(!showTransportDetail)}
                       className="w-full text-right font-medium hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded px-1 py-0.5 flex items-center justify-end gap-1"
                     >
-                      <span>{showTransport ? '▼' : '▶'}</span>
+                      <span>{showTransportDetail ? '▼' : '▶'}</span>
                       <span className="tabular-nums">{formatMoney(row.transport.total)}</span>
                     </button>
                   </td>
                   
                   {/* Скрытые колонки транспорта */}
-                  {showTransport ? (
+                  {showTransportDetail ? (
                     <>
                       <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.transport.techTransport > 0 ? formatMoney(row.transport.techTransport) : '—'}</td>
                       <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.transport.other > 0 ? formatMoney(row.transport.other) : '—'}</td>
