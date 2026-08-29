@@ -77,7 +77,7 @@ export function CostCalculationPage() {
 
   const projectData = useMemo((): CostRow[] => {
     return projects.map(project => {
-      const projectExpenses = expenses.filter(e => e.projectId === project.id);
+      const projectExpenses = (expenses || []).filter(e => e.projectId === project.id);
       
       // Расходы сотрудников (все кроме HOUSEHOLD, PER_DIEM, ROAD, OTHER)
       const employeeExpenses = projectExpenses
@@ -119,7 +119,7 @@ export function CostCalculationPage() {
       const transportTotal = techTransport + transportOther;
       
       // Часы ТО (сумма часов всех сотрудников роли employee по этому проекту)
-      const techHours = timeEntries
+      const techHours = (timeEntries || [])
         .filter(t => t.projectId === project.id)
         .reduce((sum, t) => sum + t.hours, 0);
       
