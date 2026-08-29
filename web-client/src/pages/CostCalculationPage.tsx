@@ -37,12 +37,15 @@ export function CostCalculationPage() {
   const canView = !permLoading && can('cost_calculation', 'view');
   const canEdit = !permLoading && can('cost_calculation', 'edit');
   const [projects, setProjects] = useState<ProjectDto[]>([]);
-  const [expenses, setExpenses] = useState<ExpenseDto[]>([]);
-  const [timeEntries, setTimeEntries] = useState<TimeEntryDto[]>([]);
+  const [allExpenses, setAllExpenses] = useState<ExpenseDto[]>([]);
+  const [allTimeEntries, setAllTimeEntries] = useState<TimeEntryDto[]>([]);
   const [loading, setLoading] = useState(true);
   // Глобальное состояние раскрытия колонок для всей таблицы
   const [showExpensesDetail, setShowExpensesDetail] = useState(false);
   const [showTransportDetail, setShowTransportDetail] = useState(false);
+  // Состояние для фильтрации по периоду
+  const [periodType, setPeriodType] = useState<'month' | 'quarter' | 'year'>('month');
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const [manualData, setManualData] = useState<Record<string, {
     salePrice: number;
     materials: number;
@@ -52,6 +55,59 @@ export function CostCalculationPage() {
   }>>({});
   const [editingCell, setEditingCell] = useState<{ projectId: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
+
+  // Инициализация выбранного периода - текущий месяц
+  useEffect(() => {
+    if (!selectedPeriod) {
+      const now = new Date();
+      if (periodType === 'month') {
+        setSelectedPeriod(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+      } else if (periodType === 'quarter') {
+        const quarter = Math.floor(now.getMonth() / 3) + 1;
+        setSelectedPeriod(`${now.getFullYear()}-Q${quarter}`);
+      } else {
+        setSelectedPeriod(`${now.getFullYear()}`);
+      }
+    }
+  }, [periodType]);
+
+  // Фильтрация данных по выбранному периоду
+  const { expenses, timeEntries } = useMemo(() => {
+    if (!selectedPeriod) {
+      return { expenses: allExpenses, timeEntries: allTimeEntries };
+    }
+
+    let startDate: Date;
+    let endDate: Date;
+
+    if (periodType === 'month') {
+      const [year, month] = selectedPeriod.split('-').map(Number);
+      startDate = new Date(year, month - 1, 1);
+      endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    } else if (periodType === 'quarter') {
+      const [year, quarterStr] = selectedPeriod.split('-Q');
+      const quarter = parseInt(quarterStr, 10);
+      const startMonth = (quarter - 1) * 3;
+      startDate = new Date(+year, startMonth, 1);
+      endDate = new Date(+year, startMonth + 3, 0, 23, 59, 59, 999);
+    } else {
+      const year = parseInt(selectedPeriod, 10);
+      startDate = new Date(year, 0, 1);
+      endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+    }
+
+    const filteredExpenses = allExpenses.filter(e => {
+      const entryDate = new Date(e.date);
+      return entryDate >= startDate && entryDate <= endDate;
+    });
+
+    const filteredTimeEntries = allTimeEntries.filter(t => {
+      const entryDate = new Date(t.date);
+      return entryDate >= startDate && entryDate <= endDate;
+    });
+
+    return { expenses: filteredExpenses, timeEntries: filteredTimeEntries };
+  }, [allExpenses, allTimeEntries, periodType, selectedPeriod]);
 
   useEffect(() => {
     if (!canView) return;
@@ -63,8 +119,8 @@ export function CostCalculationPage() {
         api.get<TimeEntryDto[]>('/entries'),
       ]);
       setProjects(projRes.status === 'fulfilled' ? (projRes.value.data || []).filter((p: ProjectDto) => p.isActive) : []);
-      setExpenses(expRes.status === 'fulfilled' ? (expRes.value.data || []) : []);
-      setTimeEntries(timeRes.status === 'fulfilled' ? (timeRes.value.data || []) : []);
+      setAllExpenses(expRes.status === 'fulfilled' ? (expRes.value.data || []) : []);
+      setAllTimeEntries(timeRes.status === 'fulfilled' ? (timeRes.value.data || []) : []);
       
       // Загружаем сохраненные ручные данные из проектов
       const manual: Record<string, { salePrice: number; materials: number; transportToClient: number; contractors: number; creditPercent: number }> = {};
@@ -392,18 +448,68 @@ export function CostCalculationPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">🧮 Расчёт себестоимости</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {projects.length} проектов • Нажмите на ячейку для редактирования (требуются права редактора)
+            {projectData.length} проектов • Нажмите на ячейку для редактирования (требуются права редактора)
           </p>
         </div>
-        <button
-          onClick={handleExportXLSX}
-          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-md transition-all duration-300 flex items-center gap-2 text-sm font-medium"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Экспорт в XLSX
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Фильтр по периоду */}
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-2 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Период:</span>
+            <select
+              value={periodType}
+              onChange={(e) => setPeriodType(e.target.value as 'month' | 'quarter' | 'year')}
+              className="text-xs border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="month">Месяц</option>
+              <option value="quarter">Квартал</option>
+              <option value="year">Год</option>
+            </select>
+            {periodType === 'month' && (
+              <input
+                type="month"
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="text-xs border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500"
+              />
+            )}
+            {periodType === 'quarter' && (
+              <select
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="text-xs border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500"
+              >
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                  <optgroup key={year} label={`${year}`}>
+                    <option value={`${year}-Q1`}>Q1 (Янв - Мар)</option>
+                    <option value={`${year}-Q2`}>Q2 (Апр - Июн)</option>
+                    <option value={`${year}-Q3`}>Q3 (Июл - Сен)</option>
+                    <option value={`${year}-Q4`}>Q4 (Окт - Дек)</option>
+                  </optgroup>
+                ))}
+              </select>
+            )}
+            {periodType === 'year' && (
+              <select
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="text-xs border border-slate-300 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500"
+              >
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                  <option key={year} value={`${year}`}>{year}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <button
+            onClick={handleExportXLSX}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-md transition-all duration-300 flex items-center gap-2 text-sm font-medium"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Экспорт в XLSX
+          </button>
+        </div>
       </div>
 
       {/* Таблица в стиле Excel */}
