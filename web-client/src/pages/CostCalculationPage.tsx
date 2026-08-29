@@ -3,6 +3,8 @@ import api from '../api/client';
 import type { ProjectDto, ExpenseDto, TimeEntryDto } from '../types';
 import { formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 interface CostRow {
   project: ProjectDto;
@@ -247,6 +249,133 @@ export function CostCalculationPage() {
     }
   };
 
+  const handleExportXLSX = () => {
+    // Создаем данные для экспорта со всеми колонками (включая раскрытые детали)
+    const exportData = projectData.map(row => ({
+      'Проект': row.project.name,
+      'Клиент': row.project.client || '',
+      'Продажная стоимость': row.salePriceManual,
+      'Материалы': row.materialsManual,
+      'Часы ТО': row.techHours,
+      'Затраты на реализацию - Расходы': row.expenses.employeeExpenses,
+      'Затраты на реализацию - Хоз.нужды': row.expenses.household,
+      'Затраты на реализацию - Авансы': row.expenses.advances,
+      'Затраты на реализацию - Билеты': row.expenses.tickets,
+      'Затраты на реализацию - Проживание': row.expenses.perDiem,
+      'Затраты на реализацию - Иные': row.expenses.other,
+      'Транспорт - Транспорт ТО': row.transport.techTransport,
+      'Транспорт - Другое': row.transport.other,
+      'Транспорт до клиента': row.transportToClientManual,
+      'Услуги подрядчиков': row.contractorsManual,
+      '% по кредиту': row.creditPercentManual,
+      'Итого с/с': row.totalCost,
+      'Марж. доход': row.marginalIncome,
+      '% менеджеру': 0, // Заглушка
+      'Менеджер': 'ФИО менеджера', // Заглушка
+    }));
+
+    // Добавляем итоговую строку
+    exportData.push({
+      'Проект': 'ИТОГО',
+      'Клиент': '',
+      'Продажная стоимость': totals.salePriceManual,
+      'Материалы': totals.materialsManual,
+      'Часы ТО': totals.techHours,
+      'Затраты на реализацию - Расходы': projectData.reduce((sum, r) => sum + r.expenses.employeeExpenses, 0),
+      'Затраты на реализацию - Хоз.нужды': projectData.reduce((sum, r) => sum + r.expenses.household, 0),
+      'Затраты на реализацию - Авансы': projectData.reduce((sum, r) => sum + r.expenses.advances, 0),
+      'Затраты на реализацию - Билеты': projectData.reduce((sum, r) => sum + r.expenses.tickets, 0),
+      'Затраты на реализацию - Проживание': projectData.reduce((sum, r) => sum + r.expenses.perDiem, 0),
+      'Затраты на реализацию - Иные': projectData.reduce((sum, r) => sum + r.expenses.other, 0),
+      'Транспорт - Транспорт ТО': projectData.reduce((sum, r) => sum + r.transport.techTransport, 0),
+      'Транспорт - Другое': projectData.reduce((sum, r) => sum + r.transport.other, 0),
+      'Транспорт до клиента': totals.transportToClientManual,
+      'Услуги подрядчиков': totals.contractorsManual,
+      '% по кредиту': totals.creditPercentManual,
+      'Итого с/с': totals.totalCost,
+      'Марж. доход': totals.marginalIncome,
+      '% менеджеру': 0,
+      'Менеджер': '',
+    });
+
+    // Создаем workbook и worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // Настраиваем ширину колонок
+    const colWidths = [
+      { wch: 30 }, // Проект
+      { wch: 25 }, // Клиент
+      { wch: 18 }, // Продажная стоимость
+      { wch: 15 }, // Материалы
+      { wch: 12 }, // Часы ТО
+      { wch: 18 }, // Затраты - Расходы
+      { wch: 15 }, // Затраты - Хоз.нужды
+      { wch: 12 }, // Затраты - Авансы
+      { wch: 12 }, // Затраты - Билеты
+      { wch: 15 }, // Затраты - Проживание
+      { wch: 12 }, // Затраты - Иные
+      { wch: 18 }, // Транспорт - ТО
+      { wch: 12 }, // Транспорт - Другое
+      { wch: 18 }, // Транспорт до клиента
+      { wch: 18 }, // Услуги подрядчиков
+      { wch: 15 }, // % по кредиту
+      { wch: 15 }, // Итого с/с
+      { wch: 15 }, // Марж. доход
+      { wch: 15 }, // % менеджеру
+      { wch: 25 }, // Менеджер
+    ];
+    ws['!cols'] = colWidths;
+
+    // Добавляем стили заголовка
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const address = XLSX.utils.encode_col(C) + '1';
+      if (!ws[address]) continue;
+      ws[address].s = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '4F46E5' } },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: {
+          top: { style: 'thin', color: { rgb: '000000' } },
+          bottom: { style: 'thin', color: { rgb: '000000' } },
+          left: { style: 'thin', color: { rgb: '000000' } },
+          right: { style: 'thin', color: { rgb: '000000' } },
+        },
+      };
+    }
+
+    // Стили для итоговой строки
+    const lastRow = exportData.length + 1;
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const address = XLSX.utils.encode_col(C) + lastRow.toString();
+      if (!ws[address]) continue;
+      ws[address].s = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: 'E0E7FF' } },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: {
+          top: { style: 'medium', color: { rgb: '000000' } },
+          bottom: { style: 'thin', color: { rgb: '000000' } },
+          left: { style: 'thin', color: { rgb: '000000' } },
+          right: { style: 'thin', color: { rgb: '000000' } },
+        },
+      };
+    }
+
+    // Добавляем worksheet в workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Расчёт себестоимости');
+
+    // Генерируем имя файла с датой
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const fileName = `Расчёт_себестоимости_${dateStr}.xlsx`;
+
+    // Сохраняем файл
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    saveAs(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
+  };
+
   if (permLoading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
   if (!canView) return (
     <div className="card p-12 text-center">
@@ -259,11 +388,22 @@ export function CostCalculationPage() {
 
   return (
     <div className="space-y-6 max-w-full mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">🧮 Расчёт себестоимости</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          {projects.length} проектов • Нажмите на ячейку для редактирования (требуются права редактора)
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">🧮 Расчёт себестоимости</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            {projects.length} проектов • Нажмите на ячейку для редактирования (требуются права редактора)
+          </p>
+        </div>
+        <button
+          onClick={handleExportXLSX}
+          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-md transition-all duration-300 flex items-center gap-2 text-sm font-medium"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Экспорт в XLSX
+        </button>
       </div>
 
       {/* Таблица в стиле Excel */}
