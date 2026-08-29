@@ -136,7 +136,7 @@ export function Layout() {
       </aside>
 
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 z-40 px-4 h-14 flex items-center justify-between">
+      <div className="md:hidden fixed top-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 z-40 h-[calc(3.5rem+var(--safe-area-inset-top))] pt-[var(--safe-area-inset-top)] flex items-center justify-between px-4">
         <NavLink to="/" className="flex items-center gap-2 hover:opacity-80 active:scale-95 transition-all cursor-pointer">
           <div className="w-7 h-7 bg-indigo-600 rounded-md flex items-center justify-center text-white font-bold text-sm">P</div>
           <span className="font-bold text-slate-900 dark:text-slate-100">Proles Sys</span>
@@ -179,7 +179,7 @@ export function Layout() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 top-14 bg-white dark:bg-slate-900 z-30 animate-fade-in overflow-y-auto pb-20">
+        <div className="md:hidden fixed inset-0 top-[calc(3.5rem+var(--safe-area-inset-top))] bg-white dark:bg-slate-900 z-30 animate-fade-in overflow-y-auto pb-[max(1.25rem,var(--safe-area-inset-bottom))] pt-[var(--safe-area-inset-top)]">
           <nav className="p-4 space-y-1">
             <div className="mb-3">
               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">Основное</div>
@@ -202,9 +202,9 @@ export function Layout() {
         </div>
       )}
 
-      {/* Mobile Bottom Nav — адаптивный */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 z-40 pb-safe">
-        <div className={`flex justify-around items-center h-16 ${hasManagement ? 'px-2' : 'px-6'}`}>
+      {/* Mobile Bottom Nav — адаптивный с поддержкой safe area */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 z-40 pb-[max(0.5rem,var(--safe-area-inset-bottom))]">
+        <div className={`flex justify-around items-center h-[calc(3.5rem+var(--safe-area-inset-bottom))] ${hasManagement ? 'px-2' : 'px-6'}`}>
           <NavLink to="/" end className={({ isActive }) => `flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
             <span className="text-xl leading-none">🏠</span>
             <span>Главная</span>
@@ -226,7 +226,7 @@ export function Layout() {
         </div>
       </nav>
 
-      <main className={`flex-1 pt-14 pb-20 md:pb-8 min-h-dvh transition-all duration-300 ${sidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+      <main className={`flex-1 pt-[calc(3.5rem+var(--safe-area-inset-top))] pb-[calc(3.5rem+var(--safe-area-inset-bottom))] md:pb-8 min-h-dvh transition-all duration-300 ${sidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
         <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 animate-fade-in">
           <Outlet />
         </div>
