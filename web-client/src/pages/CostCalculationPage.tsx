@@ -84,9 +84,10 @@ export function CostCalculationPage() {
     return projects.map(project => {
       const projectExpenses = (expenses || []).filter(e => e.projectId === project.id);
       
-      // Расходы сотрудников (все кроме HOUSEHOLD, PER_DIEM, ROAD, OTHER)
+      // Расходы сотрудников (все кроме HOUSEHOLD, PER_DIEM, ROAD)
+      // Включая OTHER и остальные типы расходов
       const employeeExpenses = projectExpenses
-        .filter(e => e.type !== 'HOUSEHOLD' && e.type !== 'PER_DIEM' && e.type !== 'ROAD' && e.type !== 'OTHER')
+        .filter(e => e.type !== 'HOUSEHOLD' && e.type !== 'PER_DIEM' && e.type !== 'ROAD')
         .reduce((sum, e) => sum + e.amount, 0);
       
       // Хоз.нужды
@@ -107,10 +108,8 @@ export function CostCalculationPage() {
         .filter(e => e.type === 'PER_DIEM')
         .reduce((sum, e) => sum + e.amount, 0);
       
-      // Иные расходы
-      const other = projectExpenses
-        .filter(e => e.type === 'OTHER')
-        .reduce((sum, e) => sum + e.amount, 0);
+      // Иные расходы (теперь пусто, т.к. всё включено в Расходы)
+      const other = 0;
       
       const expensesTotal = employeeExpenses + household + advances + tickets + perDiem + other;
       
