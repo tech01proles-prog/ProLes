@@ -58,6 +58,9 @@ export interface ProjectDto {
   productionCost: number;      // 🆕
   transportToClient: number;   // 🆕
   sellingPrice: number;        // 🆕
+  materials?: number;          // 🆕 Материалы (ручной ввод)
+  contractors?: number;        // 🆕 Услуги подрядчиков (ручной ввод)
+  creditPercent?: number;      // 🆕 % по кредиту (ручной ввод)
 }
 
 export interface ExpenseDto {
