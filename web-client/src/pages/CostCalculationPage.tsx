@@ -6,6 +6,7 @@ import { usePermissions } from '../hooks/usePermissions';
 
 interface CostRow {
   project: ProjectDto;
+  salePriceManual: number;
   materialsManual: number;
   techHours: number;
   expenses: {
@@ -26,6 +27,7 @@ interface CostRow {
   contractorsManual: number;
   creditPercentManual: number;
   totalCost: number;
+  marginalIncome: number;
 }
 
 export function CostCalculationPage() {
@@ -40,6 +42,7 @@ export function CostCalculationPage() {
   const [showExpensesDetail, setShowExpensesDetail] = useState(false);
   const [showTransportDetail, setShowTransportDetail] = useState(false);
   const [manualData, setManualData] = useState<Record<string, {
+    salePrice: number;
     materials: number;
     transportToClient: number;
     contractors: number;
@@ -62,9 +65,10 @@ export function CostCalculationPage() {
       setTimeEntries(timeRes.status === 'fulfilled' ? (timeRes.value.data || []) : []);
       
       // Загружаем сохраненные ручные данные из проектов
-      const manual: Record<string, { materials: number; transportToClient: number; contractors: number; creditPercent: number }> = {};
+      const manual: Record<string, { salePrice: number; materials: number; transportToClient: number; contractors: number; creditPercent: number }> = {};
       projRes.status === 'fulfilled' && projRes.value.data.forEach((p: ProjectDto) => {
         manual[p.id] = {
+          salePrice: (p as any).salePrice || 0,
           materials: (p as any).materials || 0,
           transportToClient: p.transportToClient || 0,
           contractors: (p as any).contractors || 0,
@@ -125,13 +129,15 @@ export function CostCalculationPage() {
         .reduce((sum, t) => sum + t.hours, 0);
       
       // Ручные данные
-      const manual = manualData[project.id] || { materials: 0, transportToClient: 0, contractors: 0, creditPercent: 0 };
+      const manual = manualData[project.id] || { salePrice: 0, materials: 0, transportToClient: 0, contractors: 0, creditPercent: 0 };
       
       // Затраты на реализацию = материалы + расходы + транспорт ТО
       const totalCost = manual.materials + expensesTotal + transportTotal + manual.transportToClient + manual.contractors + manual.creditPercent;
+      const marginalIncome = manual.salePrice - totalCost;
       
       return {
         project,
+        salePriceManual: manual.salePrice,
         materialsManual: manual.materials,
         techHours,
         expenses: {
@@ -152,12 +158,14 @@ export function CostCalculationPage() {
         contractorsManual: manual.contractors,
         creditPercentManual: manual.creditPercent,
         totalCost,
+        marginalIncome,
       };
     });
   }, [projects, expenses, timeEntries, manualData]);
 
   const totals = useMemo(() => {
     return projectData.reduce((acc, row) => ({
+      salePriceManual: acc.salePriceManual + row.salePriceManual,
       materialsManual: acc.materialsManual + row.materialsManual,
       techHours: acc.techHours + row.techHours,
       expensesTotal: acc.expensesTotal + row.expenses.total,
@@ -166,7 +174,9 @@ export function CostCalculationPage() {
       contractorsManual: acc.contractorsManual + row.contractorsManual,
       creditPercentManual: acc.creditPercentManual + row.creditPercentManual,
       totalCost: acc.totalCost + row.totalCost,
+      marginalIncome: acc.marginalIncome + row.marginalIncome,
     }), {
+      salePriceManual: 0,
       materialsManual: 0,
       techHours: 0,
       expensesTotal: 0,
@@ -175,6 +185,7 @@ export function CostCalculationPage() {
       contractorsManual: 0,
       creditPercentManual: 0,
       totalCost: 0,
+      marginalIncome: 0,
     });
   }, [projectData]);
 
@@ -190,10 +201,12 @@ export function CostCalculationPage() {
       const project = projects.find(p => p.id === editingCell.projectId);
       if (!project) return;
 
-      const currentManual = manualData[editingCell.projectId] || { materials: 0, transportToClient: 0, contractors: 0, creditPercent: 0 };
+      const currentManual = manualData[editingCell.projectId] || { salePrice: 0, materials: 0, transportToClient: 0, contractors: 0, creditPercent: 0 };
       let updatedManual = { ...currentManual };
 
-      if (editingCell.field === 'materials') {
+      if (editingCell.field === 'salePrice') {
+        updatedManual.salePrice = parseFloat(editValue) || 0;
+      } else if (editingCell.field === 'materials') {
         updatedManual.materials = parseFloat(editValue) || 0;
       } else if (editingCell.field === 'transportToClient') {
         updatedManual.transportToClient = parseFloat(editValue) || 0;
@@ -208,6 +221,7 @@ export function CostCalculationPage() {
       // Сохраняем в проект
       const updatedProject = {
         ...project,
+        salePrice: updatedManual.salePrice,
         transportToClient: updatedManual.transportToClient,
         materials: updatedManual.materials,
         contractors: updatedManual.contractors,
@@ -257,18 +271,21 @@ export function CostCalculationPage() {
             {/* Заголовок - строка 1: Группы колонок */}
             <tr className="bg-slate-100 dark:bg-slate-800">
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-left font-semibold text-slate-700 dark:text-slate-300 min-w-[200px]">Проект</th>
+              <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">Продажная стоимость</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[100px]">Материалы</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[80px]">Часы ТО</th>
-              <th colSpan={showExpensesDetail ? 6 : 1} className={`border border-slate-300 dark:border-slate-600 p-2 ${showExpensesDetail ? 'text-center' : 'text-right'} font-semibold text-slate-700 dark:text-slate-300 bg-indigo-50 dark:bg-indigo-900/30 cursor-pointer select-none`} onClick={() => setShowExpensesDetail(!showExpensesDetail)}>
+              <th colSpan={showExpensesDetail ? 6 : 1} className={`border border-slate-300 dark:border-slate-600 p-2 ${showExpensesDetail ? 'text-center' : 'text-right'} font-semibold text-slate-700 dark:text-slate-300 bg-indigo-50 dark:bg-indigo-900/30 cursor-pointer select-none transition-all duration-300`} onClick={() => setShowExpensesDetail(!showExpensesDetail)}>
                 Затраты на реализацию {showExpensesDetail ? '▼' : '▶'}
               </th>
-              <th colSpan={showTransportDetail ? 2 : 1} className={`border border-slate-300 dark:border-slate-600 p-2 ${showTransportDetail ? 'text-center' : 'text-right'} font-semibold text-slate-700 dark:text-slate-300 bg-blue-50 dark:bg-blue-900/30 cursor-pointer select-none`} onClick={() => setShowTransportDetail(!showTransportDetail)}>
+              <th colSpan={showTransportDetail ? 2 : 1} className={`border border-slate-300 dark:border-slate-600 p-2 ${showTransportDetail ? 'text-center' : 'text-right'} font-semibold text-slate-700 dark:text-slate-300 bg-blue-50 dark:bg-blue-900/30 cursor-pointer select-none transition-all duration-300`} onClick={() => setShowTransportDetail(!showTransportDetail)}>
                 Транспорт {showTransportDetail ? '▼' : '▶'}
               </th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">Транспорт до клиента</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">Услуги подрядчиков</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">% по кредиту</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px] bg-emerald-50 dark:bg-emerald-900/30">Итого с/с</th>
+              <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px] bg-amber-50 dark:bg-amber-900/30">Марж. доход</th>
+              <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px] bg-purple-50 dark:bg-purple-900/30">% менеджеру</th>
             </tr>
             {/* Заголовок - строка 2: Подколонки */}
             <tr className="bg-slate-50 dark:bg-slate-800/50">
@@ -295,11 +312,38 @@ export function CostCalculationPage() {
           <tbody>
             {projectData.map((row) => {
               return (
-                <tr key={row.project.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                <tr key={row.project.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all duration-300">
                   {/* Проект */}
                   <td className="border border-slate-200 dark:border-slate-700 p-2">
                     <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{row.project.name}</div>
                     {row.project.client && <div className="text-xs text-slate-500 truncate">{row.project.client}</div>}
+                  </td>
+                  
+                  {/* Продажная стоимость */}
+                  <td className="border border-slate-200 dark:border-slate-700 p-2 text-right">
+                    {canEdit ? (
+                      editingCell?.projectId === row.project.id && editingCell?.field === 'salePrice' ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={handleCellSave}
+                          onKeyDown={handleKeyDown}
+                          className="w-full text-right px-1 py-0.5 border border-indigo-400 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          onClick={() => handleCellEdit(row.project.id, 'salePrice', row.salePriceManual)}
+                          className="w-full text-right hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded px-1 py-0.5 cursor-pointer"
+                        >
+                          {row.salePriceManual > 0 ? formatMoney(row.salePriceManual) : '—'}
+                        </button>
+                      )
+                    ) : (
+                      row.salePriceManual > 0 ? formatMoney(row.salePriceManual) : '—'
+                    )}
                   </td>
                   
                   {/* Материалы */}
@@ -463,6 +507,17 @@ export function CostCalculationPage() {
                   <td className="border border-slate-200 dark:border-slate-700 p-2 text-right font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400">
                     {formatMoney(row.totalCost)}
                   </td>
+                  
+                  {/* Марж. доход */}
+                  <td className={`border border-slate-200 dark:border-slate-700 p-2 text-right font-bold bg-amber-50 dark:bg-amber-900/20 ${row.marginalIncome >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                    {formatMoney(row.marginalIncome)}
+                  </td>
+                  
+                  {/* % менеджеру - заглушка */}
+                  <td className="border border-slate-200 dark:border-slate-700 p-2 text-right bg-purple-50 dark:bg-purple-900/20">
+                    <div className="font-medium text-purple-700 dark:text-purple-400">—</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Менеджер</div>
+                  </td>
                 </tr>
               );
             })}
@@ -470,6 +525,7 @@ export function CostCalculationPage() {
           <tfoot>
             <tr className="bg-slate-100 dark:bg-slate-800 font-bold">
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-left">ИТОГО</td>
+              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.salePriceManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.materialsManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{totals.techHours.toFixed(1)}</td>
               {showExpensesDetail ? (
@@ -496,6 +552,8 @@ export function CostCalculationPage() {
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.contractorsManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.creditPercentManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">{formatMoney(totals.totalCost)}</td>
+              <td className={`border border-slate-300 dark:border-slate-600 p-2 text-right bg-amber-100 dark:bg-amber-900/30 ${totals.marginalIncome >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>{formatMoney(totals.marginalIncome)}</td>
+              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">—</td>
             </tr>
           </tfoot>
         </table>
