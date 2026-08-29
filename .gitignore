@@ -2,23 +2,18 @@
 # Dependencies
 node_modules/
 
-# Logs and temp files
-*.log
-*.tmp
-
-# Environment variables
+# Environment
 .env
 .env.local
 *.env.*
 
+# Logs and temp files
+*.log
+*.tmp
+
 # Editors
 .vscode/
 .idea/
-
-# Build outputs
-dist/
-build/
-target/
 
 # Python
 __pycache__/
@@ -29,7 +24,6 @@ __pycache__/
 env/
 venv/
 .venv/
-.venv.bak/
 pip-log.txt
 pip-delete-this-directory.txt
 .tox/
@@ -40,40 +34,7 @@ nosetests.xml
 coverage.xml
 *.cover
 *.log
-.git*
-!CHANGELOG.md
-!CONTRIBUTING.md
-!LICENSE
-!README.md
-*.pot
-*.po
-*~
-.pytest_cache/
-.hypothesis/
-.coverage*
-.eggs/
-egg-info/
-.installed.cfg
-lib/
-lib64/
-pip-wheel-metadata/
-wheels/
-share/python-wheels/
-*.egg-info/
-.venv/
-venv/
-ENV/
-env/
-.Python
-.python-version
-.pytest_cache/
-.hypothesis/
-.coverage*
-.eggs/
-.egg-info/
-lib/
-lib64/
-pip-wheel-metadata/
-wheels/
-share/python-wheels/
+.git/modules/
+.DS_Store
+Thumbs.db
 ```

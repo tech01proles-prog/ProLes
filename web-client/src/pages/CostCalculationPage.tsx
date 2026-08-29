@@ -52,6 +52,79 @@ export function CostCalculationPage() {
   }>>({});
   const [editingCell, setEditingCell] = useState<{ projectId: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
+  
+  // Фильтр по периоду времени
+  const [periodType, setPeriodType] = useState<'month' | 'quarter' | 'year'>('month');
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // Вычисляем даты начала и конца выбранного периода
+  const { startDate, endDate } = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    let start: Date;
+    let end: Date;
+    
+    if (periodType === 'month') {
+      start = new Date(year, month, 1);
+      end = new Date(year, month + 1, 0, 23, 59, 59);
+    } else if (periodType === 'quarter') {
+      const quarter = Math.floor(month / 3);
+      start = new Date(year, quarter * 3, 1);
+      end = new Date(year, quarter * 3 + 3, 0, 23, 59, 59);
+    } else { // year
+      start = new Date(year, 0, 1);
+      end = new Date(year, 11, 31, 23, 59, 59);
+    }
+    
+    return {
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end.toISOString().slice(0, 10)
+    };
+  }, [currentDate, periodType]);
+  
+  // Фильтрация расходов и записей времени по периоду
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter(e => e.date >= startDate && e.date <= endDate);
+  }, [expenses, startDate, endDate]);
+  
+  const filteredTimeEntries = useMemo(() => {
+    return timeEntries.filter(t => t.date >= startDate && t.date <= endDate);
+  }, [timeEntries, startDate, endDate]);
+  
+  // Навигация по периодам
+  const handlePeriodNavigate = (direction: 'prev' | 'next') => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      if (periodType === 'month') {
+        newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
+      } else if (periodType === 'quarter') {
+        newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 3 : -3));
+      } else { // year
+        newDate.setFullYear(newDate.getFullYear() + (direction === 'next' ? 1 : -1));
+      }
+      return newDate;
+    });
+  };
+  
+  const handlePeriodReset = () => {
+    setCurrentDate(new Date());
+  };
+  
+  // Форматирование названия периода
+  const periodLabel = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    if (periodType === 'month') {
+      return currentDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+    } else if (periodType === 'quarter') {
+      const quarter = Math.floor(month / 3) + 1;
+      return `${quarter} квартал ${year}`;
+    } else { // year
+      return year.toString();
+    }
+  }, [currentDate, periodType]);
 
   useEffect(() => {
     if (!canView) return;
@@ -84,7 +157,7 @@ export function CostCalculationPage() {
 
   const projectData = useMemo((): CostRow[] => {
     return projects.map(project => {
-      const projectExpenses = (expenses || []).filter(e => e.projectId === project.id);
+      const projectExpenses = (filteredExpenses || []).filter(e => e.projectId === project.id);
       
       // Расходы сотрудников (все кроме HOUSEHOLD, PER_DIEM, ROAD)
       // Включая OTHER и остальные типы расходов
@@ -128,7 +201,7 @@ export function CostCalculationPage() {
       const transportTotal = techTransport + transportOther;
       
       // Часы ТО (сумма часов всех сотрудников роли employee по этому проекту)
-      const techHours = (timeEntries || [])
+      const techHours = (filteredTimeEntries || [])
         .filter(t => t.projectId === project.id)
         .reduce((sum, t) => sum + t.hours, 0);
       
@@ -165,7 +238,7 @@ export function CostCalculationPage() {
         marginalIncome,
       };
     });
-  }, [projects, expenses, timeEntries, manualData]);
+  }, [projects, filteredExpenses, filteredTimeEntries, manualData]);
 
   const totals = useMemo(() => {
     return projectData.reduce((acc, row) => ({
@@ -395,15 +468,73 @@ export function CostCalculationPage() {
             {projects.length} проектов • Нажмите на ячейку для редактирования (требуются права редактора)
           </p>
         </div>
-        <button
-          onClick={handleExportXLSX}
-          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-md transition-all duration-300 flex items-center gap-2 text-sm font-medium"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Экспорт в XLSX
-        </button>
+        <div className="flex items-center gap-4">
+          {/* Фильтр по периоду */}
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-1">
+            <button
+              onClick={() => handlePeriodNavigate('prev')}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors"
+              title="Предыдущий период"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPeriodType('month')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${periodType === 'month' ? 'bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                Месяц
+              </button>
+              <button
+                onClick={() => setPeriodType('quarter')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${periodType === 'quarter' ? 'bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                Квартал
+              </button>
+              <button
+                onClick={() => setPeriodType('year')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${periodType === 'year' ? 'bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                Год
+              </button>
+            </div>
+            
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300 min-w-[140px] text-center capitalize">
+              {periodLabel}
+            </span>
+            
+            <button
+              onClick={() => handlePeriodNavigate('next')}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors"
+              title="Следующий период"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            
+            <button
+              onClick={handlePeriodReset}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors text-xs text-slate-500 dark:text-slate-400"
+              title="Текущий период"
+            >
+              Сегодня
+            </button>
+          </div>
+          
+          <button
+            onClick={handleExportXLSX}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-md transition-all duration-300 flex items-center gap-2 text-sm font-medium"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Экспорт в XLSX
+          </button>
+        </div>
       </div>
 
       {/* Таблица в стиле Excel */}
