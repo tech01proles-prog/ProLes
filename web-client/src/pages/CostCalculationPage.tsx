@@ -103,9 +103,12 @@ export function CostCalculationPage() {
         .filter(e => e.name.toLowerCase().includes('билет') || e.name.toLowerCase().includes('ticket'))
         .reduce((sum, e) => sum + e.amount, 0);
       
-      // Проживание (суточные - PER_DIEM)
+      // Проживание (суточные - PER_DIEM, per_diem, perdiem)
       const perDiem = projectExpenses
-        .filter(e => e.type === 'PER_DIEM')
+        .filter(e => {
+          const typeUpper = e.type.toUpperCase();
+          return typeUpper === 'PER_DIEM' || typeUpper === 'PERDIEM' || e.type.toLowerCase() === 'per_diem';
+        })
         .reduce((sum, e) => sum + e.amount, 0);
       
       // Иные расходы (теперь пусто, т.к. всё включено в Расходы)
