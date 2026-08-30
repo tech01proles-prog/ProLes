@@ -6,6 +6,8 @@ import type { IncomeDto, ExpenseDto, ProjectDto, UserDto } from '../types';
 import { generateUUID, formatDate, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import { ScopeTabs } from '../components/ScopeTabs';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 const INCOME_TYPES = [
   { key: 'HOUSEHOLD', label: 'Хоз.нужды', icon: '🏠', color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900' },
@@ -230,6 +232,84 @@ export function ExpensesPage() {
     await loadData();
   };
 
+  const handleExportXLSX = () => {
+    // Создаем данные для экспорта с учетом фильтров
+    const exportData = filtered.map(entry => ({
+      'Дата': entry.date,
+      'Тип': entry.type === 'INCOME' ? 'Доход' : 'Расход',
+      'Проект': entry.projectName || '',
+      'Сотрудник': effectiveScope === 'all' ? (users.find(u => u.id === entry.userId)?.name || '') : '',
+      'Название': entry.name,
+      'Категория': entry.category,
+      'Сумма': entry.amount,
+      'Валюта': entry.currency,
+      'Комментарий': entry.comment || '',
+    }));
+
+    // Добавляем итоговую строку с сальдо по валютам
+    Object.entries(saldoByCurrency).forEach(([currency, amount]) => {
+      exportData.push({
+        'Дата': '',
+        'Тип': `Сальдо ${currency}`,
+        'Проект': '',
+        'Сотрудник': '',
+        'Название': '',
+        'Категория': '',
+        'Сумма': amount,
+        'Валюта': currency,
+        'Комментарий': '',
+      });
+    });
+
+    // Создаем workbook и worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // Настраиваем ширину колонок
+    const colWidths = [
+      { wch: 12 }, // Дата
+      { wch: 10 }, // Тип
+      { wch: 25 }, // Проект
+      { wch: 20 }, // Сотрудник
+      { wch: 25 }, // Название
+      { wch: 15 }, // Категория
+      { wch: 15 }, // Сумма
+      { wch: 8 },  // Валюта
+      { wch: 30 }, // Комментарий
+    ];
+    ws['!cols'] = colWidths;
+
+    // Добавляем стили заголовка
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const address = XLSX.utils.encode_col(C) + '1';
+      if (!ws[address]) continue;
+      ws[address].s = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '4F46E5' } },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: {
+          top: { style: 'thin', color: { rgb: '000000' } },
+          bottom: { style: 'thin', color: { rgb: '000000' } },
+          left: { style: 'thin', color: { rgb: '000000' } },
+          right: { style: 'thin', color: { rgb: '000000' } },
+        },
+      };
+    }
+
+    // Добавляем worksheet в workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Доходы и Расходы');
+
+    // Генерируем имя файла с датой
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const fileName = `Доходы_Расходы_${dateStr}.xlsx`;
+
+    // Сохраняем файл
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    saveAs(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
+  };
+
   const toggleSort = (field: 'date' | 'amount' | 'type') => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('desc'); }
@@ -246,6 +326,15 @@ export function ExpensesPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={handleExportXLSX}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all shadow-md shadow-blue-200 dark:shadow-blue-900/30 flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Экспорт в XLSX
+          </button>
           <button onClick={() => { setFormType('INCOME'); setShowForm(!showForm); }} className={`btn-primary px-5 py-2.5 shadow-md ${!showForm || formType === 'INCOME' ? 'shadow-indigo-200' : ''}`}>
             {showForm && formType === 'INCOME' ? '✕ Закрыть' : '＋ Новый доход'}
           </button>
