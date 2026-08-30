@@ -1,4 +1,4 @@
-```gitignore
+```
 # Dependencies
 node_modules/
 
@@ -17,31 +17,34 @@ env/
 venv/
 .venv/
 .ENV
-.python-version
+.env
+.env.*
 .pytest_cache/
 .mypy_cache/
+.coverage
+coverage/
 
 # Logs
 *.log
 
-# Environment variables
-.env
-.env.local
-.env.*
+# OS generated files
+.DS_Store
+Thumbs.db
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
-.DS_Store
-Thumbs.db
+*.tmp
+
+# Environment specific
+.env.local
+.env.*
 
 # Coverage
 coverage/
 htmlcov/
-.coverage
 
 # Compressed files
 *.zip
