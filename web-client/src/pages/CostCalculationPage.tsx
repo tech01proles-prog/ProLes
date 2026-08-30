@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../api/client';
-import type { ProjectDto, ExpenseDto, TimeEntryDto } from '../types';
+import type { ProjectDto, ExpenseDto, TimeEntryDto, UserDto, SalaryComponentDto } from '../types';
 import { formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import * as XLSX from 'xlsx';
@@ -11,6 +11,7 @@ interface CostRow {
   salePriceManual: number;
   materialsManual: number;
   techHours: number;
+  techSalary: number;
   expenses: {
     employeeExpenses: number;
     household: number;
@@ -39,6 +40,8 @@ export function CostCalculationPage() {
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [allExpenses, setAllExpenses] = useState<ExpenseDto[]>([]);
   const [allTimeEntries, setAllTimeEntries] = useState<TimeEntryDto[]>([]);
+  const [allUsers, setAllUsers] = useState<UserDto[]>([]);
+  const [allSalaryComponents, setAllSalaryComponents] = useState<SalaryComponentDto[]>([]);
   const [loading, setLoading] = useState(true);
   // Глобальное состояние раскрытия колонок для всей таблицы
   const [showExpensesDetail, setShowExpensesDetail] = useState(false);
@@ -113,14 +116,16 @@ export function CostCalculationPage() {
     if (!canView) return;
     (async () => {
       setLoading(true);
-      const [projRes, expRes, timeRes] = await Promise.allSettled([
+      const [projRes, expRes, timeRes, usersRes] = await Promise.allSettled([
         api.get<ProjectDto[]>('/projects'),
         api.get<ExpenseDto[]>('/expenses/all'),
         api.get<TimeEntryDto[]>('/entries'),
+        api.get<UserDto[]>('/users'),
       ]);
       setProjects(projRes.status === 'fulfilled' ? (projRes.value.data || []).filter((p: ProjectDto) => p.isActive) : []);
       setAllExpenses(expRes.status === 'fulfilled' ? (expRes.value.data || []) : []);
       setAllTimeEntries(timeRes.status === 'fulfilled' ? (timeRes.value.data || []) : []);
+      setAllUsers(usersRes.status === 'fulfilled' ? (usersRes.value.data || []) : []);
       
       // Загружаем сохраненные ручные данные из проектов
       const manual: Record<string, { salePrice: number; materials: number; transportToClient: number; contractors: number; creditPercent: number }> = {};
