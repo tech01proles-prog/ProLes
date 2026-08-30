@@ -1,39 +1,48 @@
-```gitignore
-# Dependencies
-node_modules/
-
-# Build outputs
+```
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
 dist/
 build/
 target/
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.pyc.*
-.Python
-venv/
+# Dependencies
 .venv/
+venv/
+node_modules/
+.julia/
+zig-cache/
+.dep/
+.deps/
+deps/
+vendor/
+.PATH/
+.COPYRIGHT/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+*.out
+
+# Environment
 .env
 .env.local
 .env.*
 
-# Logs
-*.log
-
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# IDE
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
 
 # OS
 .DS_Store
