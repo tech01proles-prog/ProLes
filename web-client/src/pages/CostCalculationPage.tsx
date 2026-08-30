@@ -116,16 +116,18 @@ export function CostCalculationPage() {
     if (!canView) return;
     (async () => {
       setLoading(true);
-      const [projRes, expRes, timeRes, usersRes] = await Promise.allSettled([
+      const [projRes, expRes, timeRes, usersRes, salaryRes] = await Promise.allSettled([
         api.get<ProjectDto[]>('/projects'),
         api.get<ExpenseDto[]>('/expenses/all'),
         api.get<TimeEntryDto[]>('/entries'),
         api.get<UserDto[]>('/users'),
+        api.get<SalaryComponentDto[]>('/payroll/components/all'),
       ]);
       setProjects(projRes.status === 'fulfilled' ? (projRes.value.data || []).filter((p: ProjectDto) => p.isActive) : []);
       setAllExpenses(expRes.status === 'fulfilled' ? (expRes.value.data || []) : []);
       setAllTimeEntries(timeRes.status === 'fulfilled' ? (timeRes.value.data || []) : []);
       setAllUsers(usersRes.status === 'fulfilled' ? (usersRes.value.data || []) : []);
+      setAllSalaryComponents(salaryRes.status === 'fulfilled' ? (salaryRes.value.data || []) : []);
       
       // Загружаем сохраненные ручные данные из проектов
       const manual: Record<string, { salePrice: number; materials: number; transportToClient: number; contractors: number; creditPercent: number }> = {};
@@ -193,11 +195,48 @@ export function CostCalculationPage() {
         .filter(t => t.projectId === project.id)
         .reduce((sum, t) => sum + t.hours, 0);
       
+      // Расчет зарплаты тех.отдела (сотрудники с ролью 'employee')
+      // Только почасовые (HOURLY) и премии (BONUS), без FIXED
+      // Фильтруем компоненты зарплаты по периоду
+      const periodEnd = periodType === 'month'
+        ? new Date(+selectedPeriod.split('-')[0], +selectedPeriod.split('-')[1], 0, 23, 59, 59, 999)
+        : periodType === 'quarter'
+          ? new Date(+selectedPeriod.split('-Q')[0], +selectedPeriod.split('-Q')[1] * 3, 0, 23, 59, 59, 999)
+          : new Date(+selectedPeriod, 11, 31, 23, 59, 59, 999);
+      
+      // Находим сотрудников тех.отдела (роль 'employee')
+      const techEmployees = (allUsers || []).filter(u => u.role === 'employee');
+      const techEmployeeIds = new Set(techEmployees.map(e => e.id));
+      
+      // Фильтруем компоненты зарплаты: только для тех.сотрудников, активные, в периоде, только HOURLY и BONUS
+      const techSalaryComponents = (allSalaryComponents || []).filter(c => 
+        techEmployeeIds.has(c.userId) &&
+        c.isActive &&
+        (!c.effectiveTo || new Date(c.effectiveFrom) <= periodEnd) &&
+        new Date(c.effectiveFrom) <= periodEnd &&
+        (c.type === 'HOURLY' || c.type === 'BONUS')
+      );
+      
+      // Считаем зарплату: для HOURLY - часы * ставка, для BONUS - сумма бонусов
+      let techSalary = 0;
+      for (const component of techSalaryComponents) {
+        if (component.type === 'HOURLY' && component.ratePerHour) {
+          // Для почасовых: берем часы из timeEntries для этого сотрудника по этому проекту (или всем проектам)
+          const employeeHours = (timeEntries || [])
+            .filter(t => t.userId === component.userId && t.projectId === project.id)
+            .reduce((sum, t) => sum + t.hours, 0);
+          techSalary += employeeHours * component.ratePerHour;
+        } else if (component.type === 'BONUS') {
+          // Для премий: просто добавляем сумму
+          techSalary += component.amount;
+        }
+      }
+      
       // Ручные данные
       const manual = manualData[project.id] || { salePrice: 0, materials: 0, transportToClient: 0, contractors: 0, creditPercent: 0 };
       
-      // Затраты на реализацию = материалы + расходы + транспорт ТО
-      const totalCost = manual.materials + expensesTotal + transportTotal + manual.transportToClient + manual.contractors + manual.creditPercent;
+      // Затраты на реализацию = материалы + расходы + транспорт ТО + зарплата тех.отдела
+      const totalCost = manual.materials + expensesTotal + transportTotal + manual.transportToClient + manual.contractors + manual.creditPercent + techSalary;
       const marginalIncome = manual.salePrice - totalCost;
       
       return {
@@ -205,6 +244,7 @@ export function CostCalculationPage() {
         salePriceManual: manual.salePrice,
         materialsManual: manual.materials,
         techHours,
+        techSalary,
         expenses: {
           employeeExpenses,
           household,
@@ -226,13 +266,14 @@ export function CostCalculationPage() {
         marginalIncome,
       };
     });
-  }, [projects, expenses, timeEntries, manualData]);
+  }, [projects, expenses, timeEntries, manualData, allSalaryComponents, allUsers, periodType, selectedPeriod]);
 
   const totals = useMemo(() => {
     return projectData.reduce((acc, row) => ({
       salePriceManual: acc.salePriceManual + row.salePriceManual,
       materialsManual: acc.materialsManual + row.materialsManual,
       techHours: acc.techHours + row.techHours,
+      techSalary: acc.techSalary + row.techSalary,
       expensesTotal: acc.expensesTotal + row.expenses.total,
       transportTotal: acc.transportTotal + row.transport.total,
       transportToClientManual: acc.transportToClientManual + row.transportToClientManual,
@@ -244,6 +285,7 @@ export function CostCalculationPage() {
       salePriceManual: 0,
       materialsManual: 0,
       techHours: 0,
+      techSalary: 0,
       expensesTotal: 0,
       transportTotal: 0,
       transportToClientManual: 0,
@@ -318,6 +360,7 @@ export function CostCalculationPage() {
       'Продажная стоимость': row.salePriceManual,
       'Материалы': row.materialsManual,
       'Часы ТО': row.techHours,
+      'Зарплата ТО': row.techSalary,
       'Затраты на реализацию - Расходы': row.expenses.employeeExpenses,
       'Затраты на реализацию - Хоз.нужды': row.expenses.household,
       'Затраты на реализацию - Авансы': row.expenses.advances,
@@ -342,6 +385,7 @@ export function CostCalculationPage() {
       'Продажная стоимость': totals.salePriceManual,
       'Материалы': totals.materialsManual,
       'Часы ТО': totals.techHours,
+      'Зарплата ТО': totals.techSalary,
       'Затраты на реализацию - Расходы': projectData.reduce((sum, r) => sum + r.expenses.employeeExpenses, 0),
       'Затраты на реализацию - Хоз.нужды': projectData.reduce((sum, r) => sum + r.expenses.household, 0),
       'Затраты на реализацию - Авансы': projectData.reduce((sum, r) => sum + r.expenses.advances, 0),
@@ -370,6 +414,7 @@ export function CostCalculationPage() {
       { wch: 18 }, // Продажная стоимость
       { wch: 15 }, // Материалы
       { wch: 12 }, // Часы ТО
+      { wch: 15 }, // Зарплата ТО
       { wch: 18 }, // Затраты - Расходы
       { wch: 15 }, // Затраты - Хоз.нужды
       { wch: 12 }, // Затраты - Авансы
@@ -526,7 +571,7 @@ export function CostCalculationPage() {
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-left font-semibold text-slate-700 dark:text-slate-300 min-w-[200px]">Проект</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">Продажная стоимость</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[100px]">Материалы</th>
-              <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[80px]">Часы ТО</th>
+              <th colSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-center font-semibold text-slate-700 dark:text-slate-300 bg-green-50 dark:bg-green-900/30">Часы ТО и Зарплата</th>
               <th colSpan={showExpensesDetail ? 6 : 1} className={`border border-slate-300 dark:border-slate-600 p-2 ${showExpensesDetail ? 'text-center' : 'text-right'} font-semibold text-slate-700 dark:text-slate-300 bg-indigo-50 dark:bg-indigo-900/30 cursor-pointer select-none transition-all duration-300`} onClick={() => setShowExpensesDetail(!showExpensesDetail)}>
                 Затраты на реализацию {showExpensesDetail ? '▼' : '▶'}
               </th>
@@ -542,6 +587,9 @@ export function CostCalculationPage() {
             </tr>
             {/* Заголовок - строка 2: Подколонки */}
             <tr className="bg-slate-50 dark:bg-slate-800/50">
+              {/* Часы ТО и Зарплата - подколонки */}
+              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[80px]">Часы</th>
+              <th className="border border-slate-300 dark:border-slate-600 p-2 text-right font-medium text-slate-600 dark:text-slate-400 w-[120px]">Зарплата</th>
               {/* Затраты на реализацию - подколонки */}
               {showExpensesDetail && (
                 <>
@@ -629,6 +677,11 @@ export function CostCalculationPage() {
                   {/* Часы ТО */}
                   <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
                     {row.techHours > 0 ? row.techHours.toFixed(1) : '—'}
+                  </td>
+                  
+                  {/* Зарплата ТО */}
+                  <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-700 dark:text-slate-300 bg-green-50/30 dark:bg-green-900/10">
+                    {row.techSalary > 0 ? formatMoney(row.techSalary) : '—'}
                   </td>
                   
                   {/* Затраты на реализацию - основная колонка (Σ) */}
@@ -781,6 +834,7 @@ export function CostCalculationPage() {
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.salePriceManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.materialsManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{totals.techHours.toFixed(1)}</td>
+              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right bg-green-50/30 dark:bg-green-900/10">{totals.techSalary > 0 ? formatMoney(totals.techSalary) : '—'}</td>
               {showExpensesDetail ? (
                 <>
                   <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(projectData.reduce((sum, row) => sum + row.expenses.employeeExpenses, 0))}</td>
