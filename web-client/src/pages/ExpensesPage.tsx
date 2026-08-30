@@ -335,7 +335,7 @@ export function ExpensesPage() {
             </svg>
             Экспорт в XLSX
           </button>
-          <button onClick={() => { setFormType('INCOME'); setShowForm(!showForm); }} className={`btn-primary px-5 py-2.5 shadow-md ${!showForm || formType === 'INCOME' ? 'shadow-indigo-200' : ''}`}>
+          <button onClick={() => { setFormType('INCOME'); setShowForm(!showForm); }} className={`bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-green-200 dark:shadow-green-900/30 ${!showForm || formType === 'INCOME' ? 'shadow-indigo-200' : ''}`}>
             {showForm && formType === 'INCOME' ? '✕ Закрыть' : '＋ Новый доход'}
           </button>
           <button onClick={() => { setFormType('EXPENSE'); setShowForm(true); }} className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-red-200 dark:shadow-red-900/30">
