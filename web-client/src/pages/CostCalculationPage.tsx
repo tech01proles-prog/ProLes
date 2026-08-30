@@ -198,36 +198,54 @@ export function CostCalculationPage() {
       // Расчет зарплаты тех.отдела (сотрудники с ролью 'employee')
       // Только почасовые (HOURLY) и премии (BONUS), без FIXED
       // Фильтруем компоненты зарплаты по периоду
-      const periodEnd = periodType === 'month'
-        ? new Date(+selectedPeriod.split('-')[0], +selectedPeriod.split('-')[1], 0, 23, 59, 59, 999)
-        : periodType === 'quarter'
-          ? new Date(+selectedPeriod.split('-Q')[0], +selectedPeriod.split('-Q')[1] * 3, 0, 23, 59, 59, 999)
-          : new Date(+selectedPeriod, 11, 31, 23, 59, 59, 999);
+      
+      // Определяем границы периода
+      let startDate: Date;
+      let endDate: Date;
+      
+      if (periodType === 'month') {
+        const [year, month] = selectedPeriod.split('-').map(Number);
+        startDate = new Date(year, month - 1, 1);
+        endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      } else if (periodType === 'quarter') {
+        const [year, quarterStr] = selectedPeriod.split('-Q');
+        const quarter = parseInt(quarterStr, 10);
+        const startMonth = (quarter - 1) * 3;
+        startDate = new Date(+year, startMonth, 1);
+        endDate = new Date(+year, startMonth + 3, 0, 23, 59, 59, 999);
+      } else {
+        const year = parseInt(selectedPeriod, 10);
+        startDate = new Date(year, 0, 1);
+        endDate = new Date(year, 11, 31, 23, 59, 59, 999);
+      }
       
       // Находим сотрудников тех.отдела (роль 'employee')
       const techEmployees = (allUsers || []).filter(u => u.role === 'employee');
       const techEmployeeIds = new Set(techEmployees.map(e => e.id));
       
-      // Фильтруем компоненты зарплаты: только для тех.сотрудников, активные, в периоде, только HOURLY и BONUS
+      // Фильтруем компоненты зарплаты: только для тех.сотрудников, активные, действующие в периоде, только HOURLY и BONUS
+      // Компонент действует в периоде, если есть пересечение [effectiveFrom, effectiveTo] и [startDate, endDate]
       const techSalaryComponents = (allSalaryComponents || []).filter(c => 
         techEmployeeIds.has(c.userId) &&
         c.isActive &&
-        (!c.effectiveTo || new Date(c.effectiveFrom) <= periodEnd) &&
-        new Date(c.effectiveFrom) <= periodEnd &&
-        (c.type === 'HOURLY' || c.type === 'BONUS')
+        (c.type === 'HOURLY' || c.type === 'BONUS') &&
+        // Проверка пересечения периодов: компонент начал действовать до конца периода
+        new Date(c.effectiveFrom) <= endDate &&
+        // и либо нет даты окончания, либо она после начала периода
+        (!c.effectiveTo || new Date(c.effectiveTo) >= startDate)
       );
       
       // Считаем зарплату: для HOURLY - часы * ставка, для BONUS - сумма бонусов
       let techSalary = 0;
       for (const component of techSalaryComponents) {
         if (component.type === 'HOURLY' && component.ratePerHour) {
-          // Для почасовых: берем часы из timeEntries для этого сотрудника по этому проекту (или всем проектам)
+          // Для почасовых: берем часы из timeEntries для этого сотрудника по этому проекту в выбранном периоде
           const employeeHours = (timeEntries || [])
             .filter(t => t.userId === component.userId && t.projectId === project.id)
             .reduce((sum, t) => sum + t.hours, 0);
           techSalary += employeeHours * component.ratePerHour;
         } else if (component.type === 'BONUS') {
-          // Для премий: просто добавляем сумму
+          // Для премий: просто добавляем сумму (премия применяется ко всему периоду действия)
           techSalary += component.amount;
         }
       }
