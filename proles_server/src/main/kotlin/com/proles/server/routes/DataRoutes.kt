@@ -2692,6 +2692,31 @@ fun Route.dataRoutes() {
     // 💰 PAYROLL: Зарплаты
     // ─────────────────────────────────────────────────────────────
     route("/api/v1/payroll") {
+        // Получить все компоненты зарплаты (для CostCalculationPage)
+        get("/components/all") {
+            if (!call.checkPermission(Permission.PAYROLL, "view")) return@get
+            val components = transaction {
+                SalaryComponentsTable.selectAll()
+                    .orderBy(SalaryComponentsTable.type to SortOrder.ASC)
+                    .map { row ->
+                        SalaryComponentDto(
+                            id = row[SalaryComponentsTable.id].value.toString(),
+                            userId = row[SalaryComponentsTable.userId].value.toString(),
+                            type = row[SalaryComponentsTable.type],
+                            amount = row[SalaryComponentsTable.amount],
+                            projectId = row[SalaryComponentsTable.projectId]?.value?.toString(),
+                            ratePerHour = row[SalaryComponentsTable.ratePerHour],
+                            ratePerUnit = row[SalaryComponentsTable.ratePerUnit],
+                            description = row[SalaryComponentsTable.description],
+                            effectiveFrom = row[SalaryComponentsTable.effectiveFrom].toString(),
+                            effectiveTo = row[SalaryComponentsTable.effectiveTo]?.toString(),
+                            isActive = row[SalaryComponentsTable.isActive]
+                        )
+                    }
+            }
+            call.respond(HttpStatusCode.OK, components)
+        }
+
         // Получить компоненты зарплаты пользователя
         get("/components/{userId}") {
             if (!call.checkPermission(Permission.PAYROLL, "view")) return@get
