@@ -129,6 +129,12 @@ export function CostCalculationPage() {
       setAllUsers(usersRes.status === 'fulfilled' ? (usersRes.value.data || []) : []);
       setAllSalaryComponents(salaryRes.status === 'fulfilled' ? (salaryRes.value.data || []) : []);
       
+      // 🔍 DEBUG: проверяем загрузку компонентов зарплаты
+      console.log('📊 Salary components loaded:', salaryRes.status, (salaryRes.value?.data || []).length, 'items');
+      console.log('👥 Users loaded:', usersRes.status, (usersRes.value?.data || []).length, 'items');
+      const empUsers = (usersRes.value?.data || []).filter((u: UserDto) => u.role === 'employee');
+      console.log('👷 Employee users:', empUsers.length, empUsers.map(u => ({id: u.id, name: u.name})));
+      
       // Загружаем сохраненные ручные данные из проектов
       const manual: Record<string, { salePrice: number; materials: number; transportToClient: number; contractors: number; creditPercent: number }> = {};
       projRes.status === 'fulfilled' && projRes.value.data.forEach((p: ProjectDto) => {
@@ -223,20 +229,23 @@ export function CostCalculationPage() {
       const techEmployees = (allUsers || []).filter(u => u.role === 'employee');
       const techEmployeeIds = new Set(techEmployees.map(e => e.id));
       
-      // Фильтруем компоненты зарплаты: только для тех.сотрудников, активные, действующие в периоде
-      // Включая все типы: FIXED, PIECE, HOURLY, BONUS (как в SalaryCalculator.kt)
-      // Компонент действует в периоде, если есть пересечение [effectiveFrom, effectiveTo] и [startDate, endDate]
+      // Фильтруем компоненты зарплаты: только для тех.сотрудников и активные
+      // Как в SalaryCalculator.kt — берем ВСЕ активные компоненты, без фильтрации по period
+      // Период учитывается только при подсчете часов/дней для PIECE и HOURLY
       const techSalaryComponents = (allSalaryComponents || []).filter(c => 
         techEmployeeIds.has(c.userId) &&
-        c.isActive &&
-        // Проверка пересечения периодов: компонент начал действовать до конца периода
-        new Date(c.effectiveFrom) <= endDate &&
-        // и либо нет даты окончания, либо она после начала периода
-        (!c.effectiveTo || new Date(c.effectiveTo) >= startDate)
+        c.isActive
       );
       
       // Считаем зарплату по аналогии с SalaryCalculator.kt
       let techSalary = 0;
+      
+      // 🔍 DEBUG: лог для отладки расчета зарплаты
+      console.log('🔢 Calculating techSalary for project:', project.name, 'techSalaryComponents count:', techSalaryComponents.length);
+      console.log('  - FIXED components:', techSalaryComponents.filter(c => c.type === 'FIXED').length);
+      console.log('  - BONUS components:', techSalaryComponents.filter(c => c.type === 'BONUS').length);
+      console.log('  - PIECE components:', techSalaryComponents.filter(c => c.type === 'PIECE').length);
+      console.log('  - HOURLY components:', techSalaryComponents.filter(c => c.type === 'HOURLY').length);
       
       // 1. FIXED (оклад) — суммируем все компоненты
       const fixedComponents = techSalaryComponents.filter(c => c.type === 'FIXED');
@@ -250,13 +259,13 @@ export function CostCalculationPage() {
         techSalary += component.amount || 0;
       }
       
-      // 3. PIECE (сдельная) — ratePerUnit × количество записей (дней) за период
+      // 3. PIECE (сдельная) — ratePerUnit × количество записей (дней) за ПЕРИОД
       const pieceComponents = techSalaryComponents.filter(c => c.type === 'PIECE');
       for (const component of pieceComponents) {
         const projectId = component.projectId;
         const ratePerUnit = component.ratePerUnit || 0;
         
-        // Считаем количество записей (дней с часами) за период для этого сотрудника
+        // Считаем количество записей (дней с часами) за ПЕРИОД для этого сотрудника
         const entryCount = (timeEntries || [])
           .filter(t => 
             t.userId === component.userId && 
@@ -268,7 +277,7 @@ export function CostCalculationPage() {
         techSalary += entryCount * ratePerUnit;
       }
       
-      // 4. HOURLY (почасовая) — ratePerHour × сумма часов за период
+      // 4. HOURLY (почасовая) — ratePerHour × сумма часов за ПЕРИОД
       const hourlyComponents = techSalaryComponents.filter(c => c.type === 'HOURLY');
       for (const component of hourlyComponents) {
         const projectId = component.projectId;
@@ -283,6 +292,8 @@ export function CostCalculationPage() {
         
         techSalary += totalHours * ratePerHour;
       }
+      
+      console.log('✅ Final techSalary for', project.name, ':', techSalary);
       
       // Ручные данные
       const manual = manualData[project.id] || { salePrice: 0, materials: 0, transportToClient: 0, contractors: 0, creditPercent: 0 };
@@ -733,7 +744,7 @@ export function CostCalculationPage() {
                   
                   {/* Зарплата ТО */}
                   <td className="border border-slate-200 dark:border-slate-700 p-2 text-right tabular-nums text-slate-700 dark:text-slate-300 bg-green-50/30 dark:bg-green-900/10">
-                    {row.techSalary > 0 ? formatMoney(row.techSalary) : '—'}
+                    {formatMoney(row.techSalary || 0)}
                   </td>
                   
                   {/* Затраты на реализацию - основная колонка (Σ) */}
@@ -886,7 +897,7 @@ export function CostCalculationPage() {
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.salePriceManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(totals.materialsManual)}</td>
               <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{totals.techHours.toFixed(1)}</td>
-              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right bg-green-50/30 dark:bg-green-900/10">{totals.techSalary > 0 ? formatMoney(totals.techSalary) : '—'}</td>
+              <td className="border border-slate-300 dark:border-slate-600 p-2 text-right bg-green-50/30 dark:bg-green-900/10">{formatMoney(totals.techSalary || 0)}</td>
               {showExpensesDetail ? (
                 <>
                   <td className="border border-slate-300 dark:border-slate-600 p-2 text-right">{formatMoney(projectData.reduce((sum, row) => sum + row.expenses.employeeExpenses, 0))}</td>
