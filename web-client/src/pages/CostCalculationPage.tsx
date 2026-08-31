@@ -137,6 +137,20 @@ export function CostCalculationPage() {
       console.log('👷 Employee users:', empUsers.length, empUsers.map(u => ({id: u.id, name: u.name})));
       console.log('🧾 All salary components:', (salaryRes.value?.data || []).map(c => ({id: c.id, userId: c.userId, type: c.type, amount: c.amount, isActive: c.isActive})));
       
+      // 🔍 DEBUG: проверяем совпадение userId компонента с employee users
+      const salaryCompData = salaryRes.value?.data || [];
+      if (salaryCompData.length > 0) {
+        const firstComp = salaryCompData[0];
+        const employeeIds = empUsers.map(u => u.id);
+        console.log('🔍 First component userId:', firstComp.userId);
+        console.log('🔍 Employee user IDs:', employeeIds);
+        console.log('🔍 Is component userId in employee IDs?', employeeIds.includes(firstComp.userId));
+        
+        // Проверяем все пользователи с этим userId
+        const compUser = (usersRes.value?.data || []).find(u => u.id === firstComp.userId);
+        console.log('🔍 User with component userId:', compUser ? {id: compUser.id, name: compUser.name, role: compUser.role, isActive: compUser.isActive} : 'NOT FOUND');
+      }
+      
       // Загружаем сохраненные ручные данные из проектов
       const manual: Record<string, { salePrice: number; materials: number; transportToClient: number; contractors: number; creditPercent: number }> = {};
       projRes.status === 'fulfilled' && projRes.value.data.forEach((p: ProjectDto) => {
