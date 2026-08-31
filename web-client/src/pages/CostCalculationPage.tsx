@@ -131,9 +131,11 @@ export function CostCalculationPage() {
       
       // 🔍 DEBUG: проверяем загрузку компонентов зарплаты
       console.log('📊 Salary components loaded:', salaryRes.status, (salaryRes.value?.data || []).length, 'items');
+      console.log('💾 Raw salary components data:', salaryRes.value?.data);
       console.log('👥 Users loaded:', usersRes.status, (usersRes.value?.data || []).length, 'items');
       const empUsers = (usersRes.value?.data || []).filter((u: UserDto) => u.role === 'employee');
       console.log('👷 Employee users:', empUsers.length, empUsers.map(u => ({id: u.id, name: u.name})));
+      console.log('🧾 All salary components:', (salaryRes.value?.data || []).map(c => ({id: c.id, userId: c.userId, type: c.type, amount: c.amount, isActive: c.isActive})));
       
       // Загружаем сохраненные ручные данные из проектов
       const manual: Record<string, { salePrice: number; materials: number; transportToClient: number; contractors: number; creditPercent: number }> = {};
