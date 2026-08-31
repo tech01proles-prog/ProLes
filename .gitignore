@@ -7,74 +7,48 @@ dist/
 build/
 *.js.map
 *.ts.map
-*.jsx.map
-*.tsx.map
+
+# Logs
+*.log
 
 # Environment variables
 .env
 .env.local
-.env.*
-
-# Logs
-*.log
+*.env.*
 
 # IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
 
-# Python
+# Python artifacts (if any Python in project)
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.gitattributes
-.next
-out/
-.nyc_output
+
+# Coverage reports
 coverage/
 htmlcov/
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
+.coverage
 
-# Node.js
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-node_modules/
-dist/
-build/
-*.min.js
-*.min.css
-coverage/
-.nyc_output/
-.npm
-.yarn
-.pnp.*
-.pnp.js
-
-# TypeScript
-*.tsbuildinfo
-*.bak
-
-# General
+# Temporary files
+*.tmp
+*.temp
 .DS_Store
 Thumbs.db
+
+# MyPy cache
+.mypy_cache/
+.pytest_cache/
+
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.a
+*.o
+*.obj
+*.out
 ```
