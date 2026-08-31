@@ -119,7 +119,7 @@ export function CostCalculationPage() {
       const [projRes, expRes, timeRes, usersRes, salaryRes] = await Promise.allSettled([
         api.get<ProjectDto[]>('/projects'),
         api.get<ExpenseDto[]>('/expenses/all'),
-        api.get<TimeEntryDto[]>('/entries'),
+        api.get<TimeEntryDto[]>('/entries/all'),
         api.get<UserDto[]>('/users'),
         api.get<SalaryComponentDto[]>('/payroll/components/all'),
       ]);
