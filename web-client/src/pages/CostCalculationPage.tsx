@@ -196,7 +196,7 @@ export function CostCalculationPage() {
         .reduce((sum, t) => sum + t.hours, 0);
       
       // Расчет зарплаты тех.отдела (сотрудники с ролью 'employee')
-      // Только почасовые (HOURLY) и премии (BONUS), без FIXED
+      // Включая все типы компонентов: FIXED, PIECE, HOURLY, BONUS (как в SalaryCalculator.kt)
       // Фильтруем компоненты зарплаты по периоду
       
       // Определяем границы периода
@@ -223,31 +223,65 @@ export function CostCalculationPage() {
       const techEmployees = (allUsers || []).filter(u => u.role === 'employee');
       const techEmployeeIds = new Set(techEmployees.map(e => e.id));
       
-      // Фильтруем компоненты зарплаты: только для тех.сотрудников, активные, действующие в периоде, только HOURLY и BONUS
+      // Фильтруем компоненты зарплаты: только для тех.сотрудников, активные, действующие в периоде
+      // Включая все типы: FIXED, PIECE, HOURLY, BONUS (как в SalaryCalculator.kt)
       // Компонент действует в периоде, если есть пересечение [effectiveFrom, effectiveTo] и [startDate, endDate]
       const techSalaryComponents = (allSalaryComponents || []).filter(c => 
         techEmployeeIds.has(c.userId) &&
         c.isActive &&
-        (c.type === 'HOURLY' || c.type === 'BONUS') &&
         // Проверка пересечения периодов: компонент начал действовать до конца периода
         new Date(c.effectiveFrom) <= endDate &&
         // и либо нет даты окончания, либо она после начала периода
         (!c.effectiveTo || new Date(c.effectiveTo) >= startDate)
       );
       
-      // Считаем зарплату: для HOURLY - часы * ставка, для BONUS - сумма бонусов
+      // Считаем зарплату по аналогии с SalaryCalculator.kt
       let techSalary = 0;
-      for (const component of techSalaryComponents) {
-        if (component.type === 'HOURLY' && component.ratePerHour) {
-          // Для почасовых: берем часы из timeEntries для этого сотрудника по этому проекту в выбранном периоде
-          const employeeHours = (timeEntries || [])
-            .filter(t => t.userId === component.userId && t.projectId === project.id)
-            .reduce((sum, t) => sum + t.hours, 0);
-          techSalary += employeeHours * component.ratePerHour;
-        } else if (component.type === 'BONUS') {
-          // Для премий: просто добавляем сумму (премия применяется ко всему периоду действия)
-          techSalary += component.amount;
-        }
+      
+      // 1. FIXED (оклад) — суммируем все компоненты
+      const fixedComponents = techSalaryComponents.filter(c => c.type === 'FIXED');
+      for (const component of fixedComponents) {
+        techSalary += component.amount || 0;
+      }
+      
+      // 2. BONUS (премия) — суммируем все компоненты
+      const bonusComponents = techSalaryComponents.filter(c => c.type === 'BONUS');
+      for (const component of bonusComponents) {
+        techSalary += component.amount || 0;
+      }
+      
+      // 3. PIECE (сдельная) — ratePerUnit × количество записей (дней) за период
+      const pieceComponents = techSalaryComponents.filter(c => c.type === 'PIECE');
+      for (const component of pieceComponents) {
+        const projectId = component.projectId;
+        const ratePerUnit = component.ratePerUnit || 0;
+        
+        // Считаем количество записей (дней с часами) за период для этого сотрудника
+        const entryCount = (timeEntries || [])
+          .filter(t => 
+            t.userId === component.userId && 
+            (!projectId || t.projectId === projectId) &&
+            t.hours > 0
+          )
+          .length;
+        
+        techSalary += entryCount * ratePerUnit;
+      }
+      
+      // 4. HOURLY (почасовая) — ratePerHour × сумма часов за период
+      const hourlyComponents = techSalaryComponents.filter(c => c.type === 'HOURLY');
+      for (const component of hourlyComponents) {
+        const projectId = component.projectId;
+        const ratePerHour = component.ratePerHour || 0;
+        
+        const totalHours = (timeEntries || [])
+          .filter(t => 
+            t.userId === component.userId && 
+            (!projectId || t.projectId === projectId)
+          )
+          .reduce((sum, t) => sum + t.hours, 0);
+        
+        techSalary += totalHours * ratePerHour;
       }
       
       // Ручные данные
