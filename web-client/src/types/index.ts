@@ -76,6 +76,7 @@ export interface ExpenseDto {
   comment: string;
   receiptSubmitted: boolean;
   hasReceiptPhoto: boolean;
+  category: 'WORK' | 'PERSONAL';  // 🆕 Надкатегория
 }
 
 export interface WaypointDto {
@@ -246,11 +247,12 @@ export interface IncomeDto {
   projectId: string;
   projectName: string;
   date: string;
-  type: string;
+  type: string;                // 🆕 Тип дохода (HOUSEHOLD, CARD, CASH)
   name: string;
   amount: number;
   currency: string;
   comment: string;
+  category: 'WORK' | 'PERSONAL';  // 🆕 Надкатегория
   createdAt: number;
 }
 

@@ -18,6 +18,18 @@ const INCOME_TYPES = [
 const EXPENSE_TYPES = [
   { key: 'ROAD', label: 'Дорога', icon: '🚗' },
   { key: 'OTHER', label: 'Прочее', icon: '📦' },
+  { key: 'CONTRACTORS', label: 'Подрядчики', icon: '👷' },
+  { key: 'MATERIALS', label: 'Материалы', icon: '🧱' },
+  { key: 'EQUIPMENT', label: 'Оборудование', icon: '🔧' },
+  { key: 'TRANSPORT', label: 'Транспорт Доп.', icon: '🚚' },
+  { key: 'MANAGER_COMMISSION', label: 'Комиссия менеджеру', icon: '💼' },
+  { key: 'FINES', label: 'Штрафы', icon: '⚠️' },
+  { key: 'CREDIT', label: 'Кредит', icon: '🏦' },
+];
+
+const CATEGORIES = [
+  { key: 'WORK', label: 'Рабочие', icon: '💼' },
+  { key: 'PERSONAL', label: 'Иные', icon: '🏠' },
 ];
 
 const findIncomeType = (key: string) => INCOME_TYPES.find(t => t.key === key);
@@ -37,6 +49,7 @@ interface CombinedEntry {
   currency: string;
   comment: string;
   hasReceipt?: boolean;
+  entryCategory: 'WORK' | 'PERSONAL';  // 🆕 Надкатегория
 }
 
 export function ExpensesPage() {
@@ -65,6 +78,7 @@ export function ExpensesPage() {
   const [filterEntryType, setFilterEntryType] = useState<'all' | 'INCOME' | 'EXPENSE'>('all');
   const [hidePerDiem, setHidePerDiem] = useState(false);
   const [filterReceipt, setFilterReceipt] = useState<'all' | 'with' | 'without'>('all');
+  const [filterCategory, setFilterCategory] = useState<'all' | 'WORK' | 'PERSONAL'>('all');  // 🆕 Фильтр по надкатегории
   
   // Автоматически переключаем на 'all' если в URL есть userId или scope=all
   useEffect(() => {

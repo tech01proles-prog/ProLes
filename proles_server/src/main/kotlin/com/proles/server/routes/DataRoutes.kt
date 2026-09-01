@@ -685,7 +685,8 @@ fun Route.dataRoutes() {
                             currency = row[ExpensesTable.currency],
                             comment = row[ExpensesTable.comment],
                             receiptSubmitted = row[ExpensesTable.receiptSubmitted],
-                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto]  //  ДОБАВЬТЕ
+                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
+                            category = row[ExpensesTable.category]
                         )
                     }
             }
@@ -726,7 +727,8 @@ fun Route.dataRoutes() {
                             currency = row[ExpensesTable.currency],
                             comment = row[ExpensesTable.comment],
                             receiptSubmitted = row[ExpensesTable.receiptSubmitted],
-                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto]  //  ДОБАВЬТЕ
+                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
+                            category = row[ExpensesTable.category]
                         )
                     }
             }
@@ -751,7 +753,8 @@ fun Route.dataRoutes() {
                     it[currency] = exp.currency
                     it[comment] = exp.comment
                     it[receiptSubmitted] = exp.receiptSubmitted
-                    it[hasReceiptPhoto] = exp.hasReceiptPhoto  //  ДОБАВЬТЕ
+                    it[hasReceiptPhoto] = exp.hasReceiptPhoto
+                    it[category] = exp.category
                     it[createdAt] = System.currentTimeMillis()
                 }
                 exp.copy(id = id.toString())
@@ -775,7 +778,8 @@ fun Route.dataRoutes() {
                     it[currency] = exp.currency
                     it[comment] = exp.comment
                     it[receiptSubmitted] = exp.receiptSubmitted
-                    it[hasReceiptPhoto] = exp.hasReceiptPhoto  //  ДОБАВЬТЕ
+                    it[hasReceiptPhoto] = exp.hasReceiptPhoto
+                    it[category] = exp.category
                 }
                 exp
             }
@@ -820,9 +824,11 @@ fun Route.dataRoutes() {
                             projectId = row[IncomesTable.projectId]?.value?.toString(),
                             projectName = row.getOrNull(ProjectsTable.name) ?: "Без проекта",
                             date = row[IncomesTable.date].toString(),
+                            type = row[IncomesTable.type],
                             name = row[IncomesTable.name],
                             amount = row[IncomesTable.amount],
                             currency = row[IncomesTable.currency],
+                            category = row[IncomesTable.category],
                             createdAt = row[IncomesTable.createdAt]
                         )
                     }
@@ -857,9 +863,11 @@ fun Route.dataRoutes() {
                             projectId = row[IncomesTable.projectId]?.value?.toString(),
                             projectName = row.getOrNull(ProjectsTable.name) ?: "Без проекта",
                             date = row[IncomesTable.date].toString(),
+                            type = row[IncomesTable.type],
                             name = row[IncomesTable.name],
                             amount = row[IncomesTable.amount],
                             currency = row[IncomesTable.currency],
+                            category = row[IncomesTable.category],
                             createdAt = row[IncomesTable.createdAt]
                         )
                     }
@@ -877,9 +885,11 @@ fun Route.dataRoutes() {
                     it[userId] = UUID.fromString(income.userId)
                     if (!income.projectId.isNullOrBlank()) it[projectId] = UUID.fromString(income.projectId)
                     it[date] = KtLocalDate.parse(income.date)
+                    it[type] = income.type
                     it[name] = income.name
                     it[amount] = income.amount
                     it[currency] = income.currency
+                    it[category] = income.category
                     it[createdAt] = System.currentTimeMillis()
                 }
                 income.copy(id = id.toString(), createdAt = System.currentTimeMillis())
@@ -896,9 +906,11 @@ fun Route.dataRoutes() {
                     if (!income.projectId.isNullOrBlank()) it[projectId] = UUID.fromString(income.projectId)
                     else it[projectId] = null
                     it[date] = KtLocalDate.parse(income.date)
+                    it[type] = income.type
                     it[name] = income.name
                     it[amount] = income.amount
                     it[currency] = income.currency
+                    it[category] = income.category
                 }
                 income
             }
