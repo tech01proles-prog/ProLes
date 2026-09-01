@@ -244,6 +244,7 @@ export function ExpensesPage() {
       'Сумма': entry.amount,
       'Валюта': entry.currency,
       'Комментарий': entry.comment || '',
+      'Чек': entry.type === 'EXPENSE' ? (entry.hasReceipt ? 'Да' : 'Нет') : '-',
     }));
 
     // Добавляем итоговую строку с сальдо по валютам
@@ -258,6 +259,7 @@ export function ExpensesPage() {
         'Сумма': amount,
         'Валюта': currency,
         'Комментарий': '',
+        'Чек': '-',
       });
     });
 
@@ -276,6 +278,7 @@ export function ExpensesPage() {
       { wch: 15 }, // Сумма
       { wch: 8 },  // Валюта
       { wch: 30 }, // Комментарий
+      { wch: 6 },  // Чек
     ];
     ws['!cols'] = colWidths;
 
@@ -560,6 +563,7 @@ export function ExpensesPage() {
                   <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">Сумма</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Валюта</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Комментарий</th>
+                  <th className="px-4 py-3 text-center font-semibold text-slate-700 dark:text-slate-300">Чек</th>
                   <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300"></th>
                 </tr>
               </thead>
@@ -590,6 +594,17 @@ export function ExpensesPage() {
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{entry.currency}</td>
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-400 max-w-xs truncate" title={entry.comment}>
                         {entry.comment || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {entry.type === 'EXPENSE' ? (
+                          entry.hasReceipt ? (
+                            <span className="text-emerald-500 text-lg" title="Чек приложен">✓</span>
+                          ) : (
+                            <span className="text-red-500 text-lg" title="Чека нет">✕</span>
+                          )
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-600">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button 
