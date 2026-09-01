@@ -45,9 +45,11 @@ data class IncomeDto(
     val projectId: String? = null,
     val projectName: String = "",
     val date: String = "",
+    val type: String = "",        // 🆕 Тип дохода (HOUSEHOLD, CARD, CASH)
     val name: String = "",
     val amount: Double = 0.0,
     val currency: String = "RUB",
+    val category: String = "WORK", // 🆕 Надкатегория: WORK | PERSONAL
     val createdAt: Long = 0L
 )
 
@@ -64,7 +66,8 @@ data class ExpenseDto(
     val currency: String = "RUB",
     val comment: String = "",
     val receiptSubmitted: Boolean = false,
-    val hasReceiptPhoto: Boolean = false // 🆕
+    val hasReceiptPhoto: Boolean = false, // 🆕
+    val category: String = "WORK"         // 🆕 Надкатегория: WORK | PERSONAL
 )
 
 

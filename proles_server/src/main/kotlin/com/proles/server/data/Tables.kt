@@ -70,13 +70,14 @@ object ExpensesTable : UUIDTable("expenses") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.CASCADE)
     val date = date("date").index()
-    val type = varchar("type", 20)
+    val type = varchar("type", 50)
     val name = varchar("name", 255).default("")
     val amount = double("amount").default(0.0)
     val currency = varchar("currency", 3).default("RUB")
     val comment = text("comment").default("")
     val receiptSubmitted = bool("receipt_submitted").default(false)
     val hasReceiptPhoto = bool("has_receipt_photo").default(false)
+    val category = varchar("category", 20).default("WORK")  // 🆕 Надкатегория: WORK | PERSONAL
     val createdAt = long("created_at").default(0L)
 }
 
@@ -87,9 +88,11 @@ object IncomesTable : UUIDTable("incomes") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.CASCADE).nullable()
     val date = date("date").index()
+    val type = varchar("type", 50).default("")  // 🆕 Тип дохода: HOUSEHOLD, CARD, CASH
     val name = varchar("name", 255).default("")
     val amount = double("amount").default(0.0)
     val currency = varchar("currency", 3).default("RUB")
+    val category = varchar("category", 20).default("WORK")  // 🆕 Надкатегория: WORK | PERSONAL
     val createdAt = long("created_at").default(0L)
 }
 
