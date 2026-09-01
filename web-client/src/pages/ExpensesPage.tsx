@@ -64,6 +64,7 @@ export function ExpensesPage() {
   const [filterType, setFilterType] = useState('all');
   const [filterEntryType, setFilterEntryType] = useState<'all' | 'INCOME' | 'EXPENSE'>('all');
   const [hidePerDiem, setHidePerDiem] = useState(false);
+  const [filterReceipt, setFilterReceipt] = useState<'all' | 'with' | 'without'>('all');
   
   // Автоматически переключаем на 'all' если в URL есть userId или scope=all
   useEffect(() => {
@@ -164,6 +165,13 @@ export function ExpensesPage() {
     .filter(entry => filterEntryType === 'all' || entry.type === filterEntryType)
     .filter(entry => filterType === 'all' || entry.category === filterType)
     .filter(entry => !hidePerDiem || entry.category !== 'per_diem')
+    .filter(entry => {
+      if (filterReceipt === 'all') return true;
+      if (entry.type !== 'EXPENSE') return false;
+      if (filterReceipt === 'with') return entry.hasReceipt;
+      if (filterReceipt === 'without') return !entry.hasReceipt;
+      return true;
+    })
     .filter(entry => entry.date >= dateFrom && entry.date <= dateTo)
     .sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
@@ -495,7 +503,7 @@ export function ExpensesPage() {
 
         {/* Остальные фильтры — только в режиме «Все» */}
         {effectiveScope === 'all' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <select value={filterUser} onChange={(e) => setFilterUser(e.target.value)} className="input bg-white dark:bg-slate-900">
               <option value="all">Все сотрудники</option>
               {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -508,6 +516,11 @@ export function ExpensesPage() {
             <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input bg-white dark:bg-slate-900">
               <option value="all">Все категории</option>
               {[...INCOME_TYPES, ...EXPENSE_TYPES].map(t => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
+            </select>
+            <select value={filterReceipt} onChange={(e) => setFilterReceipt(e.target.value as 'all' | 'with' | 'without')} className="input bg-white dark:bg-slate-900">
+              <option value="all">Все чеки</option>
+              <option value="with">✓ С чеком</option>
+              <option value="without">✕ Без чека</option>
             </select>
           </div>
         )}
