@@ -18,18 +18,12 @@ const INCOME_TYPES = [
 const EXPENSE_TYPES = [
   { key: 'ROAD', label: 'Дорога', icon: '🚗' },
   { key: 'OTHER', label: 'Прочее', icon: '📦' },
-  { key: 'CONTRACTORS', label: 'Подрядчики', icon: '👷' },
   { key: 'MATERIALS', label: 'Материалы', icon: '🧱' },
   { key: 'EQUIPMENT', label: 'Оборудование', icon: '🔧' },
   { key: 'TRANSPORT', label: 'Транспорт Доп.', icon: '🚚' },
   { key: 'MANAGER_COMMISSION', label: 'Комиссия менеджеру', icon: '💼' },
   { key: 'FINES', label: 'Штрафы', icon: '⚠️' },
   { key: 'CREDIT', label: 'Кредит', icon: '🏦' },
-];
-
-const CATEGORIES = [
-  { key: 'WORK', label: 'Рабочие', icon: '💼' },
-  { key: 'PERSONAL', label: 'Иные', icon: '🏠' },
 ];
 
 const findIncomeType = (key: string) => INCOME_TYPES.find(t => t.key === key);
@@ -45,6 +39,7 @@ interface CombinedEntry {
   date: string;
   name: string;
   category: string;
+  subcategory?: string;       // 🆕 Подкатегория типа расхода
   amount: number;
   currency: string;
   comment: string;
@@ -74,11 +69,11 @@ export function ExpensesPage() {
   const [sortField, setSortField] = useState<'date' | 'amount' | 'type'>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [filterUser, setFilterUser] = useState(searchParams.get('userId') || 'all');
-  const [filterType, setFilterType] = useState('all');
   const [filterEntryType, setFilterEntryType] = useState<'all' | 'INCOME' | 'EXPENSE'>('all');
   const [hidePerDiem, setHidePerDiem] = useState(false);
   const [filterReceipt, setFilterReceipt] = useState<'all' | 'with' | 'without'>('all');
   const [filterCategory, setFilterCategory] = useState<'all' | 'WORK' | 'PERSONAL'>('all');  // 🆕 Фильтр по надкатегории
+  const [filterSubcategory, setFilterSubcategory] = useState('all');  // 🆕 Фильтр по подкатегории (типу расхода)
   
   // Автоматически переключаем на 'all' если в URL есть userId или scope=all
   useEffect(() => {
@@ -153,10 +148,12 @@ export function ExpensesPage() {
       projectName: i.projectName,
       date: i.date,
       name: findIncomeType(i.name)?.label || i.name,
-      category: i.name,
+      category: i.category,  // 🆕 Используем надкатегорию из DTO
+      subcategory: i.type,   // 🆕 Тип дохода как подкатегория для фильтрации
       amount: i.amount,
       currency: i.currency,
       comment: i.comment || '',
+      entryCategory: i.category as 'WORK' | 'PERSONAL',  // 🆕 Надкатегория
     })),
     ...expenses.map(e => ({
       id: e.id,
@@ -166,18 +163,21 @@ export function ExpensesPage() {
       projectName: e.projectName,
       date: e.date,
       name: e.name || findExpenseType(e.type)?.label || e.type,
-      category: e.type === 'PER_DIEM' || e.type === 'per_diem' || e.type === 'perdiem' ? 'per_diem' : (findExpenseType(e.type)?.label || e.type),
+      category: e.category,  // 🆕 Надкатегория из DTO
+      subcategory: e.type,   // 🆕 Тип расхода как подкатегория для фильтрации
       amount: e.amount,
       currency: e.currency,
       comment: e.comment || '',
       hasReceipt: e.receiptSubmitted || e.hasReceiptPhoto,
+      entryCategory: e.category as 'WORK' | 'PERSONAL',  // 🆕 Надкатегория
     })),
   ];
 
   const filtered = combinedEntries
     .filter(entry => effectiveScope !== 'all' || filterUser === 'all' || entry.userId === filterUser)
     .filter(entry => filterEntryType === 'all' || entry.type === filterEntryType)
-    .filter(entry => filterType === 'all' || entry.category === filterType)
+    .filter(entry => filterCategory === 'all' || entry.entryCategory === filterCategory)  // 🆕 Фильтр по надкатегории
+    .filter(entry => filterSubcategory === 'all' || entry.subcategory === filterSubcategory)  // 🆕 Фильтр по подкатегории (типу)
     .filter(entry => !hidePerDiem || entry.category !== 'per_diem')
     .filter(entry => {
       if (filterReceipt === 'all') return true;
@@ -517,7 +517,7 @@ export function ExpensesPage() {
 
         {/* Остальные фильтры — только в режиме «Все» */}
         {effectiveScope === 'all' && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <select value={filterUser} onChange={(e) => setFilterUser(e.target.value)} className="input bg-white dark:bg-slate-900">
               <option value="all">Все сотрудники</option>
               {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -527,8 +527,13 @@ export function ExpensesPage() {
               <option value="INCOME">📈 Доходы</option>
               <option value="EXPENSE">📉 Расходы</option>
             </select>
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="input bg-white dark:bg-slate-900">
-              <option value="all">Все категории</option>
+            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value as 'all' | 'WORK' | 'PERSONAL')} className="input bg-white dark:bg-slate-900">
+              <option value="all">Все надкатегории</option>
+              <option value="WORK">💼 Рабочие</option>
+              <option value="PERSONAL">🏠 Иные</option>
+            </select>
+            <select value={filterSubcategory} onChange={(e) => setFilterSubcategory(e.target.value)} className="input bg-white dark:bg-slate-900">
+              <option value="all">Все типы</option>
               {[...INCOME_TYPES, ...EXPENSE_TYPES].map(t => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
             </select>
             <select value={filterReceipt} onChange={(e) => setFilterReceipt(e.target.value as 'all' | 'with' | 'without')} className="input bg-white dark:bg-slate-900">

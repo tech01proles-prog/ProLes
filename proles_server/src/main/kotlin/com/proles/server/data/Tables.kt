@@ -78,6 +78,7 @@ object ExpensesTable : UUIDTable("expenses") {
     val receiptSubmitted = bool("receipt_submitted").default(false)
     val hasReceiptPhoto = bool("has_receipt_photo").default(false)
     val category = varchar("category", 20).default("WORK")  // 🆕 Надкатегория: WORK | PERSONAL
+    val subcategory = varchar("subcategory", 50).nullable()  // 🆕 Подкатегория типа расхода
     val createdAt = long("created_at").default(0L)
 }
 
@@ -93,6 +94,7 @@ object IncomesTable : UUIDTable("incomes") {
     val amount = double("amount").default(0.0)
     val currency = varchar("currency", 3).default("RUB")
     val category = varchar("category", 20).default("WORK")  // 🆕 Надкатегория: WORK | PERSONAL
+    val subcategory = varchar("subcategory", 50).nullable()  // 🆕 Подкатегория типа расхода
     val createdAt = long("created_at").default(0L)
 }
 

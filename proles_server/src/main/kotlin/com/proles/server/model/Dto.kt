@@ -50,6 +50,7 @@ data class IncomeDto(
     val amount: Double = 0.0,
     val currency: String = "RUB",
     val category: String = "WORK", // 🆕 Надкатегория: WORK | PERSONAL
+    val subcategory: String? = null, // 🆕 Подкатегория типа расхода
     val createdAt: Long = 0L
 )
 
@@ -67,7 +68,8 @@ data class ExpenseDto(
     val comment: String = "",
     val receiptSubmitted: Boolean = false,
     val hasReceiptPhoto: Boolean = false, // 🆕
-    val category: String = "WORK"         // 🆕 Надкатегория: WORK | PERSONAL
+    val category: String = "WORK",         // 🆕 Надкатегория: WORK | PERSONAL
+    val subcategory: String? = null        // 🆕 Подкатегория типа расхода
 )
 
 
