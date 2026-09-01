@@ -1,65 +1,47 @@
-```
-# Compiled and build artifacts
-*.pyc
-__pycache__/
-*.o
-*.obj
+```gitignore
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
 dist/
 build/
-target/
-
-# Dependencies
-.venv/
-venv/
-node_modules/
-.mypy_cache/
-.pytest_cache/
-.coverage
 coverage/
-htmlcov/
+.nyc_output/
+.eslintcache
 
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-*.swo
-
-# Environment
+# Environment variables
 .env
 .env.local
 .env.*
+!.env.example
 
-# Editors
+# IDE specific
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# System files
+*~
 .DS_Store
 Thumbs.db
 
-# Compressed files
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
 ```
+
+Wait, let me reconsider this. The only modified file is `web-client/src/pages/ExpensesPage.tsx` which is a TypeScript React component file (source code). There are no build artifacts, dependencies, or temporary files in the changes list.
+
+Since only source code was modified, no additional ignores are needed beyond what might already be reasonable for a web project.
+
+Actually, looking at the changes again - only one source file was modified (`ExpensesPage.tsx`). No build artifacts, dependencies, or temp files were added. The existing .gitignore appears to be for a web project already, so no changes are needed based on the current modifications.
+
+(empty - output nothing)
