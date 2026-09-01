@@ -130,25 +130,29 @@ export function CostCalculationPage() {
       setAllSalaryComponents(salaryRes.status === 'fulfilled' ? (salaryRes.value.data || []) : []);
       
       // 🔍 DEBUG: проверяем загрузку компонентов зарплаты
-      console.log('📊 Salary components loaded:', salaryRes.status, (salaryRes.value?.data || []).length, 'items');
-      console.log('💾 Raw salary components data:', salaryRes.value?.data);
-      console.log('👥 Users loaded:', usersRes.status, (usersRes.value?.data || []).length, 'items');
-      const empUsers = (usersRes.value?.data || []).filter((u: UserDto) => u.role === 'employee');
-      console.log('👷 Employee users:', empUsers.length, empUsers.map(u => ({id: u.id, name: u.name})));
-      console.log('🧾 All salary components:', (salaryRes.value?.data || []).map(c => ({id: c.id, userId: c.userId, type: c.type, amount: c.amount, isActive: c.isActive})));
-      
-      // 🔍 DEBUG: проверяем совпадение userId компонента с employee users
-      const salaryCompData = salaryRes.value?.data || [];
-      if (salaryCompData.length > 0) {
-        const firstComp = salaryCompData[0];
-        const employeeIds = empUsers.map(u => u.id);
-        console.log('🔍 First component userId:', firstComp.userId);
-        console.log('🔍 Employee user IDs:', employeeIds);
-        console.log('🔍 Is component userId in employee IDs?', employeeIds.includes(firstComp.userId));
+      if (salaryRes.status === 'fulfilled') {
+        console.log('📊 Salary components loaded:', salaryRes.status, (salaryRes.value.data || []).length, 'items');
+        console.log('💾 Raw salary components data:', salaryRes.value.data);
+        const salaryCompData = salaryRes.value.data || [];
+        console.log('🧾 All salary components:', salaryCompData.map((c: SalaryComponentDto) => ({id: c.id, userId: c.userId, type: c.type, amount: c.amount, isActive: c.isActive})));
         
-        // Проверяем все пользователи с этим userId
-        const compUser = (usersRes.value?.data || []).find(u => u.id === firstComp.userId);
-        console.log('🔍 User with component userId:', compUser ? {id: compUser.id, name: compUser.name, role: compUser.role, isActive: compUser.isActive} : 'NOT FOUND');
+        // 🔍 DEBUG: проверяем совпадение userId компонента с employee users
+        if (salaryCompData.length > 0 && usersRes.status === 'fulfilled') {
+          const firstComp = salaryCompData[0];
+          const empUsers = (usersRes.value.data || []).filter((u: UserDto) => u.role === 'employee');
+          console.log('👷 Employee users:', empUsers.length, empUsers.map((u: UserDto) => ({id: u.id, name: u.name})));
+          const employeeIds = empUsers.map((u: UserDto) => u.id);
+          console.log('🔍 First component userId:', firstComp.userId);
+          console.log('🔍 Employee user IDs:', employeeIds);
+          console.log('🔍 Is component userId in employee IDs?', employeeIds.includes(firstComp.userId));
+          
+          // Проверяем все пользователи с этим userId
+          const compUser = (usersRes.value.data || []).find((u: UserDto) => u.id === firstComp.userId);
+          console.log('🔍 User with component userId:', compUser ? {id: compUser.id, name: compUser.name, role: compUser.role} : 'NOT FOUND');
+        }
+      }
+      if (usersRes.status === 'fulfilled') {
+        console.log('👥 Users loaded:', usersRes.status, (usersRes.value.data || []).length, 'items');
       }
       
       // Загружаем сохраненные ручные данные из проектов
@@ -220,26 +224,6 @@ export function CostCalculationPage() {
       // Расчет зарплаты тех.отдела (сотрудники с ролью 'employee')
       // Включая все типы компонентов: FIXED, PIECE, HOURLY, BONUS (как в SalaryCalculator.kt)
       // Фильтруем компоненты зарплаты по периоду
-      
-      // Определяем границы периода
-      let startDate: Date;
-      let endDate: Date;
-      
-      if (periodType === 'month') {
-        const [year, month] = selectedPeriod.split('-').map(Number);
-        startDate = new Date(year, month - 1, 1);
-        endDate = new Date(year, month, 0, 23, 59, 59, 999);
-      } else if (periodType === 'quarter') {
-        const [year, quarterStr] = selectedPeriod.split('-Q');
-        const quarter = parseInt(quarterStr, 10);
-        const startMonth = (quarter - 1) * 3;
-        startDate = new Date(+year, startMonth, 1);
-        endDate = new Date(+year, startMonth + 3, 0, 23, 59, 59, 999);
-      } else {
-        const year = parseInt(selectedPeriod, 10);
-        startDate = new Date(year, 0, 1);
-        endDate = new Date(year, 11, 31, 23, 59, 59, 999);
-      }
       
       // Находим сотрудников тех.отдела (роль 'employee')
       const techEmployees = (allUsers || []).filter(u => u.role === 'employee');
