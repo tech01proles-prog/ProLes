@@ -191,9 +191,8 @@ export function ProjectDetailPage() {
                 {Object.entries(stats.expensesByType).sort((a, b) => b[1] - a[1]).map(([type, amount]) => {
                   const pct = (amount / stats.totalExpenses) * 100;
                   const labels: Record<string, string> = {
-                    CONTRACTORS: '👷 Подрядчики', MATERIALS: '🧱 Материалы', EQUIPMENT: '🔧 Оборудование',
-                    TRANSPORT: '🚚 Транспорт Доп.', ROAD: '🚗 Транспорт', MANAGER_COMMISSION: '💼 Комиссия',
-                    FINES: '⚠️ Штрафы', CREDIT: '🏦 Кредит', OTHER: '📦 Другое',
+                    CONTRACTORS: '👷 Подрядчики', ROAD: '🚗 Дорога', PER_DIEM: '💵 Суточные',
+                    CASH: '💰 Наличные', CARD: '💳 Карта', OTHER: '📦 Прочее',
                   };
                   return (
                     <div key={type}>

@@ -16,14 +16,12 @@ const INCOME_TYPES = [
 ];
 
 const EXPENSE_TYPES = [
+  { key: 'CONTRACTORS', label: 'Подрядчики', icon: '👷' },
   { key: 'ROAD', label: 'Дорога', icon: '🚗' },
+  { key: 'PER_DIEM', label: 'Суточные', icon: '💵' },
+  { key: 'CASH', label: 'Наличные', icon: '💰' },
+  { key: 'CARD', label: 'Карта', icon: '💳' },
   { key: 'OTHER', label: 'Прочее', icon: '📦' },
-  { key: 'MATERIALS', label: 'Материалы', icon: '🧱' },
-  { key: 'EQUIPMENT', label: 'Оборудование', icon: '🔧' },
-  { key: 'TRANSPORT', label: 'Транспорт Доп.', icon: '🚚' },
-  { key: 'MANAGER_COMMISSION', label: 'Комиссия менеджеру', icon: '💼' },
-  { key: 'FINES', label: 'Штрафы', icon: '⚠️' },
-  { key: 'CREDIT', label: 'Кредит', icon: '🏦' },
 ];
 
 const findIncomeType = (key: string) => INCOME_TYPES.find(t => t.key === key);

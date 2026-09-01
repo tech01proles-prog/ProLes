@@ -1,41 +1,54 @@
 ```
-# Compiled and build artifacts
-*.class
-*.o
-*.obj
-*.exe
-*.dll
-*.so
-*.a
-*.out
+# Build artifacts
 build/
-target/
+dist/
+*.jar
+*.war
+*.class
 
 # Dependencies
-.gradle/
 node_modules/
+.gradle/
+target/
+
+# Python related
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+
+# Virtual environments
 venv/
 .venv/
-__pycache__/
-.mypy_cache/
-.pytest_cache/
-dist/
+env/
+.ENV
 
-# Logs and temp files
-*.log
-*.tmp
+# IDE specific
+.vscode/
+.idea/
 *.swp
+*.swo
 
-# Environment
+# Logs
+*.log
+
+# Environment variables
 .env
 .env.local
 *.env.*
 
-# Editors
-.vscode/
-.idea/
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
 
-# System files
+# OS generated files
 .DS_Store
 Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
 ```
