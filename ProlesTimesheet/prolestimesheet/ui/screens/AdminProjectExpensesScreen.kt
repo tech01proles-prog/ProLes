@@ -283,7 +283,7 @@ private fun AddExpenseDialog(
     onDismiss: () -> Unit,
     onSave: (type: String, name: String, amount: Double, currency: String, comment: String) -> Unit
 ) {
-    var selectedType by remember { mutableStateOf("MATERIALS") }
+    var selectedType by remember { mutableStateOf("ROAD") }
     var name by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var currency by remember { mutableStateOf("RUB") }
@@ -400,12 +400,9 @@ private fun AddExpenseDialog(
  */
 private val EXPENSE_TYPE_LABELS = mapOf(
     "CONTRACTORS" to ("Подрядчики" to "👷"),
-    "MATERIALS" to ("Материалы" to "🧱"),
-    "EQUIPMENT" to ("Оборудование" to "🔧"),
-    "TRANSPORT" to ("Транспорт Доп." to "🚚"),
-    "ROAD" to ("Транспорт" to "🚗"),
-    "MANAGER_COMMISSION" to ("Комиссия менеджеру" to "💼"),
-    "FINES" to ("Штрафы" to "⚠️"),
-    "CREDIT" to ("Кредит" to "🏦"),
-    "OTHER" to ("Другое" to "📦")
+    "ROAD" to ("Дорога" to "🚗"),
+    "PER_DIEM" to ("Суточные" to "💵"),
+    "CASH" to ("Наличные" to "💰"),
+    "CARD" to ("Карта" to "💳"),
+    "OTHER" to ("Прочее" to "📦")
 )

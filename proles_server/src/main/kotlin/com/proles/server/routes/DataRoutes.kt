@@ -56,14 +56,11 @@ data class UserPermissionOverrideDto(
 object ExpenseTypes {
     val ALL = listOf(
         "CONTRACTORS" to "👷 Подрядчики",
-        "MATERIALS" to "🧱 Материалы",
-        "EQUIPMENT" to "🔧 Оборудование",
-        "TRANSPORT" to "🚚 Транспорт Доп.",
-        "ROAD" to "🚗 Транспорт",  // для обратной совместимости
-        "MANAGER_COMMISSION" to "💼 Комиссия менеджеру",
-        "FINES" to "⚠️ Штрафы",
-        "CREDIT" to "🏦 Кредит",
-        "OTHER" to "📦 Другое"
+        "ROAD" to "🚗 Дорога",
+        "PER_DIEM" to "💵 Суточные",
+        "CASH" to "💰 Наличные",
+        "CARD" to "💳 Карта",
+        "OTHER" to "📦 Прочее"
     )
 
     fun label(type: String): String = ALL.find { it.first == type }?.second ?: type
