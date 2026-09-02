@@ -331,7 +331,12 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
             return AddEntryResult.Error("Нельзя добавлять часы за будущие даты")
         }
         if (hours <= 0f) return AddEntryResult.Error("Часы должны быть больше 0")
-        if (!canAddHours(date, hours)) return AddEntryResult.Error("Нельзя добавить более 24 часов в день")
+        
+        // 🔥 ПРОВЕРКА: не превышаем ли 24 часа в дне
+        val totalHoursAfterAdd = getTotalHoursForDate(date) + hours
+        if (totalHoursAfterAdd > 24f) {
+            return AddEntryResult.Error("Нельзя добавить более 24 часов в день (сейчас: ${getTotalHoursForDate(date)}, добавляем: $hours)")
+        }
 
         val existingEntry = entries.value.find {
             it.userId == currentUser.id && it.projectId == projectId && it.date == date
