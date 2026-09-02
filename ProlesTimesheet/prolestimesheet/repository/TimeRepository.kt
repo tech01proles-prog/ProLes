@@ -81,8 +81,9 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
     suspend fun loadIncomes(userId: String) {
         // Сначала показываем кэш
         _incomes.value = LocalDataStore.getIncomes(context, userId)
-        // Затем тянем актуальные с сервера
-        val remote = apiClient.fetchIncomes(userId).getOrDefault(emptyList())
+        // Затем тянем актуальные с сервера — используем fetchAllIncomes для всех пользователей
+        // чтобы избежать проблем с правами доступа к фильтрации по userId на сервере
+        val remote = apiClient.fetchAllIncomes().getOrDefault(emptyList()).filter { it.userId == userId }
         _incomes.value = remote
         LocalDataStore.saveIncomes(context, userId, remote)
     }
