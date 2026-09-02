@@ -136,6 +136,16 @@ object LocalDataStore {
     suspend fun getVacations(ctx: Context, uid: String): List<VacationPeriod> =
         ctx.dataStore.data.first()[vacationsKey(uid)]?.let { json.decodeFromString(it) } ?: emptyList()
 
+    // 💵 Доходы (Incomes)
+    private fun incomesKey(userId: String) = stringPreferencesKey("incomes_${userId}_json")
+
+    suspend fun saveIncomes(ctx: Context, uid: String, incomes: List<Income>) {
+        ctx.dataStore.edit { it[incomesKey(uid)] = json.encodeToString(incomes) }
+    }
+
+    suspend fun getIncomes(ctx: Context, uid: String): List<Income> =
+        ctx.dataStore.data.first()[incomesKey(uid)]?.let { json.decodeFromString(it) } ?: emptyList()
+
     suspend fun saveProfiles(ctx: Context, profiles: List<User>) {
         ctx.dataStore.edit { it[PROFILES_KEY] = json.encodeToString(profiles) }
     }
