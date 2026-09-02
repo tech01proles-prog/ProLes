@@ -79,24 +79,41 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
     // 💵 INCOMES
     // ═══════════════════════════════════════════════════════════
     suspend fun loadIncomes(userId: String) {
+        // Сначала показываем кэш
+        _incomes.value = LocalDataStore.getIncomes(context, userId)
+        // Затем тянем актуальные с сервера
         val remote = apiClient.fetchIncomes(userId).getOrDefault(emptyList())
         _incomes.value = remote
+        LocalDataStore.saveIncomes(context, userId, remote)
     }
 
     suspend fun loadAllIncomes() {
         val remote = apiClient.fetchAllIncomes().getOrDefault(emptyList())
-        if (remote.isNotEmpty()) _incomes.value = remote
+        if (remote.isNotEmpty()) {
+            _incomes.value = remote
+            // Сохраняем в кэш для текущего пользователя
+            _user.value?.let { user ->
+                LocalDataStore.saveIncomes(context, user.id, remote.filter { it.userId == user.id })
+            }
+        }
     }
 
     suspend fun addIncome(income: Income) {
         apiClient.createIncome(income).onSuccess { created ->
             _incomes.value = listOf(created) + _incomes.value
+            // Сохраняем в кэш
+            LocalDataStore.saveIncomes(context, income.userId, _incomes.value.filter { it.userId == income.userId })
         }
     }
 
     suspend fun removeIncome(incomeId: String) {
+        val income = _incomes.value.firstOrNull { it.id == incomeId }
         apiClient.deleteIncome(incomeId).onSuccess {
             _incomes.value = _incomes.value.filter { it.id != incomeId }
+            // Обновляем кэш
+            income?.let { inc ->
+                LocalDataStore.saveIncomes(context, inc.userId, _incomes.value.filter { it.userId == inc.userId })
+            }
         }
     }
 
@@ -213,12 +230,18 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
 
             // 🆕 Доходы всех сотрудников (для аналитики)
             val allInc = apiClient.fetchAllIncomes().getOrDefault(emptyList())
-            if (allInc.isNotEmpty()) _incomes.value = allInc
+            if (allInc.isNotEmpty()) {
+                _incomes.value = allInc
+                // Сохраняем в кэш для текущего пользователя
+                LocalDataStore.saveIncomes(context, resp.user.id, allInc.filter { it.userId == resp.user.id })
+            }
             Log.d("Repository", "✅ Admin data loaded: ${allEntries.size} entries, ${allExp.size} expenses")
         } else {
             loadBusinessTrips(resp.user.id)
             // Для обычного сотрудника — только свои расходы
             loadExpenses(resp.user.id)
+            // 🆕 Загружаем доходы сотрудника
+            loadIncomes(resp.user.id)
         }
         resp.user
     }
@@ -282,12 +305,15 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
             val cachedEntries = LocalDataStore.getEntries(context, user.id)
             if (cachedEntries.isNotEmpty()) _entries.value = cachedEntries
 
-            // 🆕 Доходы всех сотрудников
-            val allInc = apiClient.fetchAllIncomes().getOrDefault(emptyList())
-            if (allInc.isNotEmpty()) _incomes.value = allInc
+            // 🆕 Доходы всех сотрудников из кэша
+            val cachedIncomes = LocalDataStore.getIncomes(context, user.id)
+            if (cachedIncomes.isNotEmpty()) _incomes.value = cachedIncomes
         } else {
             // Для сотрудника — свои расходы из кэша
             loadExpenses(user.id)
+            // 🆕 Доходы из кэша
+            val cachedIncomes = LocalDataStore.getIncomes(context, user.id)
+            if (cachedIncomes.isNotEmpty()) _incomes.value = cachedIncomes
         }
 
         // 🔥 В ФОНЕ: обновляем данные с сервера (если сеть есть)
@@ -297,6 +323,7 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
                 loadBusinessTrips(user.id)
                 loadDayOffs(user.id)  // Перезагрузит и обновит кэш
                 loadUserPermissions()
+                loadIncomes(user.id)  // 🆕 Обновляем доходы с сервера
 
                 if (user.role == "admin" || user.role == "director" || user.role == "superadmin") {
                     loadEmployees()

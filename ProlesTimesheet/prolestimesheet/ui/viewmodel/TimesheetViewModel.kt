@@ -221,7 +221,10 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 // Восстанавливаем данные из локального кэша (быстрый старт)
                 val cachedEntries = LocalDataStore.getEntries(context, savedUser.id)
                 val cachedVacations = LocalDataStore.getVacations(context, savedUser.id)
+                val cachedIncomes = LocalDataStore.getIncomes(context, savedUser.id)
                 repository.restoreSession(savedUser, cachedEntries, cachedVacations)
+                // Восстанавливаем доходы из кэша
+                repository._incomes.value = cachedIncomes
 
                 // 🔥 СРАЗУ показываем приложение (из кэша)
                 _uiState.value = UiState.Authenticated
@@ -236,6 +239,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                         repository.loadEntries(savedUser.id)
                         repository.loadDayOffs(savedUser.id)
                         repository.loadUserPermissions()
+                        repository.loadIncomes(savedUser.id)  // 🆕 Загружаем доходы
                         android.util.Log.d("ViewModel", "✅ Background sync completed")
                     } catch (e: Exception) {
                         // Ожидаемо при офлайне — просто логируем, не роняем пользователя
