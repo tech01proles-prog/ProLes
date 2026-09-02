@@ -1208,8 +1208,11 @@ fun CalendarGrid(
 ) {
     val daysInMonth = month.lengthOfMonth()
     val firstDayOffset = (java.time.LocalDate.of(month.year, month.monthValue, 1).dayOfWeek.value - 1) % 7
+    val totalCells = firstDayOffset + daysInMonth
+    val weeksNeeded = (totalCells + 6) / 7 // Адаптивное количество строк
+    
     val cells = mutableListOf<LocalDate?>()
-    for (i in 0 until 35) {
+    for (i in 0 until weeksNeeded * 7) {
         if (i < firstDayOffset) cells.add(null)
         else {
             val day = i - firstDayOffset + 1
@@ -1232,7 +1235,7 @@ fun CalendarGrid(
         }
         Spacer(Modifier.height(4.dp))
 
-        for (week in 0 until 5) {
+        for (week in 0 until weeksNeeded) {
             Row(Modifier.fillMaxWidth().height(45.dp)) {
                 for (dayInWeek in 0 until 7) {
                     val date = cells.getOrNull(week * 7 + dayInWeek)
@@ -1310,8 +1313,11 @@ fun VacationCalendar(
     val daysInMonth = month.lengthOfMonth()
     val firstDayOfMonth = java.time.LocalDate.of(month.year, month.monthValue, 1)
     val firstDayOffset = (firstDayOfMonth.dayOfWeek.value - 1) % 7
+    val totalCells = firstDayOffset + daysInMonth
+    val weeksNeeded = (totalCells + 6) / 7 // Адаптивное количество строк
+    
     val cells = mutableListOf<LocalDate?>()
-    for (i in 0 until 35) {
+    for (i in 0 until weeksNeeded * 7) {
         if (i < firstDayOffset) cells.add(null)
         else {
             val day = i - firstDayOffset + 1
@@ -1360,7 +1366,7 @@ fun VacationCalendar(
         }
         Spacer(Modifier.height(4.dp))
 
-        for (week in 0 until 5) {
+        for (week in 0 until weeksNeeded) {
             Row(Modifier.fillMaxWidth().height(40.dp)) {
                 for (dayInWeek in 0 until 7) {
                     val cellIndex = week * 7 + dayInWeek
