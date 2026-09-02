@@ -400,13 +400,18 @@ fun TimesheetScreen(
                     Button(
                         onClick = {
                             if (selectedProject != null && hours.isNotEmpty()) {
-                                viewModel.addEntry(
+                                val result = viewModel.addEntry(
                                     selectedProject!!.id,
                                     selectedProject!!.name,
                                     hours.toFloatOrNull() ?: 0f,
                                     selectedCountry,
                                     comment
                                 )
+                                if (result is TimesheetViewModel.AddEntryResult.Error) {
+                                    Toast.makeText(context, "❌ ${result.message}", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "✅ Часы добавлены", Toast.LENGTH_SHORT).show()
+                                }
                             }
                             clearAll()
                         },

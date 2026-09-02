@@ -1,1 +1,56 @@
-Nothing should be ignored since the changes only include a Kotlin source file (.kt) which is source code.
+```
+# Kotlin/Android build artifacts
+*.class
+*.jar
+*.war
+*.aar
+*.apk
+*.dex
+
+# Gradle
+.gradle/
+build/
+!gradle-wrapper.properties
+
+# Android
+*.ap_
+*.aab
+*.apks
+*.apex
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Compiled Python (if any Python in project)
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.*
+
+# Dependencies
+node_modules/
+venv/
+.venv/
+target/
+.mypy_cache/
+.pytest_cache/
+coverage/
+htmlcov/
+.coverage
+
+# OS generated files
+.DS_Store
+Thumbs.db
+```
