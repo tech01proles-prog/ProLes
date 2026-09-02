@@ -591,7 +591,7 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
     }
 
     suspend fun loadExpenses(userId: String) {
-        val remote = apiClient.fetchExpenses(userId).getOrDefault(emptyList())
+        val remote = apiClient.fetchAllExpenses().getOrDefault(emptyList()).filter { it.userId == userId }
         _expenses.value = remote
     }
 
