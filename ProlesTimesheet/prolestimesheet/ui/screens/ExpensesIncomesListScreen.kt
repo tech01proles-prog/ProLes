@@ -135,8 +135,6 @@ fun ExpensesIncomesListScreen(
     val totalIncomes = filteredIncomes.sumOf { it.amount }
     val balance = totalIncomes - totalExpenses
     
-    var showAddExpenseDialog by remember { mutableStateOf(false) }
-    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -162,14 +160,6 @@ fun ExpensesIncomesListScreen(
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddExpenseDialog = true },
-                containerColor = Color(0xFFC62828)
-            ) {
-                Icon(Icons.Default.Add, "Добавить расход")
-            }
         }
     ) { padding ->
         Column(
@@ -302,27 +292,6 @@ fun ExpensesIncomesListScreen(
                 currentYearMonth = selectedYearMonth,
                 onMonthSelected = { selectedYearMonth = it; showMonthPicker = false },
                 onDismiss = { showMonthPicker = false }
-            )
-        }
-        
-        // Диалог добавления расхода
-        if (showAddExpenseDialog) {
-            AddExpenseDialog(
-                defaultDate = today,
-                onDismiss = { showAddExpenseDialog = false },
-                onSave = { type, name, amount, currency, comment ->
-                    viewModel.addExpense(
-                        projectId = "",
-                        projectName = null,
-                        date = today,
-                        type = type,
-                        name = name,
-                        amount = amount,
-                        currency = currency,
-                        comment = comment
-                    )
-                    showAddExpenseDialog = false
-                }
             )
         }
     }
