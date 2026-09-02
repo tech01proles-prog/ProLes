@@ -33,7 +33,6 @@ import kotlinx.datetime.*
 import java.time.LocalTime
 import java.time.format.TextStyle
 import java.util.Locale
-import kotlin.random.Random
 
 @Composable
 fun HomeScreen(
@@ -193,9 +192,6 @@ fun HomeScreen(
             )
         }
 
-        // 🎡 Колесо удачи
-        FortuneWheelCard()
-
         // 💡 Мотивационная карточка
         MotivationCard()
     }
@@ -343,105 +339,6 @@ private fun MotivationCard() {
             Text(quote, style = MaterialTheme.typography.bodyMedium,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                 color = MaterialTheme.colorScheme.onSurface)
-        }
-    }
-}
-
-// 🎡 Колесо удачи с анимацией вращения и случайными предсказаниями
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun FortuneWheelCard() {
-    val fortunes = listOf(
-        "🍀 Вас ждёт удачный день!",
-        "⭐ Сегодня звёзды на вашей стороне!",
-        "💰 Финансовая удача близка!",
-        "🎯 Цель будет достигнута!",
-        "❤️ Вас ждёт приятная встреча!",
-        "🚀 Новое начинание увенчается успехом!",
-        "🌟 День принесёт неожиданные возможности!",
-        "💪 Вы справитесь со всеми задачами!",
-        "🎁 Вас ждёт приятный сюрприз!",
-        "🔥 Энергия и вдохновение наполнят вас!"
-    )
-    
-    var isSpinning by remember { mutableStateOf(false) }
-    var currentFortune by remember { mutableStateOf(fortunes.first()) }
-    var rotationAngle by remember { mutableStateOf(0f) }
-    
-    val infiniteTransition = rememberInfiniteTransition(label = "spin")
-    val spinOffset by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(3000, easing = LinearEasing), RepeatMode.Restart),
-        label = "spin"
-    )
-    
-    val displayRotation = if (isSpinning) spinOffset else rotationAngle
-    
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable {
-                if (!isSpinning) {
-                    isSpinning = true
-                    rotationAngle += 720 + Random.nextInt(360)
-                    currentFortune = fortunes.random()
-                    // Запуск корутины для задержки
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                        delay(1500)
-                        isSpinning = false
-                    }
-                }
-            },
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFFD700)
-        ),
-        elevation = CardDefaults.cardElevation(4.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                "🎡 Колесо удачи",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Spacer(Modifier.height(12.dp))
-            
-            // Вращающаяся иконка колеса
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .rotate(displayRotation),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Casino,
-                    contentDescription = "Колесо удачи",
-                    tint = Color.White,
-                    modifier = Modifier.size(48.dp)
-                )
-            }
-            
-            Spacer(Modifier.height(12.dp))
-            
-            Text(
-                text = currentFortune,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = Color.White,
-                fontWeight = FontWeight.Medium
-            )
-            
-            Spacer(Modifier.height(8.dp))
-            
-            Text(
-                text = if (isSpinning) "Вращаем..." else "Нажмите, чтобы крутить",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.8f),
-                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-            )
         }
     }
 }
