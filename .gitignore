@@ -10,47 +10,32 @@
 # Gradle
 .gradle/
 build/
-!gradle-wrapper.properties
 
-# Android
-*.ap_
-*.aab
-*.apks
-*.apex
+# Local configuration file (sdk path, etc)
+local.properties
 
-# IDE
-.idea/
+# Android Studio
 *.iml
-*.ipr
 *.iws
-.vscode/
+.idea/
+captures/
+.externalNativeBuild
+.cxx/
 
-# Compiled Python (if any Python in project)
-*.pyc
-__pycache__/
-*.pyo
-*.pyd
-
-# Logs
+# Temporary files
+*.tmp
+*.temp
 *.log
 
-# Environment variables
+# Environment
 .env
 .env.local
 .env.*
 
 # Dependencies
 node_modules/
-venv/
 .venv/
-target/
-.mypy_cache/
-.pytest_cache/
-coverage/
-htmlcov/
-.coverage
-
-# OS generated files
-.DS_Store
-Thumbs.db
+venv/
+__pycache__/
+*.egg-info/
 ```
