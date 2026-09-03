@@ -2,6 +2,7 @@ package com.example.prolestimesheet.ui.screens
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -784,12 +785,13 @@ fun TimesheetScreen(
         var expenseSubcategory by remember { mutableStateOf<String?>(null) }
         var showExpenseCategoryPicker by remember { mutableStateOf(false) }
 
-        // 📸 Состояния для загрузки фото чека
+        // 📸 Состояния для загрузки фото/файлов чека (поддержка нескольких файлов)
         var currentPhotoExpenseId by remember { mutableStateOf<String?>(null) }
+        var expensePhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
         var showPhotoSourceDialog by remember { mutableStateOf(false) }
         var uploadingPhoto by remember { mutableStateOf(false) }
 
-        // 📷 Лаунчер камеры
+        // 📷 Лаунчер камеры (для одного фото)
         val cameraLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.TakePicturePreview()
         ) { bitmap: Bitmap? ->
@@ -804,35 +806,60 @@ fun TimesheetScreen(
             }
         }
 
-        // 🖼️ Лаунчер галереи (современный Photo Picker для Android 13+)
-        val galleryLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.PickVisualMedia()
-        ) { uri ->
+        // 🖼️ Лаунчер галереи для нескольких фото (Android 13+)
+        val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+        ) { uris ->
             val expenseId = currentPhotoExpenseId
             currentPhotoExpenseId = null
-            if (uri != null && expenseId != null) {
-                try {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                    val bitmap = BitmapFactory.decodeStream(inputStream)
-                    inputStream?.close()
-                    if (bitmap != null) {
-                        processPhoto(bitmap, expenseId)
-                        uploadingPhoto = false
-                    } else {
-                        Toast.makeText(context, "❌ Не удалось загрузить фото", Toast.LENGTH_SHORT).show()
-                        uploadingPhoto = false
+            if (uris.isNotEmpty() && expenseId != null) {
+                uris.forEach { uri ->
+                    try {
+                        val inputStream = context.contentResolver.openInputStream(uri)
+                        val bitmap = BitmapFactory.decodeStream(inputStream)
+                        inputStream?.close()
+                        if (bitmap != null) {
+                            processPhoto(bitmap, expenseId)
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "❌ Ошибка при загрузке фото: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
-                } catch (e: Exception) {
-                    Toast.makeText(context, "❌ Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
-                    uploadingPhoto = false
                 }
-            } else if (uri == null) {
-                Toast.makeText(context, "Выбор отменён", Toast.LENGTH_SHORT).show()
+                uploadingPhoto = false
+            } else {
                 uploadingPhoto = false
             }
         }
 
-        // 🖼️ Fallback для старых Android (< 13)
+        // 📎 Лаунчер для выбора любых файлов (документы, PDF и т.д.)
+        val documentPickerLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetMultipleContents()
+        ) { uris ->
+            val expenseId = currentPhotoExpenseId
+            currentPhotoExpenseId = null
+            if (uris.isNotEmpty() && expenseId != null) {
+                uris.forEach { uri ->
+                    try {
+                        val inputStream = context.contentResolver.openInputStream(uri)
+                        val bitmap = BitmapFactory.decodeStream(inputStream)
+                        inputStream?.close()
+                        if (bitmap != null) {
+                            processPhoto(bitmap, expenseId)
+                        } else {
+                            // Это не изображение, просто прикрепляем файл
+                            viewModel.attachFileToExpense(expenseId, uri, context)
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "❌ Ошибка при загрузке файла: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                uploadingPhoto = false
+            } else {
+                uploadingPhoto = false
+            }
+        }
+
+        // 🖼️ Fallback для старых Android (< 13) - выбор одного изображения
         val legacyGalleryLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent()
         ) { uri ->
@@ -931,35 +958,6 @@ fun TimesheetScreen(
                                 modifier = Modifier.weight(1f)
                             )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            FilterChip(
-                                selected = expenseSubcategory == "HOTEL",
-                                onClick = { expenseSubcategory = if (expenseSubcategory == "HOTEL") null else "HOTEL" },
-                                label = { Text("Отель") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            FilterChip(
-                                selected = expenseSubcategory == "MATERIALS",
-                                onClick = { expenseSubcategory = if (expenseSubcategory == "MATERIALS") null else "MATERIALS" },
-                                label = { Text("Материалы") },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    } else if (expenseCategory == "PERSONAL") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            FilterChip(
-                                selected = expenseSubcategory == "PERSONAL_TRANSPORT",
-                                onClick = { expenseSubcategory = if (expenseSubcategory == "PERSONAL_TRANSPORT") null else "PERSONAL_TRANSPORT" },
-                                label = { Text("Транспорт") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            FilterChip(
-                                selected = expenseSubcategory == "PERSONAL_MEALS",
-                                onClick = { expenseSubcategory = if (expenseSubcategory == "PERSONAL_MEALS") null else "PERSONAL_MEALS" },
-                                label = { Text("Питание") },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
                     }
 
                     // 🆕 Плавная анимация поля "Название расхода"
@@ -1023,31 +1021,65 @@ fun TimesheetScreen(
                         }
                     }
 
-                    // 📸 Кнопка добавления фото чека
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    // 📸 Кнопки добавления фото/файлов чека (поддержка нескольких файлов)
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                     ) {
-                        if (uploadingPhoto) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text("Загрузка фото...", style = MaterialTheme.typography.bodySmall)
-                        } else {
-                            OutlinedButton(
-                                onClick = {
-                                    currentPhotoExpenseId = "temp_expense_${System.currentTimeMillis()}"
-                                    showPhotoSourceDialog = true
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("📷 Фото чека")
+                        Text("Прикрепить файлы чека", style = MaterialTheme.typography.labelMedium)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (uploadingPhoto) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text("Загрузка...", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                            } else {
+                                OutlinedButton(
+                                    onClick = {
+                                        currentPhotoExpenseId = "temp_expense_${System.currentTimeMillis()}"
+                                        showPhotoSourceDialog = true
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("📷 Фото")
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        currentPhotoExpenseId = "temp_expense_${System.currentTimeMillis()}"
+                                        multiplePhotoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.PhotoLibrary, null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("🖼️ Галерея")
+                                }
                             }
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                currentPhotoExpenseId = "temp_expense_${System.currentTimeMillis()}"
+                                documentPickerLauncher.launch("*/*")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !uploadingPhoto
+                        ) {
+                            Icon(Icons.Default.AttachMoney, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("📎 Прикрепить документы (PDF, DOC и др.)")
+                        }
+                        if (expensePhotos.isNotEmpty()) {
+                            Text("Прикреплено файлов: ${expensePhotos.size}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
 
@@ -1134,7 +1166,7 @@ fun TimesheetScreen(
             )
         }
 
-        // 📸 Диалог выбора источника фото
+        // 📸 Диалог выбора источника фото (упрощённый - только камера)
         if (showPhotoSourceDialog) {
             AlertDialog(
                 onDismissRequest = { showPhotoSourceDialog = false },
@@ -1153,24 +1185,7 @@ fun TimesheetScreen(
                             Spacer(Modifier.width(8.dp))
                             Text("📷 Сделать фото")
                         }
-                        OutlinedButton(
-                            onClick = {
-                                showPhotoSourceDialog = false
-                                uploadingPhoto = true
-                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                                    galleryLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
-                                } else {
-                                    legacyGalleryLauncher.launch("image/*")
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.PhotoLibrary, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("🖼️ Выбрать из галереи")
-                        }
+                        Text("Для выбора нескольких фото или документов используйте кнопки в основном диалоге", style = MaterialTheme.typography.bodySmall)
                     }
                 },
                 confirmButton = {
@@ -1273,40 +1288,7 @@ fun TimesheetScreen(
                             }
                         )
                     }
-                    
-                    // 🔹 Выбор подкатегории (опционально)
-                    if (incomeCategory == "SALARY") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            FilterChip(
-                                selected = incomeSubcategory == "ADVANCE",
-                                onClick = { incomeSubcategory = if (incomeSubcategory == "ADVANCE") null else "ADVANCE" },
-                                label = { Text("Аванс") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            FilterChip(
-                                selected = incomeSubcategory == "SALARY_FINAL",
-                                onClick = { incomeSubcategory = if (incomeSubcategory == "SALARY_FINAL") null else "SALARY_FINAL" },
-                                label = { Text("ЗП") },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    } else if (incomeCategory == "BONUS") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            FilterChip(
-                                selected = incomeSubcategory == "PROJECT_BONUS",
-                                onClick = { incomeSubcategory = if (incomeSubcategory == "PROJECT_BONUS") null else "PROJECT_BONUS" },
-                                label = { Text("За проект") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            FilterChip(
-                                selected = incomeSubcategory == "PERFORMANCE_BONUS",
-                                onClick = { incomeSubcategory = if (incomeSubcategory == "PERFORMANCE_BONUS") null else "PERFORMANCE_BONUS" },
-                                label = { Text("KPI") },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    
+
                     OutlinedTextField(
                         value = incomeName,
                         onValueChange = { incomeName = it },

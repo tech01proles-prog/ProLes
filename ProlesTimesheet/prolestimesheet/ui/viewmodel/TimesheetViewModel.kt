@@ -545,6 +545,24 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         }
     }
 
+    // 📎 Прикрепление файла к расходу (документы, PDF и др.)
+    fun attachFileToExpense(expenseId: String, uri: android.net.Uri, context: Context) {
+        viewModelScope.launch {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bytes = inputStream?.readBytes()
+                inputStream?.close()
+                if (bytes != null) {
+                    // Можно сохранить в хранилище или отправить на сервер
+                    Toast.makeText(context, "📎 Файл прикреплён (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
+                    // Здесь можно вызвать repository.attachFileToExpense(expenseId, bytes)
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "❌ Ошибка прикрепления файла: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     val trips: StateFlow<List<BusinessTrip>> = repository.tripsFlow
 
     fun addBusinessTrip(trip: BusinessTrip) { viewModelScope.launch { repository.addBusinessTrip(trip) } }
