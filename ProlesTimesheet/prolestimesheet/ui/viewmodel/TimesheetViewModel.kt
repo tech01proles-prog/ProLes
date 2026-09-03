@@ -313,12 +313,14 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
             repository.updateProject(project)
         }
     }
-    fun getTotalHoursForDate(date: LocalDate): Float {
-        return entries.value.filter { it.date == date }.sumOf { it.hours.toDouble() }.toFloat()
+    fun getTotalHoursForDate(date: LocalDate, userId: String? = null): Float {
+        return entries.value.filter { 
+            it.date == date && (userId == null || it.userId == userId)
+        }.sumOf { it.hours.toDouble() }.toFloat()
     }
 
-    fun canAddHours(date: LocalDate, additionalHours: Float): Boolean {
-        return getTotalHoursForDate(date) + additionalHours <= 24f
+    fun canAddHours(date: LocalDate, additionalHours: Float, userId: String): Boolean {
+        return getTotalHoursForDate(date, userId) + additionalHours <= 24f
     }
 
     fun addEntry(projectId: String, projectName: String, hours: Float, country: String, comment: String): AddEntryResult {
@@ -332,10 +334,10 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         }
         if (hours <= 0f) return AddEntryResult.Error("Часы должны быть больше 0")
         
-        // 🔥 ПРОВЕРКА: не превышаем ли 24 часа в дне
-        val totalHoursAfterAdd = getTotalHoursForDate(date) + hours
+        // 🔥 ПРОВЕРКА: не превышаем ли 24 часа в дне (только для текущего пользователя)
+        val totalHoursAfterAdd = getTotalHoursForDate(date, currentUser.id) + hours
         if (totalHoursAfterAdd > 24f) {
-            return AddEntryResult.Error("Нельзя добавить более 24 часов в день (сейчас: ${getTotalHoursForDate(date)}, добавляем: $hours)")
+            return AddEntryResult.Error("Нельзя добавить более 24 часов в день (сейчас: ${getTotalHoursForDate(date, currentUser.id)}, добавляем: $hours)")
         }
 
         val existingEntry = entries.value.find {

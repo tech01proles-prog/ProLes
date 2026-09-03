@@ -171,13 +171,19 @@ fun TimesheetScreen(
     // 🔥 Общая функция обработки фото
     fun processPhoto(bitmap: Bitmap, expenseId: String) {
         val stream = ByteArrayOutputStream()
-        val scaledBitmap = scaleBitmapIfNeeded(bitmap, maxWidth = 1024)
+        val scaledBitmap = bitmap.scaleDown(maxWidth = 1024)
         scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, stream)
         val bytes = stream.toByteArray()
         Toast.makeText(context, "📤 Фото отправлено (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
-        // Сохраняем байты во временной переменной или сразу передаём в viewModel
-        // Для простоты - вызываем viewModel.uploadReceiptPhoto
         viewModel.uploadReceiptPhoto(expenseId, bytes)
+    }
+
+    // 🆕 Функция масштабирования битмапа
+    fun Bitmap.scaleDown(maxWidth: Int = 1024): Bitmap {
+        if (this.width <= maxWidth) return this
+        val ratio = maxWidth.toFloat() / this.width
+        val newHeight = (this.height * ratio).toInt()
+        return this.scale(maxWidth, newHeight)
     }
 
 
@@ -400,13 +406,18 @@ fun TimesheetScreen(
                     Button(
                         onClick = {
                             if (selectedProject != null && hours.isNotEmpty()) {
-                                viewModel.addEntry(
+                                val result = viewModel.addEntry(
                                     selectedProject!!.id,
                                     selectedProject!!.name,
                                     hours.toFloatOrNull() ?: 0f,
                                     selectedCountry,
                                     comment
                                 )
+                                if (result is TimesheetViewModel.AddEntryResult.Error) {
+                                    Toast.makeText(context, "❌ ${result.message}", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "✅ Часы добавлены", Toast.LENGTH_SHORT).show()
+                                }
                             }
                             clearAll()
                         },
