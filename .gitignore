@@ -1,47 +1,66 @@
-```
-# Kotlin/Android build artifacts
+# Compiled and build artifacts
 *.class
-*.jar
-*.war
-*.ear
-*.iml
-*.iws
-*.ipr
-out/
-build/
-.gradle/
-target/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+*.pyc
+__pycache__/
 
 # Dependencies
 node_modules/
-vendor/bundle/
-.libs/
+venv/
+.venv/
+.mypy_cache/
+.pytest_cache/
+target/
+.gradle/
+build/
+dist/
 
-# IDE files
-.idea/
+# Editors
 .vscode/
+.idea/
 *.swp
 *.swo
 
-# Logs
-*.log
-
-# Environment
+# System
+.DS_Store
+Thumbs.db
 .env
 .env.local
 *.env.*
 
-# Coverage reports
+# Logs and coverage
+*.log
+*.tmp
 coverage/
 htmlcov/
-*.coverage
+.coverage
 
-# Distribution / packaging
-dist/
-*.tar.gz
+# Compressed files
 *.zip
-
-# OS generated files
-.DS_Store
-Thumbs.db
-```
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst

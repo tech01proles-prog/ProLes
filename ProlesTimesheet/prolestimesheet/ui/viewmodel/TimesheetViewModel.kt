@@ -557,8 +557,17 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
     }
 
 
-    fun addIncome(projectId: String?, projectName: String, date: kotlinx.datetime.LocalDate,
-                  name: String, amount: Double, currency: String) {
+    fun addIncome(
+        projectId: String?,
+        projectName: String,
+        date: kotlinx.datetime.LocalDate,
+        name: String,
+        amount: Double,
+        currency: String,
+        type: String = "WORK",
+        category: String = "SALARY",
+        subcategory: String? = null
+    ) {
         val currentUser = user.value ?: return
         viewModelScope.launch {
             val income = Income(
@@ -568,7 +577,10 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 date = date,
                 name = name,
                 amount = amount,
-                currency = currency
+                currency = currency,
+                type = type,
+                category = category,
+                subcategory = subcategory
             )
             repository.addIncome(income)
         }

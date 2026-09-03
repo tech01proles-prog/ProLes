@@ -773,11 +773,16 @@ fun TimesheetScreen(
         var name by remember { mutableStateOf("") }
         var currency by remember { mutableStateOf("RUB") }
         var comment by remember { mutableStateOf("") }
-
+        
         // 🆕 Состояния для смены проекта в диалоге
         var dialogProjectId by remember { mutableStateOf(selectedProject?.id ?: "") }
         var dialogProjectName by remember { mutableStateOf(selectedProject?.name ?: "") }
         var showProjectPicker by remember { mutableStateOf(false) }
+        
+        // 🆕 Поля для категории и подкатегории расхода
+        var expenseCategory by remember { mutableStateOf("WORK") }
+        var expenseSubcategory by remember { mutableStateOf<String?>(null) }
+        var showExpenseCategoryPicker by remember { mutableStateOf(false) }
 
         // 📸 Состояния для загрузки фото чека
         var currentPhotoExpenseId by remember { mutableStateOf<String?>(null) }
@@ -891,6 +896,70 @@ fun TimesheetScreen(
                         Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(dialogProjectName.ifBlank { "Выберите проект" })
+                    }
+                    
+                    // 🔹 Выбор надкатегории расхода
+                    OutlinedButton(
+                        onClick = { showExpenseCategoryPicker = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            when (expenseCategory) {
+                                "WORK" -> "💼 Рабочий расход"
+                                "PERSONAL" -> "👤 Личный расход"
+                                "OTHER" -> "📦 Прочий расход"
+                                else -> expenseCategory
+                            }
+                        )
+                    }
+                    
+                    // 🔹 Выбор подкатегории (опционально)
+                    if (expenseCategory == "WORK") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            FilterChip(
+                                selected = expenseSubcategory == "TRANSPORT",
+                                onClick = { expenseSubcategory = if (expenseSubcategory == "TRANSPORT") null else "TRANSPORT" },
+                                label = { Text("Транспорт") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = expenseSubcategory == "MEALS",
+                                onClick = { expenseSubcategory = if (expenseSubcategory == "MEALS") null else "MEALS" },
+                                label = { Text("Питание") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            FilterChip(
+                                selected = expenseSubcategory == "HOTEL",
+                                onClick = { expenseSubcategory = if (expenseSubcategory == "HOTEL") null else "HOTEL" },
+                                label = { Text("Отель") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = expenseSubcategory == "MATERIALS",
+                                onClick = { expenseSubcategory = if (expenseSubcategory == "MATERIALS") null else "MATERIALS" },
+                                label = { Text("Материалы") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    } else if (expenseCategory == "PERSONAL") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            FilterChip(
+                                selected = expenseSubcategory == "PERSONAL_TRANSPORT",
+                                onClick = { expenseSubcategory = if (expenseSubcategory == "PERSONAL_TRANSPORT") null else "PERSONAL_TRANSPORT" },
+                                label = { Text("Транспорт") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = expenseSubcategory == "PERSONAL_MEALS",
+                                onClick = { expenseSubcategory = if (expenseSubcategory == "PERSONAL_MEALS") null else "PERSONAL_MEALS" },
+                                label = { Text("Питание") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
 
                     // 🆕 Плавная анимация поля "Название расхода"
@@ -1007,7 +1076,9 @@ fun TimesheetScreen(
                                     name = if (expenseType == "OTHER") name else "",
                                     amount = amount.toDouble(),
                                     currency = currency,
-                                    comment = comment
+                                    comment = comment,
+                                    category = expenseCategory,
+                                    subcategory = expenseSubcategory
                                 )
                                 showExpenseDialog = false
                             }
@@ -1022,6 +1093,46 @@ fun TimesheetScreen(
                 TextButton(onClick = { showExpenseDialog = false }) { Text("Отмена") }
             }
         )
+        
+        // 📂 Диалог выбора надкатегории расхода
+        if (showExpenseCategoryPicker) {
+            AlertDialog(
+                onDismissRequest = { showExpenseCategoryPicker = false },
+                title = { Text("Выберите категорию расхода") },
+                text = {
+                    LazyColumn {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    expenseCategory = "WORK"
+                                    expenseSubcategory = null
+                                    showExpenseCategoryPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("💼 Рабочий расход", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    expenseCategory = "PERSONAL"
+                                    expenseSubcategory = null
+                                    showExpenseCategoryPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("👤 Личный расход", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    expenseCategory = "OTHER"
+                                    expenseSubcategory = null
+                                    showExpenseCategoryPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("📦 Прочий расход", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
 
         // 📸 Диалог выбора источника фото
         if (showPhotoSourceDialog) {
@@ -1106,6 +1217,13 @@ fun TimesheetScreen(
         var incomeProjectId by remember { mutableStateOf<String?>(null) }
         var incomeProjectName by remember { mutableStateOf("Без проекта") }
         var showIncomeProjectPicker by remember { mutableStateOf(false) }
+        
+        // 🆕 Поля для типа, категории и подкатегории дохода
+        var incomeType by remember { mutableStateOf("WORK") }
+        var incomeCategory by remember { mutableStateOf("SALARY") }
+        var incomeSubcategory by remember { mutableStateOf<String?>(null) }
+        var showIncomeTypePicker by remember { mutableStateOf(false) }
+        var showIncomeCategoryPicker by remember { mutableStateOf(false) }
 
         AlertDialog(
             onDismissRequest = { showIncomeDialog = false },
@@ -1120,6 +1238,75 @@ fun TimesheetScreen(
                         Spacer(Modifier.width(8.dp))
                         Text(incomeProjectName)
                     }
+                    
+                    // 🔹 Выбор типа дохода
+                    OutlinedButton(
+                        onClick = { showIncomeTypePicker = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.TrendingUp, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            when (incomeType) {
+                                "WORK" -> "💼 Доход от работы"
+                                "PERSONAL" -> "👤 Личный доход"
+                                "OTHER" -> "📦 Прочий доход"
+                                else -> incomeType
+                            }
+                        )
+                    }
+                    
+                    // 🔹 Выбор надкатегории
+                    OutlinedButton(
+                        onClick = { showIncomeCategoryPicker = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Folder, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            when (incomeCategory) {
+                                "SALARY" -> "💰 Зарплата"
+                                "BONUS" -> "🎁 Бонус"
+                                "GIFT" -> "🎄 Подарок"
+                                "OTHER" -> "📦 Прочее"
+                                else -> incomeCategory
+                            }
+                        )
+                    }
+                    
+                    // 🔹 Выбор подкатегории (опционально)
+                    if (incomeCategory == "SALARY") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            FilterChip(
+                                selected = incomeSubcategory == "ADVANCE",
+                                onClick = { incomeSubcategory = if (incomeSubcategory == "ADVANCE") null else "ADVANCE" },
+                                label = { Text("Аванс") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = incomeSubcategory == "SALARY_FINAL",
+                                onClick = { incomeSubcategory = if (incomeSubcategory == "SALARY_FINAL") null else "SALARY_FINAL" },
+                                label = { Text("ЗП") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    } else if (incomeCategory == "BONUS") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            FilterChip(
+                                selected = incomeSubcategory == "PROJECT_BONUS",
+                                onClick = { incomeSubcategory = if (incomeSubcategory == "PROJECT_BONUS") null else "PROJECT_BONUS" },
+                                label = { Text("За проект") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = incomeSubcategory == "PERFORMANCE_BONUS",
+                                onClick = { incomeSubcategory = if (incomeSubcategory == "PERFORMANCE_BONUS") null else "PERFORMANCE_BONUS" },
+                                label = { Text("KPI") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    
                     OutlinedTextField(
                         value = incomeName,
                         onValueChange = { incomeName = it },
@@ -1160,7 +1347,10 @@ fun TimesheetScreen(
                                 date = selectedDate,
                                 name = incomeName,
                                 amount = amount,
-                                currency = incomeCurrency
+                                currency = incomeCurrency,
+                                type = incomeType,
+                                category = incomeCategory,
+                                subcategory = incomeSubcategory
                             )
                             showIncomeDialog = false
                         }
@@ -1170,6 +1360,92 @@ fun TimesheetScreen(
             },
             dismissButton = { TextButton(onClick = { showIncomeDialog = false }) { Text("Отмена") } }
         )
+
+        // 📋 Диалог выбора типа дохода
+        if (showIncomeTypePicker) {
+            AlertDialog(
+                onDismissRequest = { showIncomeTypePicker = false },
+                title = { Text("Выберите тип дохода") },
+                text = {
+                    LazyColumn {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    incomeType = "WORK"
+                                    showIncomeTypePicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("💼 Доход от работы", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    incomeType = "PERSONAL"
+                                    showIncomeTypePicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("👤 Личный доход", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    incomeType = "OTHER"
+                                    showIncomeTypePicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("📦 Прочий доход", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+        
+        // 📂 Диалог выбора надкатегории дохода
+        if (showIncomeCategoryPicker) {
+            AlertDialog(
+                onDismissRequest = { showIncomeCategoryPicker = false },
+                title = { Text("Выберите категорию дохода") },
+                text = {
+                    LazyColumn {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    incomeCategory = "SALARY"
+                                    incomeSubcategory = null
+                                    showIncomeCategoryPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("💰 Зарплата", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    incomeCategory = "BONUS"
+                                    incomeSubcategory = null
+                                    showIncomeCategoryPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("🎁 Бонус", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    incomeCategory = "GIFT"
+                                    incomeSubcategory = null
+                                    showIncomeCategoryPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("🎄 Подарок", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    incomeCategory = "OTHER"
+                                    incomeSubcategory = null
+                                    showIncomeCategoryPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("📦 Прочее", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
 
         if (showIncomeProjectPicker) {
             AlertDialog(
