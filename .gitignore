@@ -3,39 +3,45 @@
 *.class
 *.jar
 *.war
-*.aar
-*.apk
-*.dex
-
-# Gradle
-.gradle/
-build/
-
-# Local configuration file (sdk path, etc)
-local.properties
-
-# Android Studio
+*.ear
 *.iml
 *.iws
-.idea/
-captures/
-.externalNativeBuild
-.cxx/
+*.ipr
+out/
+build/
+.gradle/
+target/
 
-# Temporary files
-*.tmp
-*.temp
+# Dependencies
+node_modules/
+vendor/bundle/
+.libs/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
 *.log
 
 # Environment
 .env
 .env.local
-.env.*
+*.env.*
 
-# Dependencies
-node_modules/
-.venv/
-venv/
-__pycache__/
-*.egg-info/
+# Coverage reports
+coverage/
+htmlcov/
+*.coverage
+
+# Distribution / packaging
+dist/
+*.tar.gz
+*.zip
+
+# OS generated files
+.DS_Store
+Thumbs.db
 ```
