@@ -503,7 +503,9 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         name: String = "", // название для OTHER
         amount: Double,
         currency: String = "RUB",
-        comment: String = ""
+        comment: String = "",
+        category: String = "WORK",
+        subcategory: String? = null
     ) {
         val currentUser = user.value ?: return
         viewModelScope.launch {
@@ -516,7 +518,9 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 name = name,
                 amount = amount,
                 currency = currency,
-                comment = comment
+                comment = comment,
+                category = category,
+                subcategory = subcategory
             )
             repository.addExpense(expense)
         }

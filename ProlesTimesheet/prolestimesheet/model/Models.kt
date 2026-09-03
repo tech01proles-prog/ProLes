@@ -114,6 +114,9 @@ data class Income(
     val name: String = "",
     val amount: Double = 0.0,
     val currency: String = "RUB",
+    val type: String = "WORK", // 🆕 Тип дохода: WORK | PERSONAL | OTHER
+    val category: String = "SALARY", // 🆕 Надкатегория: SALARY | BONUS | GIFT | OTHER
+    val subcategory: String? = null, // 🆕 Подкатегория типа дохода
     val createdAt: Long = 0L
 )
 
@@ -131,7 +134,9 @@ data class Expense(
     val currency: String = "RUB",
     val comment: String = "",
     val receiptSubmitted: Boolean = false,
-    val hasReceiptPhoto: Boolean = false
+    val hasReceiptPhoto: Boolean = false,
+    val category: String = "WORK",         // 🆕 Надкатегория: WORK | PERSONAL
+    val subcategory: String? = null        // 🆕 Подкатегория типа расхода
 )
 
 @SuppressLint("UnsafeOptInUsageError")
