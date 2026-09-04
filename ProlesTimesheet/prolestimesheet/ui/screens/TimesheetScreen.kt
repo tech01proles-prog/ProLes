@@ -169,6 +169,14 @@ fun TimesheetScreen(
     // - Выходной (сб/вс) + запись в day_offs = РАБОЧИЙ (исключение)
     val isCurrentlyDayOff = if (isWeekend) !isUserDayOff else isUserDayOff
 
+    // 🆕 Функция масштабирования битмапа
+    fun Bitmap.scaleDown(maxWidth: Int = 1024): Bitmap {
+        if (this.width <= maxWidth) return this
+        val ratio = maxWidth.toFloat() / this.width
+        val newHeight = (this.height * ratio).toInt()
+        return this.scale(maxWidth, newHeight)
+    }
+
     // 🔥 Общая функция обработки фото
     fun processPhoto(bitmap: Bitmap, expenseId: String) {
         val stream = ByteArrayOutputStream()
@@ -177,14 +185,6 @@ fun TimesheetScreen(
         val bytes = stream.toByteArray()
         Toast.makeText(context, "📤 Фото отправлено (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
         viewModel.uploadReceiptPhoto(expenseId, bytes)
-    }
-
-    // 🆕 Функция масштабирования битмапа
-    fun Bitmap.scaleDown(maxWidth: Int = 1024): Bitmap {
-        if (this.width <= maxWidth) return this
-        val ratio = maxWidth.toFloat() / this.width
-        val newHeight = (this.height * ratio).toInt()
-        return this.scale(maxWidth, newHeight)
     }
 
 

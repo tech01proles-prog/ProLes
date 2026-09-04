@@ -2,6 +2,7 @@ package com.example.prolestimesheet.ui.viewmodel
 
 import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.prolestimesheet.data.LocalDataStore
@@ -224,7 +225,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 val cachedIncomes = LocalDataStore.getIncomes(context, savedUser.id)
                 repository.restoreSession(savedUser, cachedEntries, cachedVacations)
                 // Восстанавливаем доходы из кэша
-                repository._incomes.value = cachedIncomes
+                repository.incomes.value = cachedIncomes
 
                 // 🔥 СРАЗУ показываем приложение (из кэша)
                 _uiState.value = UiState.Authenticated
