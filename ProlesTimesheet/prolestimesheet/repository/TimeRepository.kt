@@ -51,6 +51,9 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
 
     private val _incomes = MutableStateFlow<List<Income>>(emptyList())
     val incomesFlow: StateFlow<List<Income>> = _incomes.asStateFlow()
+    
+    // 🔥 Делаем _incomes public для доступа из ViewModel
+    val incomes: MutableStateFlow<List<Income>> = _incomes
 
     private val _trips = MutableStateFlow<List<BusinessTrip>>(emptyList())
     val tripsFlow: StateFlow<List<BusinessTrip>> = _trips.asStateFlow()

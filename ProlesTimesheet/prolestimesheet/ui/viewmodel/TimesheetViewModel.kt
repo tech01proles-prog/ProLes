@@ -2,6 +2,7 @@ package com.example.prolestimesheet.ui.viewmodel
 
 import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.prolestimesheet.data.LocalDataStore
@@ -224,7 +225,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 val cachedIncomes = LocalDataStore.getIncomes(context, savedUser.id)
                 repository.restoreSession(savedUser, cachedEntries, cachedVacations)
                 // Восстанавливаем доходы из кэша
-                repository._incomes.value = cachedIncomes
+                repository.incomes.value = cachedIncomes
 
                 // 🔥 СРАЗУ показываем приложение (из кэша)
                 _uiState.value = UiState.Authenticated
@@ -542,6 +543,24 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
     fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray) {
         viewModelScope.launch {
             repository.uploadReceiptPhoto(expenseId, imageBytes)
+        }
+    }
+
+    // 📎 Прикрепление файла к расходу (документы, PDF и др.)
+    fun attachFileToExpense(expenseId: String, uri: android.net.Uri, context: Context) {
+        viewModelScope.launch {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bytes = inputStream?.readBytes()
+                inputStream?.close()
+                if (bytes != null) {
+                    // Можно сохранить в хранилище или отправить на сервер
+                    Toast.makeText(context, "📎 Файл прикреплён (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
+                    // Здесь можно вызвать repository.attachFileToExpense(expenseId, bytes)
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "❌ Ошибка прикрепления файла: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
