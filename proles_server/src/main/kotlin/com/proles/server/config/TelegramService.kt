@@ -144,10 +144,11 @@ object TelegramService {
             val boundaryBytes = requestBody.toByteArray(Charsets.UTF_8)
             val closingBoundary = "$crlf--$boundary--$crlf".toByteArray(Charsets.UTF_8)
             
-            // Части для текстовых полей
-            val chatIdPart = "$crlf--$boundary$crlfContent-Disposition: form-data; name=\"chat_id\"$crlf$crlf$chatId$crlf".toByteArray(Charsets.UTF_8)
-            val captionPart = "$crlf--$boundary$crlfContent-Disposition: form-data; name=\"caption\"$crlf$crlf$escapedCaption$crlf".toByteArray(Charsets.UTF_8)
-            val parseModePart = "$crlf--$boundary$crlfContent-Disposition: form-data; name=\"parse_mode\"$crlf$crlf$parseMode$crlf".toByteArray(Charsets.UTF_8)
+            // Части для текстовых полей (исправлено: добавлены фигурные скобки для crlf)
+            val chatIdPart = "${crlf}--$boundary${crlf}Content-Disposition: form-data; name=\"chat_id\"${crlf}${crlf}$chatId${crlf}".toByteArray(Charsets.UTF_8)
+            val captionPart = "${crlf}--$boundary${crlf}Content-Disposition: form-data; name=\"caption\"${crlf}${crlf}$escapedCaption${crlf}".toByteArray(Charsets.UTF_8)
+            val parseMode = "HTML"
+            val parseModePart = "${crlf}--$boundary${crlf}Content-Disposition: form-data; name=\"parse_mode\"${crlf}${crlf}$parseMode${crlf}".toByteArray(Charsets.UTF_8)
             
             // Собираем всё вместе: boundary + fileBytes + chatId + caption + parseMode + closing boundary
             val fullBody = ByteArrayOutputStream()

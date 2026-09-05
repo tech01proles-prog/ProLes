@@ -5,29 +5,30 @@
 *.ear
 *.o
 *.obj
+*.out
+*.dll
 *.so
 *.a
-*.dll
-*.exe
-build/
-target/
+*.pyc
+__pycache__/
 
 # Dependencies
-.gradle/
 node_modules/
 venv/
 .venv/
-__pycache__/
+.gradle/
 .mypy_cache/
 .pytest_cache/
-.julia/
-zig*/
+target/
+build/
+dist/
 
-# Logs and temp files
-*.log
-*.tmp
+# Editors/IDEs
+.vscode/
+.idea/
 *.swp
 *.swo
+*.tmp
 
 # System files
 .DS_Store
@@ -36,7 +37,8 @@ Thumbs.db
 .env.local
 *.env.*
 
-# Coverage
+# Logs and coverage
+*.log
 coverage/
 htmlcov/
 .coverage
