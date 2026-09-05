@@ -1,5 +1,8 @@
 # Compiled and build artifacts
 *.class
+*.jar
+*.war
+*.ear
 *.o
 *.obj
 *.out
@@ -40,6 +43,15 @@ coverage/
 htmlcov/
 .coverage
 
+# System
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
 # Compressed files
 *.zip
 *.gz
@@ -63,3 +75,4 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
+```
