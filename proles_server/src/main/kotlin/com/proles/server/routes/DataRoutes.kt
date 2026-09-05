@@ -2318,6 +2318,7 @@ fun Route.dataRoutes() {
         val accountantEmail: String = "",
         val amount: Double = 0.0,        // 
         val currency: String = "RUB",    // 
+        val hasReceipt: Boolean = false,  // 🆕 Флаг наличия чека
         val recipients: List<TicketRecipientDto> = emptyList()
     )
 
@@ -2440,6 +2441,7 @@ fun Route.dataRoutes() {
                 //  Автоматически создаём расход "Билет" от имени COMPANY (если есть сумма)
                 if (request.amount > 0.0) {
                     val expenseUserId = companyUserId ?: session.userId
+                    val hasReceipt = receiptFilePath != null
                     transaction {
                         // ✅ Используем java.time вместо kotlinx.datetime (проще и всегда доступно)
                         val todayJava = java.time.LocalDate.now()
@@ -2455,12 +2457,12 @@ fun Route.dataRoutes() {
                             it[amount] = request.amount
                             it[currency] = request.currency
                             it[comment] = "Автоматически создан при загрузке билета. ${request.description.takeIf { it.isNotBlank() } ?: ""}"
-                            it[receiptSubmitted] = false
-                            it[hasReceiptPhoto] = false
+                            it[receiptSubmitted] = hasReceipt
+                            it[hasReceiptPhoto] = hasReceipt
                             it[createdAt] = System.currentTimeMillis()
                         }
                     }
-                    println("✅ Auto-expense created: ${request.amount} ${request.currency} for ticket $uniqueFileName (userId=$expenseUserId)")
+                    println("✅ Auto-expense created: ${request.amount} ${request.currency} for ticket $uniqueFileName (userId=$expenseUserId, hasReceipt=$hasReceipt)")
                 }
 
                 request.recipientIds.forEach { recipientId ->
@@ -2637,6 +2639,7 @@ fun Route.dataRoutes() {
                             accountantEmail = row[TicketsTable.accountantEmail],
                             amount = row[TicketsTable.amount],          // 
                             currency = row[TicketsTable.currency],      // 
+                            hasReceipt = row[TicketsTable.receiptPath] != null,  // 🆕 Флаг наличия чека
                             recipients = emptyList()
                         )
                     }
@@ -2675,6 +2678,7 @@ fun Route.dataRoutes() {
                             amount = row[TicketsTable.amount],          // 
                             currency = row[TicketsTable.currency],      // 
                             uploadedAt = row[TicketsTable.uploadedAt],
+                            hasReceipt = row[TicketsTable.receiptPath] != null,  // 🆕 Флаг наличия чека
                             recipients = recipients,
                             downloadUrl = row[TicketsTable.filePath]
                         )
