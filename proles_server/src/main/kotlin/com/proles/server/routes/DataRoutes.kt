@@ -2620,7 +2620,6 @@ fun Route.dataRoutes() {
                             appendLine("<b>📧 Отправлено:</b> ${request.accountantEmail}")
                         }
                     }.trimIndent()
-                    com.proles.server.config.TelegramService.sendMessage(caption)
                     
                     // Отправляем файл с подписью (только одно сообщение)
                     if (fileBytes.isNotEmpty()) {
@@ -2632,6 +2631,15 @@ fun Route.dataRoutes() {
                             appendLine("<b>📄 Файл:</b> ${request.fileName}")
                             if (request.amount > 0.0) {
                                 appendLine("<b>💰 Стоимость:</b> ${"%.2f".format(request.amount)} ${request.currency}")
+                            }
+                            if (request.description.isNotBlank()) {
+                                appendLine("<b>📝 Описание:</b> ${request.description}")
+                            }
+                            if (request.recipientIds.isNotEmpty()) {
+                                appendLine("<b>👥 Получателей:</b> ${request.recipientIds.size}")
+                            }
+                            if (request.sendToAccountant) {
+                                appendLine("<b>📧 Отправлено:</b> ${request.accountantEmail}")
                             }
                         }.trimIndent()
                         com.proles.server.config.TelegramService.sendFile(fileBytes, request.fileName, caption)
