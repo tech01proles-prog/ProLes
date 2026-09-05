@@ -425,6 +425,7 @@ export function TicketsPage() {
                   <span>•</span>
                   <span>{formatDateTime(t.uploadedAt)}</span>
                   {t.amount > 0 && (<><span>•</span><span className="font-bold text-emerald-700 dark:text-emerald-400">{formatMoney(t.amount, t.currency)}</span></>)}
+                  {t.hasReceipt && (<><span>•</span><span className="text-emerald-600 dark:text-emerald-400 font-semibold">🧾 Чек приложен</span></>)}
                 </div>
 
                 {t.recipients.length > 0 && (
