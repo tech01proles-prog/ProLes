@@ -619,8 +619,29 @@ fun Route.dataRoutes() {
 //                return@post
 //            }
 
-            // 📁 Структура: uploads/receipts/{userId}/{projectId}/
-            val uploadDir = java.io.File("uploads/receipts/$expenseUserId/$expenseProjectId").apply {
+            // 👤 Получаем ФИО пользователя для пути сохранения
+            val userFullNameShort = transaction {
+                UsersTable.selectAll()
+                    .where { UsersTable.id eq expenseUserId }
+                    .singleOrNull()
+                    ?.let { row ->
+                        val lastName = row[UsersTable.lastName]
+                        val firstName = row[UsersTable.firstName]
+                        val middleName = row[UsersTable.middleName]
+                        // Формируем "фамилия и.о."
+                        val initials = buildString {
+                            if (firstName.isNotEmpty()) append("${firstName.first().uppercase()}")
+                            if (middleName.isNotEmpty()) append(".${middleName.first().uppercase()}.")
+                        }
+                        "$lastName $initials".trim()
+                    } ?: "unknown_user"
+            }
+
+            // 📁 Структура: uploads/receipts/{YYYY-MM}/{фамилия и.о.}/
+            val currentMonth = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"))
+            // Экранируем спецсимволы в имени для безопасного пути
+            val safeUserFolder = userFullNameShort.replace("/", "_").replace("\\", "_")
+            val uploadDir = java.io.File("uploads/receipts/$currentMonth/$safeUserFolder").apply {
                 mkdirs()
             }
 
@@ -632,7 +653,7 @@ fun Route.dataRoutes() {
             java.io.File(uploadDir, fileName).writeBytes(imageBytes!!)
 
             // 🔗 URL для доступа к фото
-            val imageUrl = "/uploads/receipts/$expenseUserId/$expenseProjectId/$fileName"
+            val imageUrl = "/uploads/receipts/$currentMonth/$safeUserFolder/$fileName"
 
             val receiptId = UUID.randomUUID()
             transaction {
