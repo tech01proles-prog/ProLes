@@ -722,17 +722,18 @@ object ApiClient {
     }
 
     // 🆕 НОВЫЙ ПОДХОД: Base64 вместо multipart
-    suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray): Result<String> {
+    suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray, userFullName: String): Result<String> {
         return try {
             // Конвертируем ByteArray в Base64 строку
             val base64Image = java.util.Base64.getEncoder().encodeToString(imageBytes)
 
             val requestBody = mapOf(
                 "expenseId" to expenseId,
-                "imageBase64" to base64Image
+                "imageBase64" to base64Image,
+                "userFullName" to userFullName
             )
 
-            Log.d("ApiClient", "📡 uploadReceiptPhoto: размер ${imageBytes.size / 1024} КБ, Base64: ${base64Image.length / 1024} КБ")
+            Log.d("ApiClient", "📡 uploadReceiptPhoto: размер ${imageBytes.size / 1024} КБ, Base64: ${base64Image.length / 1024} КБ, пользователь: $userFullName")
 
             val response = client.post("$BASE_URL/expenses/upload-receipt") {
                 setBody(requestBody)

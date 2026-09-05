@@ -674,8 +674,8 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
         loadNotifications()
     }
 
-    suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray) {
-        apiClient.uploadReceiptPhoto(expenseId, imageBytes).onSuccess {
+    suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray, userFullName: String) {
+        apiClient.uploadReceiptPhoto(expenseId, imageBytes, userFullName).onSuccess {
             val expense = _expenses.value.firstOrNull { it.id == expenseId } ?: return@onSuccess
             val updated = expense.copy(hasReceiptPhoto = true, receiptSubmitted = true)
             _expenses.value = _expenses.value.map { if (it.id == expenseId) updated else it }

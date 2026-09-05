@@ -532,6 +532,11 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
             val files = _pendingExpenseFiles.value[tempId] ?: emptyList()
             if (files.isEmpty()) return@launch
 
+            // Получаем имя текущего пользователя для формирования пути на сервере
+            val userFullName = user.value?.let { u ->
+                "${u.lastName} ${u.firstName.firstOrNull()?.uppercase()}${if (u.middleName.isNotEmpty()) u.middleName.firstOrNull()?.uppercase() else ""}".trim()
+            } ?: "Unknown_User"
+
             files.forEach { file ->
                 try {
                     val inputStream = context.contentResolver.openInputStream(file.uri)
@@ -539,7 +544,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                     inputStream?.close()
                     if (bytes != null) {
                         if (file.isPhoto) {
-                            repository.uploadReceiptPhoto(expenseId, bytes)
+                            repository.uploadReceiptPhoto(expenseId, bytes, userFullName)
                         } else {
                             // Для документов можно вызвать отдельный метод репозитория
                             // repository.attachDocumentToExpense(expenseId, bytes, file.uri.toString())
