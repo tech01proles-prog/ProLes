@@ -1,5 +1,6 @@
 package com.example.prolestimesheet.ui.screens
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -796,6 +797,20 @@ fun TimesheetScreen(
         val pendingFilesCount by viewModel.pendingExpenseFiles.collectAsState(initial = emptyMap())
         val currentPendingFiles = pendingFilesCount[tempExpenseId] ?: emptyList()
 
+        // Вспомогательная функция для сохранения Bitmap во временный URI
+        fun saveBitmapToTempUri(bitmap: Bitmap, context: Context): Uri? {
+            return try {
+                val file = java.io.File(context.cacheDir, "temp_photo_${System.currentTimeMillis()}.jpg")
+                val stream = java.io.FileOutputStream(file)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
+                stream.close()
+                androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            } catch (e: Exception) {
+                Toast.makeText(context, "❌ Ошибка сохранения фото: ${e.message}", Toast.LENGTH_SHORT).show()
+                null
+            }
+        }
+
         // 📷 Лаунчер камеры (для одного фото)
         val cameraLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.TakePicturePreview()
@@ -813,20 +828,6 @@ fun TimesheetScreen(
             } else if (bitmap == null) {
                 Toast.makeText(context, "Съёмка отменена", Toast.LENGTH_SHORT).show()
                 uploadingPhoto = false
-            }
-        }
-
-        // Вспомогательная функция для сохранения Bitmap во временный URI
-        fun saveBitmapToTempUri(bitmap: Bitmap, context: Context): Uri? {
-            return try {
-                val file = java.io.File(context.cacheDir, "temp_photo_${System.currentTimeMillis()}.jpg")
-                val stream = java.io.FileOutputStream(file)
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
-                stream.close()
-                androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            } catch (e: Exception) {
-                Toast.makeText(context, "❌ Ошибка сохранения фото: ${e.message}", Toast.LENGTH_SHORT).show()
-                null
             }
         }
 

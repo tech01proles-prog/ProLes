@@ -619,8 +619,29 @@ fun Route.dataRoutes() {
 //                return@post
 //            }
 
-            // 📁 Структура: uploads/receipts/{userId}/{projectId}/
-            val uploadDir = java.io.File("uploads/receipts/$expenseUserId/$expenseProjectId").apply {
+            // 👤 Получаем ФИО пользователя для пути сохранения
+            val userFullNameShort = transaction {
+                UsersTable.selectAll()
+                    .where { UsersTable.id eq expenseUserId }
+                    .singleOrNull()
+                    ?.let { row ->
+                        val lastName = row[UsersTable.lastName]
+                        val firstName = row[UsersTable.firstName]
+                        val middleName = row[UsersTable.middleName]
+                        // Формируем "фамилия и.о."
+                        val initials = buildString {
+                            if (firstName.isNotEmpty()) append("${firstName.first().uppercase()}")
+                            if (middleName.isNotEmpty()) append(".${middleName.first().uppercase()}.")
+                        }
+                        "$lastName $initials".trim()
+                    } ?: "unknown_user"
+            }
+
+            // 📁 Структура: uploads/receipts/{YYYY-MM}/{фамилия и.о.}/
+            val currentMonth = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"))
+            // Экранируем спецсимволы в имени для безопасного пути
+            val safeUserFolder = userFullNameShort.replace("/", "_").replace("\\", "_")
+            val uploadDir = java.io.File("uploads/receipts/$currentMonth/$safeUserFolder").apply {
                 mkdirs()
             }
 
@@ -632,7 +653,7 @@ fun Route.dataRoutes() {
             java.io.File(uploadDir, fileName).writeBytes(imageBytes!!)
 
             // 🔗 URL для доступа к фото
-            val imageUrl = "/uploads/receipts/$expenseUserId/$expenseProjectId/$fileName"
+            val imageUrl = "/uploads/receipts/$currentMonth/$safeUserFolder/$fileName"
 
             val receiptId = UUID.randomUUID()
             transaction {
@@ -2592,10 +2613,27 @@ fun Route.dataRoutes() {
                         if (request.description.isNotBlank()) {
                             appendLine("<b>📝 Описание:</b> ${request.description}")
                         }
-                    }.trim()
+                        if (request.recipientIds.isNotEmpty()) {
+                            appendLine("<b>👥 Получателей:</b> ${request.recipientIds.size}")
+                        }
+                        if (request.sendToAccountant) {
+                            appendLine("<b>📧 Отправлено:</b> ${request.accountantEmail}")
+                        }
+                    }.trimIndent()
+                    com.proles.server.config.TelegramService.sendMessage(telegramMsg)
                     
                     // Отправляем файл с подписью (только одно сообщение)
                     if (fileBytes.isNotEmpty()) {
+                        val caption = buildString {
+                            appendLine("<b>🎫 БИЛЕТ (ФАЙЛ)</b>")
+                            appendLine()
+                            appendLine("<b>👤 Загрузил:</b> $senderName")
+                            appendLine("<b>📁 Проект:</b> $projectName")
+                            appendLine("<b>📄 Файл:</b> ${request.fileName}")
+                            if (request.amount > 0.0) {
+                                appendLine("<b>💰 Стоимость:</b> ${"%.2f".format(request.amount)} ${request.currency}")
+                            }
+                        }.trimIndent()
                         com.proles.server.config.TelegramService.sendFile(fileBytes, request.fileName, caption)
                     } else {
                         // Если файла нет, отправляем только текст
