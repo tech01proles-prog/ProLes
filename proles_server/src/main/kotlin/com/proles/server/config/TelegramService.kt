@@ -18,7 +18,7 @@ object TelegramService {
     private var enabled = false
 
     private val httpClient: HttpClient = HttpClient.newBuilder()
-        .connectTimeout(java.time.Duration.ofSeconds(10))
+        .connectTimeout(java.time.Duration.ofSeconds(30))
         .build()
 
     fun init(token: String?, chatId: String?) {
@@ -71,7 +71,7 @@ object TelegramService {
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
-                .timeout(java.time.Duration.ofSeconds(15))
+                .timeout(java.time.Duration.ofSeconds(30))
                 .build()
 
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
@@ -165,7 +165,7 @@ object TelegramService {
                 .uri(URI.create(url))
                 .header("Content-Type", "multipart/form-data; boundary=$boundary")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(fullBody.toByteArray()))
-                .timeout(java.time.Duration.ofSeconds(30))
+                .timeout(java.time.Duration.ofSeconds(60))
                 .build()
 
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
