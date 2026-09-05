@@ -614,7 +614,12 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
 
     fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray) {
         viewModelScope.launch {
-            val userFullName = user.value?.fullName ?: "Unknown"
+            val currentUser = user.value
+            val userFullName = if (currentUser != null) {
+                "${currentUser.lastName} ${currentUser.firstName} ${currentUser.middleName}".trim()
+            } else {
+                "Unknown"
+            }
             repository.uploadReceiptPhoto(expenseId, imageBytes, userFullName)
         }
     }
