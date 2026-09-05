@@ -5,11 +5,10 @@
 *.ear
 *.o
 *.obj
-*.out
-*.exe
-*.dll
 *.so
 *.a
+*.dll
+*.exe
 build/
 target/
 
@@ -21,17 +20,14 @@ venv/
 __pycache__/
 .mypy_cache/
 .pytest_cache/
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
+.julia/
+zig*/
 
 # Logs and temp files
 *.log
 *.tmp
+*.swp
+*.swo
 
 # System files
 .DS_Store
@@ -39,6 +35,15 @@ Thumbs.db
 .env
 .env.local
 *.env.*
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# System
+.DS_Store
+Thumbs.db
 
 # Coverage
 coverage/
@@ -68,3 +73,4 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
+```
