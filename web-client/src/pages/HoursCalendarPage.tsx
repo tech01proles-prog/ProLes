@@ -458,11 +458,19 @@ export function HoursCalendarPage() {
       {/* Календарь */}
       <div className="card p-4 md:p-5 overflow-hidden">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={prevMonth} className="btn-ghost px-3 py-1 text-lg">‹</button>
+          <button onClick={prevMonth} className="btn-ghost p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Предыдущий месяц">
+            <svg className="w-5 h-5 text-slate-700 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
           <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 capitalize w-48 text-center">
             {monthName(calMonth + 1)} {calYear}
           </h3>
-          <button onClick={nextMonth} className="btn-ghost px-3 py-1 text-lg">›</button>
+          <button onClick={nextMonth} className="btn-ghost p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Следующий месяц">
+            <svg className="w-5 h-5 text-slate-700 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
 
         {/* Дни недели */}
