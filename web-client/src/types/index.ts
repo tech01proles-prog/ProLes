@@ -236,6 +236,7 @@ export interface TicketDto {
   accountantEmail: string;
   amount: number;
   currency: string;
+  hasReceipt: boolean;  // 🆕 Флаг наличия чека
   recipients: TicketRecipientDto[];
 }
 
