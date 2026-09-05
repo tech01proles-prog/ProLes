@@ -12,8 +12,12 @@ target/
 
 # Dependencies
 .gradle/
-lib/
-libs/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+coverage/
+htmlcov/
+*.coverage
 
 # Logs and temp files
 *.log
@@ -28,23 +32,6 @@ libs/
 # Editors
 .vscode/
 .idea/
-*.iml
-*.ipr
-*.iws
-
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
-
-# Python related (if any Python in project)
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.py~
-.mypy_cache/
-.pytest_cache/
 
 # System files
 .DS_Store
