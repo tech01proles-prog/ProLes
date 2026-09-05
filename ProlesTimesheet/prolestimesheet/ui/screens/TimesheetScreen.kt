@@ -787,9 +787,14 @@ fun TimesheetScreen(
 
         // 📸 Состояния для загрузки фото/файлов чека (поддержка нескольких файлов)
         var currentPhotoExpenseId by remember { mutableStateOf<String?>(null) }
+        val tempExpenseId = remember { "temp_expense_${System.currentTimeMillis()}" }
         var expensePhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
         var showPhotoSourceDialog by remember { mutableStateOf(false) }
         var uploadingPhoto by remember { mutableStateOf(false) }
+        
+        // Наблюдаем за количеством прикреплённых файлов
+        val pendingFilesCount by viewModel.pendingExpenseFiles.collectAsState(initial = emptyMap())
+        val currentPendingFiles = pendingFilesCount[tempExpenseId] ?: emptyList()
 
         // 📷 Лаунчер камеры (для одного фото)
         val cameraLauncher = rememberLauncherForActivityResult(
@@ -798,11 +803,30 @@ fun TimesheetScreen(
             val expenseId = currentPhotoExpenseId
             currentPhotoExpenseId = null
             if (bitmap != null && expenseId != null) {
-                processPhoto(bitmap, expenseId)
+                // Сохраняем фото во временное хранилище вместо немедленной отправки
+                // Фото будет отправлено после создания расхода
+                val tempUri = saveBitmapToTempUri(bitmap, context)
+                if (tempUri != null) {
+                    viewModel.addPendingExpenseFile(tempExpenseId, tempUri, isPhoto = true)
+                }
                 uploadingPhoto = false
             } else if (bitmap == null) {
                 Toast.makeText(context, "Съёмка отменена", Toast.LENGTH_SHORT).show()
                 uploadingPhoto = false
+            }
+        }
+
+        // Вспомогательная функция для сохранения Bitmap во временный URI
+        fun saveBitmapToTempUri(bitmap: Bitmap, context: Context): Uri? {
+            return try {
+                val file = java.io.File(context.cacheDir, "temp_photo_${System.currentTimeMillis()}.jpg")
+                val stream = java.io.FileOutputStream(file)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
+                stream.close()
+                androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            } catch (e: Exception) {
+                Toast.makeText(context, "❌ Ошибка сохранения фото: ${e.message}", Toast.LENGTH_SHORT).show()
+                null
             }
         }
 
@@ -813,17 +837,9 @@ fun TimesheetScreen(
             val expenseId = currentPhotoExpenseId
             currentPhotoExpenseId = null
             if (uris.isNotEmpty() && expenseId != null) {
+                // Сохраняем все выбранные фото во временное хранилище
                 uris.forEach { uri ->
-                    try {
-                        val inputStream = context.contentResolver.openInputStream(uri)
-                        val bitmap = BitmapFactory.decodeStream(inputStream)
-                        inputStream?.close()
-                        if (bitmap != null) {
-                            processPhoto(bitmap, expenseId)
-                        }
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "❌ Ошибка при загрузке фото: ${e.message}", Toast.LENGTH_SHORT).show()
-                    }
+                    viewModel.addPendingExpenseFile(tempExpenseId, uri, isPhoto = true)
                 }
                 uploadingPhoto = false
             } else {
@@ -838,20 +854,16 @@ fun TimesheetScreen(
             val expenseId = currentPhotoExpenseId
             currentPhotoExpenseId = null
             if (uris.isNotEmpty() && expenseId != null) {
+                // Сохраняем все выбранные файлы во временное хранилище
                 uris.forEach { uri ->
-                    try {
-                        val inputStream = context.contentResolver.openInputStream(uri)
-                        val bitmap = BitmapFactory.decodeStream(inputStream)
-                        inputStream?.close()
-                        if (bitmap != null) {
-                            processPhoto(bitmap, expenseId)
-                        } else {
-                            // Это не изображение, просто прикрепляем файл
-                            viewModel.attachFileToExpense(expenseId, uri, context)
-                        }
+                    // Пытаемся определить тип файла
+                    val isPhoto = try {
+                        val mimeType = context.contentResolver.getType(uri)
+                        mimeType?.startsWith("image/") ?: false
                     } catch (e: Exception) {
-                        Toast.makeText(context, "❌ Ошибка при загрузке файла: ${e.message}", Toast.LENGTH_SHORT).show()
+                        false
                     }
+                    viewModel.addPendingExpenseFile(tempExpenseId, uri, isPhoto = isPhoto)
                 }
                 uploadingPhoto = false
             } else {
@@ -866,21 +878,18 @@ fun TimesheetScreen(
             val expenseId = currentPhotoExpenseId
             currentPhotoExpenseId = null
             if (uri != null && expenseId != null) {
-                try {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                    val bitmap = BitmapFactory.decodeStream(inputStream)
-                    inputStream?.close()
-                    if (bitmap != null) {
-                        processPhoto(bitmap, expenseId)
-                        uploadingPhoto = false
-                    } else {
-                        Toast.makeText(context, "❌ Не удалось загрузить фото", Toast.LENGTH_SHORT).show()
-                        uploadingPhoto = false
-                    }
+                // Сохраняем файл во временное хранилище
+                val isPhoto = try {
+                    val mimeType = context.contentResolver.getType(uri)
+                    mimeType?.startsWith("image/") ?: false
                 } catch (e: Exception) {
-                    Toast.makeText(context, "❌ Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
-                    uploadingPhoto = false
+                    false
                 }
+                viewModel.addPendingExpenseFile(tempExpenseId, uri, isPhoto = isPhoto)
+                uploadingPhoto = false
+            } else {
+                Toast.makeText(context, "❌ Не удалось загрузить файл", Toast.LENGTH_SHORT).show()
+                uploadingPhoto = false
             }
         }
 
@@ -1042,7 +1051,7 @@ fun TimesheetScreen(
                             } else {
                                 OutlinedButton(
                                     onClick = {
-                                        currentPhotoExpenseId = "temp_expense_${System.currentTimeMillis()}"
+                                        currentPhotoExpenseId = tempExpenseId
                                         showPhotoSourceDialog = true
                                     },
                                     modifier = Modifier.weight(1f)
@@ -1053,7 +1062,7 @@ fun TimesheetScreen(
                                 }
                                 OutlinedButton(
                                     onClick = {
-                                        currentPhotoExpenseId = "temp_expense_${System.currentTimeMillis()}"
+                                        currentPhotoExpenseId = tempExpenseId
                                         multiplePhotoPickerLauncher.launch(
                                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                         )
@@ -1068,7 +1077,7 @@ fun TimesheetScreen(
                         }
                         OutlinedButton(
                             onClick = {
-                                currentPhotoExpenseId = "temp_expense_${System.currentTimeMillis()}"
+                                currentPhotoExpenseId = tempExpenseId
                                 documentPickerLauncher.launch("*/*")
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -1078,8 +1087,8 @@ fun TimesheetScreen(
                             Spacer(Modifier.width(6.dp))
                             Text("📎 Прикрепить документы (PDF, DOC и др.)")
                         }
-                        if (expensePhotos.isNotEmpty()) {
-                            Text("Прикреплено файлов: ${expensePhotos.size}", style = MaterialTheme.typography.bodySmall)
+                        if (currentPendingFiles.isNotEmpty()) {
+                            Text("Прикреплено файлов: ${currentPendingFiles.size}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
 
@@ -1110,7 +1119,9 @@ fun TimesheetScreen(
                                     currency = currency,
                                     comment = comment,
                                     category = expenseCategory,
-                                    subcategory = expenseSubcategory
+                                    subcategory = expenseSubcategory,
+                                    tempId = tempExpenseId,
+                                    context = context
                                 )
                                 showExpenseDialog = false
                             }

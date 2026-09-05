@@ -1,6 +1,7 @@
 package com.example.prolestimesheet.ui.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
@@ -44,6 +45,12 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
     val expenses: StateFlow<List<Expense>> = repository.expensesFlow
 
     val incomes: StateFlow<List<Income>> = repository.incomesFlow
+
+    // 🗂️ Временное хранилище файлов для расходов (до создания записи)
+    private val _pendingExpenseFiles = MutableStateFlow<Map<String, List<PendingExpenseFile>>>(emptyMap())
+    val pendingExpenseFiles: StateFlow<Map<String, List<PendingExpenseFile>>> = _pendingExpenseFiles.asStateFlow()
+
+    data class PendingExpenseFile(val uri: Uri, val isPhoto: Boolean)
 
     val notifications: StateFlow<List<Notification>> = repository.notificationsFlow
     // 🔥 Реактивный unreadCount — Compose автоматически отслеживает изменения
@@ -495,6 +502,59 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         }
     }
 
+    // 📎 Добавить файл к расходу (временное хранение до создания записи)
+    fun addPendingExpenseFile(tempId: String, uri: Uri, isPhoto: Boolean) {
+        val currentMap = _pendingExpenseFiles.value
+        val currentList = currentMap[tempId] ?: emptyList()
+        _pendingExpenseFiles.value = currentMap + (tempId to (currentList + PendingExpenseFile(uri, isPhoto)))
+    }
+
+    // 🗑️ Удалить файл из временного хранилища
+    fun removePendingExpenseFile(tempId: String, uri: Uri) {
+        val currentMap = _pendingExpenseFiles.value
+        val currentList = currentMap[tempId] ?: emptyList()
+        val newList = currentList.filter { it.uri != uri }
+        _pendingExpenseFiles.value = if (newList.isEmpty()) {
+            currentMap - tempId
+        } else {
+            currentMap + (tempId to newList)
+        }
+    }
+
+    // 🧹 Очистить все временные файлы для tempId
+    fun clearPendingExpenseFiles(tempId: String) {
+        _pendingExpenseFiles.value = _pendingExpenseFiles.value - tempId
+    }
+
+    // 📤 Загрузить все прикреплённые файлы после создания расхода
+    fun uploadPendingExpenseFiles(expenseId: String, tempId: String, context: Context) {
+        viewModelScope.launch {
+            val files = _pendingExpenseFiles.value[tempId] ?: emptyList()
+            if (files.isEmpty()) return@launch
+
+            files.forEach { file ->
+                try {
+                    val inputStream = context.contentResolver.openInputStream(file.uri)
+                    val bytes = inputStream?.readBytes()
+                    inputStream?.close()
+                    if (bytes != null) {
+                        if (file.isPhoto) {
+                            repository.uploadReceiptPhoto(expenseId, bytes)
+                        } else {
+                            // Для документов можно вызвать отдельный метод репозитория
+                            // repository.attachDocumentToExpense(expenseId, bytes, file.uri.toString())
+                            Toast.makeText(context, "📎 Файл прикреплён (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "❌ Ошибка загрузки файла: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            // Очищаем временное хранилище после успешной загрузки
+            clearPendingExpenseFiles(tempId)
+        }
+    }
+
     // ➕ Добавление нового расхода
     fun addExpense(
         projectId: String,
@@ -506,7 +566,9 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         currency: String = "RUB",
         comment: String = "",
         category: String = "WORK",
-        subcategory: String? = null
+        subcategory: String? = null,
+        tempId: String? = null, // Временный ID для прикрепления файлов
+        context: Context? = null // Контекст для загрузки файлов
     ) {
         val currentUser = user.value ?: return
         viewModelScope.launch {
@@ -524,6 +586,11 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 subcategory = subcategory
             )
             repository.addExpense(expense)
+            
+            // Если есть временный ID и контекст — загружаем прикреплённые файлы
+            if (tempId != null && context != null) {
+                uploadPendingExpenseFiles(expense.id, tempId, context)
+            }
         }
     }
 
@@ -546,22 +613,11 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         }
     }
 
-    // 📎 Прикрепление файла к расходу (документы, PDF и др.)
+    // 📎 Прикрепление файла к расходу (устаревший метод — теперь используется временное хранилище)
+    @Deprecated("Используйте addPendingExpenseFile для добавления файлов до создания расхода")
     fun attachFileToExpense(expenseId: String, uri: android.net.Uri, context: Context) {
-        viewModelScope.launch {
-            try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bytes = inputStream?.readBytes()
-                inputStream?.close()
-                if (bytes != null) {
-                    // Можно сохранить в хранилище или отправить на сервер
-                    Toast.makeText(context, "📎 Файл прикреплён (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
-                    // Здесь можно вызвать repository.attachFileToExpense(expenseId, bytes)
-                }
-            } catch (e: Exception) {
-                Toast.makeText(context, "❌ Ошибка прикрепления файла: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
+        // Этот метод больше не используется, так как файлы должны добавляться через временное хранилище
+        Toast.makeText(context, "⚠️ Используйте новый метод добавления файлов", Toast.LENGTH_SHORT).show()
     }
 
     val trips: StateFlow<List<BusinessTrip>> = repository.tripsFlow
