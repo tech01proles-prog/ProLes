@@ -2583,11 +2583,11 @@ fun Route.dataRoutes() {
                         appendLine("<b>🎫 НОВЫЙ БИЛЕТ</b>")
                         appendLine()
                         if (recipientNames.isNotEmpty()) {
-                            appendLine("<b>👤 Кому:</b> ${recipientNames.joinToString(\", \")}")
+                            appendLine("<b>👤 Кому:</b> ${recipientNames.joinToString(", ")}")
                         }
                         appendLine("<b>📁 Проект:</b> $projectName")
                         if (request.amount > 0.0) {
-                            appendLine("<b>💰 Стоимость:</b> ${"%.2f".format(request.amount)} ${request.currency}")
+                            appendLine("<b>💰 Стоимость:</b> ${String.format("%.2f", request.amount)} ${request.currency}")
                         }
                         if (request.description.isNotBlank()) {
                             appendLine("<b>📝 Описание:</b> ${request.description}")
