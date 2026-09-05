@@ -1,5 +1,6 @@
 package com.proles.server.config
 
+import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -101,9 +102,6 @@ object TelegramService {
         return try {
             val url = "https://api.telegram.org/bot$botToken/sendDocument"
             
-            // Кодируем файл в base64 для отправки
-            val fileBase64 = java.util.Base64.getEncoder().encodeToString(fileBytes)
-            
             // Определяем MIME-тип по расширению
             val ext = fileName.substringAfterLast('.', "").lowercase()
             val mimeType = when (ext) {
@@ -122,41 +120,48 @@ object TelegramService {
             val boundary = "----WebKitFormBoundary${System.currentTimeMillis()}"
             val crlf = "\r\n"
             
+            // Кодируем caption для HTML
+            val escapedCaption = caption
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("&lt;b&gt;", "<b>").replace("&lt;/b&gt;", "</b>")
+                .replace("&lt;i&gt;", "<i>").replace("&lt;/i&gt;", "</i>")
+                .replace("&lt;u&gt;", "<u>").replace("&lt;/u&gt;", "</u>")
+                .replace("&lt;a ", "<a ").replace("&lt;/a&gt;", "</a>")
+                .replace("&lt;code&gt;", "<code>").replace("&lt;/code&gt;", "</code>")
+                .replace("&lt;pre&gt;", "<pre>").replace("&lt;/pre&gt;", "</pre>")
+            
             val requestBody = buildString {
-                // Часть для файла
+                // Часть для файла (отправляем как binary, без base64)
                 append("--$boundary$crlf")
                 append("Content-Disposition: form-data; name=\"document\"; filename=\"$fileName\"$crlf")
                 append("Content-Type: $mimeType$crlf")
-                append("Content-Transfer-Encoding: base64$crlf$crlf")
-                append(fileBase64)
-                append(crlf)
-                
-                // Часть для chat_id
-                append("--$boundary$crlf")
-                append("Content-Disposition: form-data; name=\"chat_id\"$crlf$crlf")
-                append(chatId)
-                append(crlf)
-                
-                // Часть для caption
-                append("--$boundary$crlf")
-                append("Content-Disposition: form-data; name=\"caption\"$crlf$crlf")
-                append(caption)
-                append(crlf)
-                
-                // Часть для parse_mode
-                append("--$boundary$crlf")
-                append("Content-Disposition: form-data; name=\"parse_mode\"$crlf$crlf")
-                append("HTML")
-                append(crlf)
-                
-                // Завершающий boundary
-                append("--$boundary--$crlf")
+                append("Content-Transfer-Encoding: binary$crlf$crlf")
             }
-
+            
+            // Создаем байтовый массив для всего тела запроса
+            val boundaryBytes = requestBody.toByteArray(Charsets.UTF_8)
+            val closingBoundary = "$crlf--$boundary--$crlf".toByteArray(Charsets.UTF_8)
+            
+            // Части для текстовых полей
+            val chatIdPart = "$crlf--$boundary$crlfContent-Disposition: form-data; name=\"chat_id\"$crlf$crlf$chatId$crlf".toByteArray(Charsets.UTF_8)
+            val captionPart = "$crlf--$boundary$crlfContent-Disposition: form-data; name=\"caption\"$crlf$crlf$escapedCaption$crlf".toByteArray(Charsets.UTF_8)
+            val parseModePart = "$crlf--$boundary$crlfContent-Disposition: form-data; name=\"parse_mode\"$crlf$crlfHTML$crlf".toByteArray(Charsets.UTF_8)
+            
+            // Собираем всё вместе: boundary + fileBytes + chatId + caption + parseMode + closing boundary
+            val fullBody = ByteArrayOutputStream()
+            fullBody.write(boundaryBytes)
+            fullBody.write(fileBytes)
+            fullBody.write(chatIdPart)
+            fullBody.write(captionPart)
+            fullBody.write(parseModePart)
+            fullBody.write(closingBoundary)
+            
             val request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "multipart/form-data; boundary=$boundary")
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .POST(HttpRequest.BodyPublishers.ofByteArray(fullBody.toByteArray()))
                 .timeout(java.time.Duration.ofSeconds(30))
                 .build()
 
@@ -171,6 +176,7 @@ object TelegramService {
             }
         } catch (e: Exception) {
             println("❌ Telegram: исключение ${e.javaClass.simpleName}: ${e.message}")
+            e.printStackTrace()
             false
         }
     }

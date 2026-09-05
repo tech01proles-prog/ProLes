@@ -2339,6 +2339,7 @@ fun Route.dataRoutes() {
         val accountantEmail: String = "",
         val amount: Double = 0.0,        // 
         val currency: String = "RUB",    // 
+        val hasReceipt: Boolean = false,  // 🆕 Флаг наличия чека
         val recipients: List<TicketRecipientDto> = emptyList()
     )
 
@@ -2461,6 +2462,7 @@ fun Route.dataRoutes() {
                 //  Автоматически создаём расход "Билет" от имени COMPANY (если есть сумма)
                 if (request.amount > 0.0) {
                     val expenseUserId = companyUserId ?: session.userId
+                    val hasReceipt = receiptFilePath != null
                     transaction {
                         // ✅ Используем java.time вместо kotlinx.datetime (проще и всегда доступно)
                         val todayJava = java.time.LocalDate.now()
@@ -2476,12 +2478,12 @@ fun Route.dataRoutes() {
                             it[amount] = request.amount
                             it[currency] = request.currency
                             it[comment] = "Автоматически создан при загрузке билета. ${request.description.takeIf { it.isNotBlank() } ?: ""}"
-                            it[receiptSubmitted] = false
-                            it[hasReceiptPhoto] = false
+                            it[receiptSubmitted] = hasReceipt
+                            it[hasReceiptPhoto] = hasReceipt
                             it[createdAt] = System.currentTimeMillis()
                         }
                     }
-                    println("✅ Auto-expense created: ${request.amount} ${request.currency} for ticket $uniqueFileName (userId=$expenseUserId)")
+                    println("✅ Auto-expense created: ${request.amount} ${request.currency} for ticket $uniqueFileName (userId=$expenseUserId, hasReceipt=$hasReceipt)")
                 }
 
                 request.recipientIds.forEach { recipientId ->
@@ -2586,12 +2588,25 @@ fun Route.dataRoutes() {
             // Telegram-уведомление о новом билете
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val telegramMsg = buildString {
+                    // Получаем имена получателей
+                    val recipientNames = transaction {
+                        request.recipientIds.mapNotNull { recipientId ->
+                            runCatching { UUID.fromString(recipientId) }.getOrNull()?.let { uuid ->
+                                UsersTable.selectAll()
+                                    .where { UsersTable.id eq uuid }
+                                    .singleOrNull()?.get(UsersTable.name)
+                            }
+                        }
+                    }
+                    
+                    // Формируем текст сообщения в нужном формате
+                    val caption = buildString {
                         appendLine("<b>🎫 НОВЫЙ БИЛЕТ</b>")
                         appendLine()
-                        appendLine("<b>👤 Загрузил:</b> $senderName")
+                        if (recipientNames.isNotEmpty()) {
+                            appendLine("<b>👤 Кому:</b> ${recipientNames.joinToString(\", \")}")
+                        }
                         appendLine("<b>📁 Проект:</b> $projectName")
-                        appendLine("<b>📄 Файл:</b> ${request.fileName}")
                         if (request.amount > 0.0) {
                             appendLine("<b>💰 Стоимость:</b> ${"%.2f".format(request.amount)} ${request.currency}")
                         }
@@ -2607,7 +2622,7 @@ fun Route.dataRoutes() {
                     }.trimIndent()
                     com.proles.server.config.TelegramService.sendMessage(telegramMsg)
                     
-                    // 🆕 Отправка файла билета в Telegram
+                    // Отправляем файл с подписью (только одно сообщение)
                     if (fileBytes.isNotEmpty()) {
                         val caption = buildString {
                             appendLine("<b>🎫 БИЛЕТ (ФАЙЛ)</b>")
@@ -2620,6 +2635,9 @@ fun Route.dataRoutes() {
                             }
                         }.trimIndent()
                         com.proles.server.config.TelegramService.sendFile(fileBytes, request.fileName, caption)
+                    } else {
+                        // Если файла нет, отправляем только текст
+                        com.proles.server.config.TelegramService.sendMessage(caption)
                     }
                 } catch (e: Exception) {
                     println("⚠️ Telegram notification failed: ${e.message}")
@@ -2658,6 +2676,7 @@ fun Route.dataRoutes() {
                             accountantEmail = row[TicketsTable.accountantEmail],
                             amount = row[TicketsTable.amount],          // 
                             currency = row[TicketsTable.currency],      // 
+                            hasReceipt = row[TicketsTable.receiptPath] != null,  // 🆕 Флаг наличия чека
                             recipients = emptyList()
                         )
                     }
@@ -2696,6 +2715,7 @@ fun Route.dataRoutes() {
                             amount = row[TicketsTable.amount],          // 
                             currency = row[TicketsTable.currency],      // 
                             uploadedAt = row[TicketsTable.uploadedAt],
+                            hasReceipt = row[TicketsTable.receiptPath] != null,  // 🆕 Флаг наличия чека
                             recipients = recipients,
                             downloadUrl = row[TicketsTable.filePath]
                         )
