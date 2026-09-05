@@ -1,33 +1,46 @@
 ```
-# Kotlin/Android build artifacts
+# Compiled and build artifacts
 *.class
 *.jar
 *.war
-*.aar
-*.apk
-*.dex
-
-# Build directories
+*.ear
+*.o
+*.obj
+*.out
 build/
-.gradle/
 target/
 
 # Dependencies
-.libs/
-lib/
+.gradle/
+node_modules/
+venv/
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
 
-# IDE files
-.idea/
-*.iml
-*.ipr
-*.iws
-.vscode/
-
-# Temp files
-*.tmp
-*.temp
+# Logs and temp files
 *.log
+*.tmp
+*.swp
 
-# Local configuration
-local.properties
+# Environment
+.env
+.env.local
+.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
 ```
