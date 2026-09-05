@@ -3,14 +3,18 @@
 *.class
 *.jar
 *.war
-*.ear
-*.apk
 *.aar
+*.apk
+*.dex
 
 # Build directories
 build/
 .gradle/
-.target/
+target/
+
+# Dependencies
+.libs/
+lib/
 
 # IDE files
 .idea/
@@ -26,5 +30,4 @@ build/
 
 # Local configuration
 local.properties
-gradle.properties
 ```
