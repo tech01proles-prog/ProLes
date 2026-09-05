@@ -2583,7 +2583,7 @@ fun Route.dataRoutes() {
                     }
                 }
             }
-            //  Telegram-уведомление о новом билете
+            // Telegram-уведомление о новом билете
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val telegramMsg = buildString {
@@ -2625,9 +2625,9 @@ fun Route.dataRoutes() {
                     println("⚠️ Telegram notification failed: ${e.message}")
                 }
             }
-
             call.respond(HttpStatusCode.Created, mapOf("id" to ticketId.toString(), "fileName" to uniqueFileName))
         }
+
 
         // 📥 Свои билеты (получатель)
         get("/my") {
