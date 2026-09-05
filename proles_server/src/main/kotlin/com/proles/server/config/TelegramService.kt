@@ -120,7 +120,7 @@ object TelegramService {
             val boundary = "----WebKitFormBoundary${System.currentTimeMillis()}"
             val crlf = "\r\n"
             
-            // Кодируем caption для HTML
+            // Для caption используем тот же подход экранирования, что и в sendMessage
             val escapedCaption = caption
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
@@ -132,34 +132,35 @@ object TelegramService {
                 .replace("&lt;code&gt;", "<code>").replace("&lt;/code&gt;", "</code>")
                 .replace("&lt;pre&gt;", "<pre>").replace("&lt;/pre&gt;", "</pre>")
             
-            val requestBody = buildString {
-                // Часть для файла (отправляем как binary, без base64)
-                append("--$boundary$crlf")
-                append("Content-Disposition: form-data; name=\"document\"; filename=\"$fileName\"$crlf")
-                append("Content-Type: $mimeType$crlf")
-                append("Content-Transfer-Encoding: binary$crlf$crlf")
-            }
-            
-            // Создаем байтовый массив для всего тела запроса
-            val boundaryBytes = requestBody.toByteArray(Charsets.UTF_8)
-            val closingBoundary = "$crlf--$boundary--$crlf".toByteArray(Charsets.UTF_8)
-            
-            // Объявляем parseMode перед использованием
             val parseMode = "HTML"
             
-            // Части для текстовых полей (исправлено: добавлены фигурные скобки для crlf)
-            val chatIdPart = "${crlf}--$boundary${crlf}Content-Disposition: form-data; name=\"chat_id\"${crlf}${crlf}$chatId${crlf}".toByteArray(Charsets.UTF_8)
-            val captionPart = "${crlf}--$boundary${crlf}Content-Disposition: form-data; name=\"caption\"${crlf}${crlf}$escapedCaption${crlf}".toByteArray(Charsets.UTF_8)
-            val parseModePart = "${crlf}--$boundary${crlf}Content-Disposition: form-data; name=\"parse_mode\"${crlf}${crlf}$parseMode${crlf}".toByteArray(Charsets.UTF_8)
-            
-            // Собираем всё вместе: boundary + fileBytes + chatId + caption + parseMode + closing boundary
+            // Собираем все части multipart запроса
             val fullBody = ByteArrayOutputStream()
-            fullBody.write(boundaryBytes)
+            
+            // Часть для chat_id
+            fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
+            fullBody.write("Content-Disposition: form-data; name=\"chat_id\"$crlf$crlf".toByteArray(Charsets.UTF_8))
+            fullBody.write("$chatId$crlf".toByteArray(Charsets.UTF_8))
+            
+            // Часть для caption
+            fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
+            fullBody.write("Content-Disposition: form-data; name=\"caption\"$crlf$crlf".toByteArray(Charsets.UTF_8))
+            fullBody.write("$escapedCaption$crlf".toByteArray(Charsets.UTF_8))
+            
+            // Часть для parse_mode
+            fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
+            fullBody.write("Content-Disposition: form-data; name=\"parse_mode\"$crlf$crlf".toByteArray(Charsets.UTF_8))
+            fullBody.write("$parseMode$crlf".toByteArray(Charsets.UTF_8))
+            
+            // Часть для файла
+            fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
+            fullBody.write("Content-Disposition: form-data; name=\"document\"; filename=\"$fileName\"$crlf".toByteArray(Charsets.UTF_8))
+            fullBody.write("Content-Type: $mimeType$crlf".toByteArray(Charsets.UTF_8))
+            fullBody.write("Content-Transfer-Encoding: binary$crlf$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write(fileBytes)
-            fullBody.write(chatIdPart)
-            fullBody.write(captionPart)
-            fullBody.write(parseModePart)
-            fullBody.write(closingBoundary)
+            
+            // Закрывающий boundary
+            fullBody.write("$crlf--$boundary--$crlf".toByteArray(Charsets.UTF_8))
             
             val request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
