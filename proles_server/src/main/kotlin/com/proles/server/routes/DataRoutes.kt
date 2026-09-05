@@ -2620,7 +2620,7 @@ fun Route.dataRoutes() {
                             appendLine("<b>📧 Отправлено:</b> ${request.accountantEmail}")
                         }
                     }.trimIndent()
-                    com.proles.server.config.TelegramService.sendMessage(telegramMsg)
+                    com.proles.server.config.TelegramService.sendMessage(caption)
                     
                     // Отправляем файл с подписью (только одно сообщение)
                     if (fileBytes.isNotEmpty()) {
