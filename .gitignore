@@ -1,35 +1,29 @@
+```
 # Compiled and build artifacts
 *.class
+*.jar
+*.war
+*.ear
 *.o
 *.obj
 *.out
-*.dll
-*.so
-*.a
-*.exe
+build/
+target/
 
 # Dependencies
 .gradle/
-build/
-target/
-**/node_modules/
-**/venv/
-**/env/
-**/.venv/
-**/__pycache__/
-**/.mypy_cache/
-**/.pytest_cache/
+lib/
+libs/
 
 # Logs and temp files
 *.log
 *.tmp
 *.swp
-*.swo
 
 # Environment
 .env
 .env.local
-.env.*
+*.env.*
 
 # Editors
 .vscode/
@@ -38,39 +32,21 @@ target/
 *.ipr
 *.iws
 
-# System
-.DS_Store
-Thumbs.db
-*.DS_Store
-ehthumbs.db
-Icon?
-.CFUserTextEncoding
-
-# Coverage
+# Coverage reports
 coverage/
 htmlcov/
 .coverage
 
-# Archives
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-*.tar.gz
-*.tar.bz2
-*.tar.xz
-*.tar.zst
+# Python related (if any Python in project)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py~
+.mypy_cache/
+.pytest_cache/
+
+# System files
+.DS_Store
+Thumbs.db
+```
