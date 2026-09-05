@@ -1,1 +1,76 @@
-Nothing should be ignored based on the provided file changes. The modified file 'ProlesTimesheet/prolestimesheet/ui/screens/TimesheetScreen.kt' is a Kotlin source file, which should not be ignored. No build artifacts, dependencies, or temporary files are present in the changes.
+# Compiled and build artifacts
+*.class
+*.o
+*.obj
+*.out
+*.dll
+*.so
+*.a
+*.exe
+
+# Dependencies
+.gradle/
+build/
+target/
+**/node_modules/
+**/venv/
+**/env/
+**/.venv/
+**/__pycache__/
+**/.mypy_cache/
+**/.pytest_cache/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Editors
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# System
+.DS_Store
+Thumbs.db
+*.DS_Store
+ehthumbs.db
+Icon?
+.CFUserTextEncoding
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Archives
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst

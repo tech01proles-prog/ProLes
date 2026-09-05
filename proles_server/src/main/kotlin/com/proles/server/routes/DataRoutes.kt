@@ -619,8 +619,9 @@ fun Route.dataRoutes() {
 //                return@post
 //            }
 
-            // 📁 Структура: uploads/receipts/{userId}/{projectId}/
-            val uploadDir = java.io.File("uploads/receipts/$expenseUserId/$expenseProjectId").apply {
+            // 📁 Структура: uploads/receipts/{YYYY-MM}/{userId}/
+            val currentMonth = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"))
+            val uploadDir = java.io.File("uploads/receipts/$currentMonth/$expenseUserId").apply {
                 mkdirs()
             }
 
@@ -632,7 +633,7 @@ fun Route.dataRoutes() {
             java.io.File(uploadDir, fileName).writeBytes(imageBytes!!)
 
             // 🔗 URL для доступа к фото
-            val imageUrl = "/uploads/receipts/$expenseUserId/$expenseProjectId/$fileName"
+            val imageUrl = "/uploads/receipts/$currentMonth/$expenseUserId/$fileName"
 
             val receiptId = UUID.randomUUID()
             transaction {
