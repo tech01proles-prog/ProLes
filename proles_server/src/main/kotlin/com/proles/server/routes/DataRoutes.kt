@@ -596,19 +596,21 @@ fun Route.dataRoutes() {
             }
 
             // 🔥 Получаем расход из БД для валидации и извлечения userId/projectId
-            val expense = transaction {
-                ExpensesTable.selectAll()
+            val expenseWithProject = transaction {
+                (ExpensesTable innerJoin ProjectsTable)
+                    .selectAll()
                     .where { ExpensesTable.id eq UUID.fromString(expenseId) }
                     .singleOrNull()
             }
 
-            if (expense == null) {
+            if (expenseWithProject == null) {
                 call.respond(HttpStatusCode.NotFound, "Expense not found")
                 return@post
             }
 
-            val expenseUserId = expense[ExpensesTable.userId].value
-            val expenseProjectId = expense[ExpensesTable.projectId].value
+            val expenseUserId = expenseWithProject[ExpensesTable.userId].value
+            val expenseProjectId = expenseWithProject[ExpensesTable.projectId].value
+            val projectName = expenseWithProject[ProjectsTable.name]
 
             // 🔒 Проверка безопасности: только владелец или админ может загружать
 //            if (expenseUserId != session.userId && session.role !in listOf("admin", "director")) {
@@ -622,10 +624,10 @@ fun Route.dataRoutes() {
                 mkdirs()
             }
 
-            // 📸 Имя файла: timestamp_уникальныйID.jpg
-            val timestamp = System.currentTimeMillis()
-            val uniqueId = UUID.randomUUID().toString().take(8)
-            val fileName = "${timestamp}_${uniqueId}.jpg"
+            // 📸 Имя файла: {проект}_{дата_загрузки}.jpg
+            // Получаем текущую дату в формате YYYY-MM-DD
+            val currentDate = java.time.LocalDate.now().toString()
+            val fileName = "${projectName}_${currentDate}.jpg"
 
             java.io.File(uploadDir, fileName).writeBytes(imageBytes!!)
 
