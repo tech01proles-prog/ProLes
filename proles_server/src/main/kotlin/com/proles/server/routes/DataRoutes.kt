@@ -102,6 +102,7 @@ data class SalaryBreakdownResponse(
     val piece: Double,
     val hourly: Double,
     val bonus: Double,
+    val penalty: Double = 0.0,
     val total: Double
 )
 
@@ -2777,6 +2778,31 @@ fun Route.dataRoutes() {
     // 💰 PAYROLL: Зарплаты
     // ─────────────────────────────────────────────────────────────
     route("/api/v1/payroll") {
+        // Сотрудники для управления зарплатой. Доступ определяется правом PAYROLL.view.
+        get("/users") {
+            if (!call.checkPermission(Permission.PAYROLL, "view")) return@get
+            val users = transaction {
+                UsersTable.selectAll()
+                    .orderBy(UsersTable.lastName to SortOrder.ASC, UsersTable.firstName to SortOrder.ASC)
+                    .map { row ->
+                        UserDto(
+                            id = row[UsersTable.id].value.toString(),
+                            lastName = row[UsersTable.lastName],
+                            firstName = row[UsersTable.firstName],
+                            middleName = row[UsersTable.middleName],
+                            name = row[UsersTable.name],
+                            login = row[UsersTable.login],
+                            role = row[UsersTable.role],
+                            position = row[UsersTable.position] ?: "",
+                            defaultRateType = row[UsersTable.defaultRateType],
+                            defaultRate = row[UsersTable.defaultRate],
+                            defaultCurrency = row[UsersTable.defaultCurrency]
+                        )
+                    }
+            }
+            call.respond(HttpStatusCode.OK, users)
+        }
+
         // Получить все компоненты зарплаты (для CostCalculationPage)
         get("/components/all") {
             if (!call.checkPermission(Permission.PAYROLL, "view")) return@get
@@ -2897,10 +2923,8 @@ fun Route.dataRoutes() {
                 return@delete call.respond(HttpStatusCode.NotFound, "Component not found")
             }
 
-            // Если не супер-админ, проверяем что компонент принадлежит текущему пользователю
-            if (session.role != "superadmin" && componentOwner != session.userId) {
-                return@delete call.respond(HttpStatusCode.Forbidden, "Cannot delete another user's component")
-            }
+            // PAYROLL.delete уже проверен выше: пользователь с этим правом может управлять
+            // компонентами выбранного сотрудника, так же как своими.
 
             transaction {
                 SalaryComponentsTable.deleteWhere { SalaryComponentsTable.id eq componentId }
@@ -2937,10 +2961,8 @@ fun Route.dataRoutes() {
                 return@put call.respond(HttpStatusCode.NotFound, "Component not found")
             }
 
-            // Если не супер-админ, проверяем что компонент принадлежит текущему пользователю
-            if (session.role != "superadmin" && componentOwner != session.userId) {
-                return@put call.respond(HttpStatusCode.Forbidden, "Cannot edit another user's component")
-            }
+            // PAYROLL.edit уже проверен выше: пользователь с этим правом может изменять
+            // компоненты выбранного сотрудника.
 
             val userId = runCatching { UUID.fromString(body.userId) }.getOrNull()
                 ?: return@put call.respond(HttpStatusCode.BadRequest, "Invalid userId")
@@ -3031,6 +3053,7 @@ fun Route.dataRoutes() {
                 piece = breakdown.piece,
                 hourly = breakdown.hourly,
                 bonus = breakdown.bonus,
+                penalty = breakdown.penalty,
                 total = breakdown.total
             ))
         }
