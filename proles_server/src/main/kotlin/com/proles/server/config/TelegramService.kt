@@ -101,7 +101,7 @@ object TelegramService {
 
         return try {
             val url = "https://api.telegram.org/bot$botToken/sendDocument"
-
+            
             // Определяем MIME-тип по расширению
             val ext = fileName.substringAfterLast('.', "").lowercase()
             val mimeType = when (ext) {
@@ -119,48 +119,43 @@ object TelegramService {
             // Формируем multipart/form-data запрос вручную
             val boundary = "----WebKitFormBoundary${System.currentTimeMillis()}"
             val crlf = "\r\n"
-
-            // parse_mode намеренно не передаём: Telegram на части инсталляций возвращал
-            // "unsupported parse_mode" для этого multipart-запроса. Делаем caption обычным текстом.
+            
+            // Для документов отправляем caption как обычный текст.
+            // Это исключает ошибки Telegram "unsupported parse_mode" и проблемы с HTML-экранированием.
             val plainCaption = caption
-                .replace(Regex("<[^>]*>"), "")
-                .replace("&amp;", "&")
-                .replace("&lt;", "<")
-                .replace("&gt;", ">")
-                .trim()
+                .replace("\r", "")
+                .replace("\u0000", "")
                 .take(1024)
-
-            val safeFileName = fileName
-                .replace("\\", "_")
-                .replace("/", "_")
-                .replace("\"", "_")
-                .replace("\r", "_")
-                .replace("\n", "_")
-                .ifBlank { "document" }
-
+            
             // Собираем все части multipart запроса
             val fullBody = ByteArrayOutputStream()
-
+            
             // Часть для chat_id
             fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("Content-Disposition: form-data; name=\"chat_id\"$crlf$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("$chatId$crlf".toByteArray(Charsets.UTF_8))
-
+            
             // Часть для caption
             fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("Content-Disposition: form-data; name=\"caption\"$crlf$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("$plainCaption$crlf".toByteArray(Charsets.UTF_8))
-
+            
             // Часть для файла
+            val safeFileName = fileName
+                .replace("\\", "_")
+                .replace("\"", "_")
+                .replace("\r", "_")
+                .replace("\n", "_")
+                .ifBlank { "document.bin" }
             fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("Content-Disposition: form-data; name=\"document\"; filename=\"$safeFileName\"$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("Content-Type: $mimeType$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("Content-Transfer-Encoding: binary$crlf$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write(fileBytes)
-
+            
             // Закрывающий boundary
             fullBody.write("$crlf--$boundary--$crlf".toByteArray(Charsets.UTF_8))
-
+            
             val request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "multipart/form-data; boundary=$boundary")

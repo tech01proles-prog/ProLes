@@ -568,146 +568,40 @@ fun Route.dataRoutes() {
             })
         }
 
-        post("/upload-receipt") {
-            if (call.checkSession() == null) return@post
-
-            //  НОВЫЙ ПОДХОД: принимаем JSON вместо multipart
+        suspend fun handleExpenseAttachment(call: ApplicationCall, requireImage: Boolean = false) {
+            val session = call.checkSession() ?: return
             val requestBody = try {
                 call.receive<Map<String, String>>()
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}")
-                return@post
+                return
             }
 
             val expenseId = requestBody["expenseId"]
-            val imageBase64 = requestBody["imageBase64"]
-
-            if (expenseId.isNullOrBlank() || imageBase64.isNullOrBlank()) {
-                call.respond(HttpStatusCode.BadRequest, "Missing expenseId or imageBase64")
-                return@post
-            }
-
-            // Декодируем Base64 обратно в ByteArray
-            val imageBytes = try {
-                Base64.getDecoder().decode(imageBase64)
-            } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, "Invalid Base64 image data")
-                return@post
-            }
-
-            // 🔥 Получаем расход из БД для валидации и извлечения userId/projectId
-            val expenseWithProject = transaction {
-                (ExpensesTable innerJoin ProjectsTable)
-                    .selectAll()
-                    .where { ExpensesTable.id eq UUID.fromString(expenseId) }
-                    .singleOrNull()
-            }
-
-            if (expenseWithProject == null) {
-                call.respond(HttpStatusCode.NotFound, "Expense not found")
-                return@post
-            }
-
-            val expenseUserId = expenseWithProject[ExpensesTable.userId].value
-            val expenseProjectId = expenseWithProject[ExpensesTable.projectId].value
-            val projectName = expenseWithProject[ProjectsTable.name]
-
-            // 🔒 Проверка безопасности: только владелец или админ может загружать
-//            if (expenseUserId != session.userId && session.role !in listOf("admin", "director")) {
-//                println("⚠️ Попытка загрузки чужого чека: user=${session.userId}, owner=$expenseUserId")
-//                call.respond(HttpStatusCode.Forbidden, "Access denied: not your expense")
-//                return@post
-//            }
-
-            // 👤 Получаем ФИО пользователя для пути сохранения
-            val userFullNameShort = transaction {
-                UsersTable.selectAll()
-                    .where { UsersTable.id eq expenseUserId }
-                    .singleOrNull()
-                    ?.let { row ->
-                        val lastName = row[UsersTable.lastName]
-                        val firstName = row[UsersTable.firstName]
-                        val middleName = row[UsersTable.middleName]
-                        // Формируем "фамилия и.о."
-                        val initials = buildString {
-                            if (firstName.isNotEmpty()) append("${firstName.first().uppercase()}")
-                            if (middleName.isNotEmpty()) append(".${middleName.first().uppercase()}.")
-                        }
-                        "$lastName $initials".trim()
-                    } ?: "unknown_user"
-            }
-
-            // 📁 Структура: uploads/receipts/{YYYY-MM}/{фамилия и.о.}/
-            val currentMonth = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"))
-            // Экранируем спецсимволы в имени для безопасного пути
-            val safeUserFolder = userFullNameShort.replace("/", "_").replace("\\", "_")
-            val uploadDir = java.io.File("uploads/receipts/$currentMonth/$safeUserFolder").apply {
-                mkdirs()
-            }
-
-            // 📸 Уникальное имя файла, чтобы несколько чеков за день не перезаписывали друг друга.
-            val receiptId = UUID.randomUUID()
-            val safeProjectName = projectName
-                .replace(Regex("[^a-zA-Z0-9а-яА-Я._-]"), "_")
-                .take(80)
-                .ifBlank { "expense" }
-            val fileName = "${safeProjectName}_${java.time.LocalDate.now()}_${receiptId}.jpg"
-
-            java.io.File(uploadDir, fileName).writeBytes(imageBytes!!)
-
-            // 🔗 URL для доступа к фото
-            val imageUrl = "/uploads/receipts/$currentMonth/$safeUserFolder/$fileName"
-
-            transaction {
-                ExpenseReceiptsTable.insert {
-                    it[id] = receiptId
-                    it[ExpenseReceiptsTable.expenseId] = UUID.fromString(expenseId)
-                    it[ExpenseReceiptsTable.imageUrl] = imageUrl
-                    it[uploadedAt] = System.currentTimeMillis()
-                }
-                ExpensesTable.update({ ExpensesTable.id eq UUID.fromString(expenseId) }) {
-                    it[hasReceiptPhoto] = true
-                    it[receiptSubmitted] = true  //  Автоматически подтверждаем чек
-                }
-            }
-
-            println("✅ Фото сохранено: $imageUrl (${imageBytes!!.size / 1024} КБ) | user=$expenseUserId, project=$expenseProjectId")
-            call.respond(HttpStatusCode.Created, mapOf("id" to receiptId.toString(), "url" to imageUrl))
-        }
-
-        post("/upload-attachment") {
-            val session = call.checkSession() ?: return@post
-
-            val requestBody = try {
-                call.receive<Map<String, String>>()
-            } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}")
-                return@post
-            }
-
-            val expenseId = requestBody["expenseId"]
-            val fileBase64 = requestBody["fileBase64"]
-            val originalFileName = requestBody["fileName"]?.takeIf { it.isNotBlank() } ?: "attachment"
-            val fileType = requestBody["fileType"]?.takeIf { it.isNotBlank() } ?: "application/octet-stream"
+            val fileBase64 = requestBody["fileBase64"] ?: requestBody["imageBase64"]
+            val originalName = requestBody["fileName"] ?: "receipt.jpg"
+            val mimeType = requestBody["mimeType"] ?: "image/jpeg"
 
             if (expenseId.isNullOrBlank() || fileBase64.isNullOrBlank()) {
                 call.respond(HttpStatusCode.BadRequest, "Missing expenseId or fileBase64")
-                return@post
+                return
             }
 
-            val expenseUuid = runCatching { UUID.fromString(expenseId) }.getOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid expenseId")
+            if (requireImage && !mimeType.startsWith("image/")) {
+                call.respond(HttpStatusCode.BadRequest, "Receipt must be an image")
+                return
+            }
+
+            val expenseUuid = try { UUID.fromString(expenseId) } catch (_: Exception) {
+                call.respond(HttpStatusCode.BadRequest, "Invalid expenseId")
+                return
+            }
 
             val fileBytes = try {
                 Base64.getDecoder().decode(fileBase64)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid Base64 file data")
-                return@post
-            }
-
-            if (fileBytes.isEmpty()) {
-                call.respond(HttpStatusCode.BadRequest, "Empty file")
-                return@post
+                return
             }
 
             val expenseWithProject = transaction {
@@ -719,17 +613,18 @@ fun Route.dataRoutes() {
 
             if (expenseWithProject == null) {
                 call.respond(HttpStatusCode.NotFound, "Expense not found")
-                return@post
+                return
             }
 
             val expenseUserId = expenseWithProject[ExpensesTable.userId].value
-            if (expenseUserId != session.userId && session.role !in listOf("admin", "director", "superadmin")) {
+            val projectName = expenseWithProject[ProjectsTable.name]
+            val canUploadForeignExpense = session.role in listOf("admin", "director", "superadmin")
+            if (expenseUserId != session.userId && !canUploadForeignExpense) {
                 call.respond(HttpStatusCode.Forbidden, "Access denied: not your expense")
-                return@post
+                return
             }
 
-            val projectName = expenseWithProject[ProjectsTable.name]
-            val userFolder = transaction {
+            val userFullNameShort = transaction {
                 UsersTable.selectAll()
                     .where { UsersTable.id eq expenseUserId }
                     .singleOrNull()
@@ -739,44 +634,67 @@ fun Route.dataRoutes() {
                         val middleName = row[UsersTable.middleName]
                         val initials = buildString {
                             if (firstName.isNotEmpty()) append(firstName.first().uppercase())
-                            if (middleName.isNotEmpty()) append(".${middleName.first().uppercase()}.")
+                            if (middleName.isNotEmpty()) append(".").append(middleName.first().uppercase()).append(".")
                         }
                         "$lastName $initials".trim()
                     } ?: "unknown_user"
-            }.replace("/", "_").replace("\\", "_")
+            }
 
-            val month = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"))
-            val safeOriginalName = originalFileName
-                .replace("/", "_")
-                .replace("\\", "_")
-                .replace(Regex("[^a-zA-Z0-9а-яА-Я._-]"), "_")
-                .take(120)
-                .ifBlank { "attachment" }
-            val attachmentId = UUID.randomUUID()
-            val uploadDir = java.io.File("uploads/receipts/$month/$userFolder").apply { mkdirs() }
-            val storedName = "${projectName.replace(Regex("[^a-zA-Z0-9а-яА-Я._-]"), "_").take(50)}_${attachmentId}_$safeOriginalName"
-            java.io.File(uploadDir, storedName).writeBytes(fileBytes)
-            val imageUrl = "/uploads/receipts/$month/$userFolder/$storedName"
+            val currentMonth = java.time.LocalDate.now().format(
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM")
+            )
+            val safeUserFolder = userFullNameShort
+                .replace(Regex("[^A-Za-zА-Яа-яЁё0-9._ -]"), "_")
+                .replace("..", "_")
+                .ifBlank { "unknown_user" }
 
+            val uploadDir = java.io.File("uploads/receipts/$currentMonth/$safeUserFolder").apply { mkdirs() }
+
+            val safeProject = projectName
+                .replace(Regex("[^A-Za-zА-Яа-яЁё0-9._ -]"), "_")
+                .replace("..", "_")
+                .take(80)
+                .ifBlank { "project" }
+            val extension = originalName.substringAfterLast('.', "").lowercase().take(10).let {
+                if (it.matches(Regex("[a-z0-9]+"))) it else when {
+                    mimeType == "application/pdf" -> "pdf"
+                    mimeType.startsWith("image/") -> "jpg"
+                    else -> "bin"
+                }
+            }
+            val fileName = "${safeProject}_${java.time.LocalDate.now()}_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}.$extension"
+            java.io.File(uploadDir, fileName).writeBytes(fileBytes)
+
+            val fileUrl = "/uploads/receipts/$currentMonth/$safeUserFolder/$fileName"
+            val receiptId = UUID.randomUUID()
             transaction {
                 ExpenseReceiptsTable.insert {
-                    it[id] = attachmentId
+                    it[id] = receiptId
                     it[ExpenseReceiptsTable.expenseId] = expenseUuid
-                    it[ExpenseReceiptsTable.imageUrl] = imageUrl
+                    it[ExpenseReceiptsTable.imageUrl] = fileUrl
                     it[uploadedAt] = System.currentTimeMillis()
                 }
                 ExpensesTable.update({ ExpensesTable.id eq expenseUuid }) {
+                    it[hasReceiptPhoto] = mimeType.startsWith("image/")
                     it[receiptSubmitted] = true
-                    if (fileType.startsWith("image/")) it[hasReceiptPhoto] = true
                 }
             }
 
-            println("✅ Attachment saved: $imageUrl (${fileBytes.size / 1024} KB), type=$fileType, user=${session.userId}")
+            println("✅ Вложение расхода сохранено: $fileUrl (${fileBytes.size / 1024} КБ, $mimeType) | expense=$expenseId")
             call.respond(
                 HttpStatusCode.Created,
-                mapOf("id" to attachmentId.toString(), "url" to imageUrl, "fileName" to originalFileName)
+                mapOf("id" to receiptId.toString(), "url" to fileUrl, "fileName" to fileName)
             )
         }
+
+        post("/upload-receipt") {
+            handleExpenseAttachment(call, requireImage = true)
+        }
+
+        post("/upload-attachment") {
+            handleExpenseAttachment(call, requireImage = false)
+        }
+
 
         //  Эндпоинт для админа: все расходы всех сотрудников
         get("/all") {
@@ -798,22 +716,22 @@ fun Route.dataRoutes() {
                     }
                     .orderBy(ExpensesTable.date to SortOrder.DESC)
                 query.map { row ->
-                    ExpenseDto(
-                        id = row[ExpensesTable.id].value.toString(),
-                        userId = row[ExpensesTable.userId].value.toString(),
-                        projectId = row[ExpensesTable.projectId].value.toString(),
-                        projectName = row[ProjectsTable.name],
-                        date = row[ExpensesTable.date].toString(),
-                        type = row[ExpensesTable.type],
-                        name = row[ExpensesTable.name],
-                        amount = row[ExpensesTable.amount],
-                        currency = row[ExpensesTable.currency],
-                        comment = row[ExpensesTable.comment],
-                        receiptSubmitted = row[ExpensesTable.receiptSubmitted],
-                        hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
-                        category = row[ExpensesTable.category]
-                    )
-                }
+                        ExpenseDto(
+                            id = row[ExpensesTable.id].value.toString(),
+                            userId = row[ExpensesTable.userId].value.toString(),
+                            projectId = row[ExpensesTable.projectId].value.toString(),
+                            projectName = row[ProjectsTable.name],
+                            date = row[ExpensesTable.date].toString(),
+                            type = row[ExpensesTable.type],
+                            name = row[ExpensesTable.name],
+                            amount = row[ExpensesTable.amount],
+                            currency = row[ExpensesTable.currency],
+                            comment = row[ExpensesTable.comment],
+                            receiptSubmitted = row[ExpensesTable.receiptSubmitted],
+                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
+                            category = row[ExpensesTable.category]
+                        )
+                    }
             }
             call.respond(HttpStatusCode.OK, list)
         }
@@ -840,22 +758,22 @@ fun Route.dataRoutes() {
                     .where { conditions.reduce { acc, op -> acc and op } }
                     .orderBy(ExpensesTable.date to SortOrder.DESC)
                 query.map { row ->
-                    ExpenseDto(
-                        id = row[ExpensesTable.id].value.toString(),
-                        userId = row[ExpensesTable.userId].value.toString(),
-                        projectId = row[ExpensesTable.projectId].value.toString(),
-                        projectName = row[ProjectsTable.name],
-                        date = row[ExpensesTable.date].toString(),
-                        type = row[ExpensesTable.type],
-                        name = row[ExpensesTable.name],
-                        amount = row[ExpensesTable.amount],
-                        currency = row[ExpensesTable.currency],
-                        comment = row[ExpensesTable.comment],
-                        receiptSubmitted = row[ExpensesTable.receiptSubmitted],
-                        hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
-                        category = row[ExpensesTable.category]
-                    )
-                }
+                        ExpenseDto(
+                            id = row[ExpensesTable.id].value.toString(),
+                            userId = row[ExpensesTable.userId].value.toString(),
+                            projectId = row[ExpensesTable.projectId].value.toString(),
+                            projectName = row[ProjectsTable.name],
+                            date = row[ExpensesTable.date].toString(),
+                            type = row[ExpensesTable.type],
+                            name = row[ExpensesTable.name],
+                            amount = row[ExpensesTable.amount],
+                            currency = row[ExpensesTable.currency],
+                            comment = row[ExpensesTable.comment],
+                            receiptSubmitted = row[ExpensesTable.receiptSubmitted],
+                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
+                            category = row[ExpensesTable.category]
+                        )
+                    }
             }
             call.respond(HttpStatusCode.OK, list)
         }
@@ -943,20 +861,20 @@ fun Route.dataRoutes() {
                     }
                     .orderBy(IncomesTable.date to SortOrder.DESC)
                 query.map { row ->
-                    IncomeDto(
-                        id = row[IncomesTable.id].value.toString(),
-                        userId = row[IncomesTable.userId].value.toString(),
-                        projectId = row[IncomesTable.projectId]?.value?.toString(),
-                        projectName = row.getOrNull(ProjectsTable.name) ?: "Без проекта",
-                        date = row[IncomesTable.date].toString(),
-                        type = row[IncomesTable.type],
-                        name = row[IncomesTable.name],
-                        amount = row[IncomesTable.amount],
-                        currency = row[IncomesTable.currency],
-                        category = row[IncomesTable.category],
-                        createdAt = row[IncomesTable.createdAt]
-                    )
-                }
+                        IncomeDto(
+                            id = row[IncomesTable.id].value.toString(),
+                            userId = row[IncomesTable.userId].value.toString(),
+                            projectId = row[IncomesTable.projectId]?.value?.toString(),
+                            projectName = row.getOrNull(ProjectsTable.name) ?: "Без проекта",
+                            date = row[IncomesTable.date].toString(),
+                            type = row[IncomesTable.type],
+                            name = row[IncomesTable.name],
+                            amount = row[IncomesTable.amount],
+                            currency = row[IncomesTable.currency],
+                            category = row[IncomesTable.category],
+                            createdAt = row[IncomesTable.createdAt]
+                        )
+                    }
             }
             call.respond(HttpStatusCode.OK, list)
         }
@@ -982,20 +900,20 @@ fun Route.dataRoutes() {
                     .where { conditions.reduce { acc, op -> acc and op } }
                     .orderBy(IncomesTable.date to SortOrder.DESC)
                 query.map { row ->
-                    IncomeDto(
-                        id = row[IncomesTable.id].value.toString(),
-                        userId = row[IncomesTable.userId].value.toString(),
-                        projectId = row[IncomesTable.projectId]?.value?.toString(),
-                        projectName = row.getOrNull(ProjectsTable.name) ?: "Без проекта",
-                        date = row[IncomesTable.date].toString(),
-                        type = row[IncomesTable.type],
-                        name = row[IncomesTable.name],
-                        amount = row[IncomesTable.amount],
-                        currency = row[IncomesTable.currency],
-                        category = row[IncomesTable.category],
-                        createdAt = row[IncomesTable.createdAt]
-                    )
-                }
+                        IncomeDto(
+                            id = row[IncomesTable.id].value.toString(),
+                            userId = row[IncomesTable.userId].value.toString(),
+                            projectId = row[IncomesTable.projectId]?.value?.toString(),
+                            projectName = row.getOrNull(ProjectsTable.name) ?: "Без проекта",
+                            date = row[IncomesTable.date].toString(),
+                            type = row[IncomesTable.type],
+                            name = row[IncomesTable.name],
+                            amount = row[IncomesTable.amount],
+                            currency = row[IncomesTable.currency],
+                            category = row[IncomesTable.category],
+                            createdAt = row[IncomesTable.createdAt]
+                        )
+                    }
             }
             call.respond(HttpStatusCode.OK, list)
         }
@@ -1644,7 +1562,7 @@ fun Route.dataRoutes() {
                         it[participants] = json.encodeToString(trip.participants)
                         it[transport] = trip.transport
                         it[notes] = trip.notes
-                        it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
+                    it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
                         it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints)
                         it[createdAt] = System.currentTimeMillis()
                         it[perDiemRate] = trip.perDiemRate
@@ -1673,7 +1591,7 @@ fun Route.dataRoutes() {
                             it[participants] = json.encodeToString(trip.participants)
                             it[transport] = trip.transport
                             it[notes] = trip.notes
-                            it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
+                    it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
                             it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints)
                             it[createdAt] = System.currentTimeMillis()
                         }
@@ -1698,7 +1616,7 @@ fun Route.dataRoutes() {
                                 it[BusinessTripsTable.waypoints] = json.encodeToString(trip.waypoints)
                                 if (trip.notes.isNotBlank()) {
                                     it[notes] = trip.notes
-                                    it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
+                    it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
                                 }
                                 it[type] = "TRANSFER"
                             } else { // COMPLETION
@@ -1708,7 +1626,7 @@ fun Route.dataRoutes() {
                                 if (trip.city.isNotBlank()) it[city] = trip.city
                                 if (trip.transport.isNotBlank()) it[transport] = trip.transport
                                 if (trip.notes.isNotBlank()) it[notes] = trip.notes
-                                it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
+                    it[perDiemRate] = trip.perDiemRate  // 🆕 Сохраняем размер суточных
                             }
                         }
 
@@ -2512,19 +2430,19 @@ fun Route.dataRoutes() {
             val uniqueFileName = "${ticketId}_${request.fileName}"
             val uploadDir = java.io.File("uploads/tickets").apply { mkdirs() }
             java.io.File(uploadDir, uniqueFileName).writeBytes(fileBytes)
-
+            
             // 🆕 Обработка чека если предоставлен
             var receiptFilePath: String? = null
             var receiptOriginalName: String? = null
             var receiptFileType: String? = null
-
+            
             if (!request.receiptBase64.isNullOrBlank()) {
                 val receiptBytes = try { java.util.Base64.getDecoder().decode(request.receiptBase64) }
-                catch (e: Exception) {
+                catch (e: Exception) { 
                     println("⚠️ Invalid receipt Base64: ${e.message}")
-                    null
+                    null 
                 }
-
+                
                 if (receiptBytes != null) {
                     val receiptFileName = request.receiptFileName ?: "receipt"
                     val uniqueReceiptFileName = "${ticketId}_receipt_$receiptFileName"
@@ -2535,14 +2453,14 @@ fun Route.dataRoutes() {
                     println("✅ Receipt saved: $uniqueReceiptFileName (${receiptBytes.size / 1024} KB)")
                 }
             }
-
+            
             transaction {
                 // Находим UUID пользователя COMPANY для расходов компании
                 val companyUser = UsersTable.selectAll()
                     .where { UsersTable.name eq "COMPANY" }
                     .singleOrNull()
                 val companyUserId = companyUser?.let { it[UsersTable.id].value }
-
+                
                 // Загрузка билета
                 TicketsTable.insert {
                     it[TicketsTable.id] = ticketId
@@ -2703,7 +2621,7 @@ fun Route.dataRoutes() {
                             }
                         }
                     }
-
+                    
                     // Формируем текст сообщения в нужном формате
                     val caption = buildString {
                         appendLine("<b>🎫 НОВЫЙ БИЛЕТ</b>")
@@ -2725,7 +2643,7 @@ fun Route.dataRoutes() {
                             appendLine("<b>📧 Отправлено:</b> ${request.accountantEmail}")
                         }
                     }.trimIndent()
-
+                    
                     // Отправляем файл с подписью (только одно сообщение)
                     if (fileBytes.isNotEmpty()) {
                         val caption = buildString {
@@ -2993,7 +2911,7 @@ fun Route.dataRoutes() {
         // ✏️ Редактировать компонент зарплаты
         put("/components/{componentId}") {
             if (!call.checkPermission(Permission.PAYROLL, "edit")) return@put
-
+            
             val componentId = runCatching {
                 UUID.fromString(call.parameters["componentId"])
             }.getOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "Invalid componentId")
@@ -3005,7 +2923,7 @@ fun Route.dataRoutes() {
             }
 
             val session = call.checkSession() ?: return@put
-
+            
             // Проверяем, что компонент принадлежит пользователю (или текущий пользователь — админ)
             val componentOwner = transaction {
                 SalaryComponentsTable.selectAll()
