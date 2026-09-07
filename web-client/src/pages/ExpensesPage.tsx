@@ -197,7 +197,7 @@ export function ExpensesPage() {
       if (reportPreset === '1') return true;
       if (reportPreset === '2') return entry.type === 'EXPENSE' && (isHouseholdExpense(entry) || isPerDiem(entry));
       if (reportPreset === '3') return entry.type === 'INCOME' || (
-        entry.type === 'EXPENSE' && (!entry.hasReceipt || isExtraPerDiem(entry))
+        entry.type === 'EXPENSE' && !isPerDiem(entry) && (!entry.hasReceipt || isExtraPerDiem(entry))
       );
       return filterEntryType === 'all' || entry.type === filterEntryType;
     })
