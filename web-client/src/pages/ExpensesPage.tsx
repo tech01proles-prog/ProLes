@@ -16,9 +16,11 @@ const INCOME_TYPES = [
 ];
 
 const EXPENSE_TYPES = [
+  { key: 'HOUSEHOLD', label: 'Хоз.нужды', icon: '🏠' },
   { key: 'CONTRACTORS', label: 'Подрядчики', icon: '👷' },
   { key: 'ROAD', label: 'Дорога', icon: '🚗' },
   { key: 'PER_DIEM', label: 'Суточные', icon: '💵' },
+  { key: 'PER_DIEM_EXTRA', label: 'Суточные сверх.', icon: '🔴' },
   { key: 'CASH', label: 'Наличные', icon: '💰' },
   { key: 'CARD', label: 'Карта', icon: '💳' },
   { key: 'OTHER', label: 'Прочее', icon: '📦' },
@@ -26,6 +28,23 @@ const EXPENSE_TYPES = [
 
 const findIncomeType = (key: string) => INCOME_TYPES.find(t => t.key === key);
 const findExpenseType = (key: string) => EXPENSE_TYPES.find(t => t.key === key);
+
+type ReportPreset = '1' | '2' | '3';
+const PER_DIEM_TYPES = new Set(['PER_DIEM', 'per_diem', 'PERDIEM', 'perdiem']);
+const EXTRA_PER_DIEM_TYPES = new Set(['PER_DIEM_EXTRA', 'per_diem_extra', 'PER_DIEM_EXCESS', 'per_diem_excess']);
+const isPerDiem = (entry: CombinedEntry) =>
+  entry.type === 'EXPENSE' && PER_DIEM_TYPES.has(entry.subcategory || '');
+const isExtraPerDiem = (entry: CombinedEntry) =>
+  entry.type === 'EXPENSE' && (
+    EXTRA_PER_DIEM_TYPES.has(entry.subcategory || '') ||
+    (entry.name || '').toLowerCase().replace(/ё/g, 'е').includes('суточные сверх')
+  );
+const isHouseholdExpense = (entry: CombinedEntry) => {
+  if (entry.type !== 'EXPENSE') return false;
+  const type = (entry.subcategory || '').toUpperCase();
+  const text = `${entry.name || ''} ${entry.comment || ''}`.toLowerCase().replace(/ё/g, 'е');
+  return type === 'HOUSEHOLD' || /хоз\s*\.?\s*нужд/.test(text);
+};
 
 interface CombinedEntry {
   id: string;
@@ -72,6 +91,7 @@ export function ExpensesPage() {
   const [filterReceipt, setFilterReceipt] = useState<'all' | 'with' | 'without'>('all');
   const [filterCategory, setFilterCategory] = useState<'all' | 'WORK' | 'PERSONAL'>('all');  // 🆕 Фильтр по надкатегории
   const [filterSubcategory, setFilterSubcategory] = useState('all');  // 🆕 Фильтр по подкатегории (типу расхода)
+  const [reportPreset, setReportPreset] = useState<ReportPreset | null>(null);
   
   // Автоматически переключаем на 'all' если в URL есть userId или scope=all
   useEffect(() => {
@@ -173,11 +193,19 @@ export function ExpensesPage() {
 
   const filtered = combinedEntries
     .filter(entry => effectiveScope !== 'all' || filterUser === 'all' || entry.userId === filterUser)
-    .filter(entry => filterEntryType === 'all' || entry.type === filterEntryType)
-    .filter(entry => filterCategory === 'all' || entry.entryCategory === filterCategory)  // 🆕 Фильтр по надкатегории
-    .filter(entry => filterSubcategory === 'all' || entry.subcategory === filterSubcategory)  // 🆕 Фильтр по подкатегории (типу)
-    .filter(entry => !hidePerDiem || entry.category !== 'per_diem')
     .filter(entry => {
+      if (reportPreset === '1') return true;
+      if (reportPreset === '2') return entry.type === 'EXPENSE' && (isHouseholdExpense(entry) || isPerDiem(entry));
+      if (reportPreset === '3') return entry.type === 'INCOME' || (
+        entry.type === 'EXPENSE' && (!entry.hasReceipt || isExtraPerDiem(entry))
+      );
+      return filterEntryType === 'all' || entry.type === filterEntryType;
+    })
+    .filter(entry => reportPreset ? true : (filterCategory === 'all' || entry.entryCategory === filterCategory))
+    .filter(entry => reportPreset ? true : (filterSubcategory === 'all' || entry.subcategory === filterSubcategory))
+    .filter(entry => reportPreset ? true : (!hidePerDiem || !isPerDiem(entry)))
+    .filter(entry => {
+      if (reportPreset) return true;
       if (filterReceipt === 'all') return true;
       if (entry.type !== 'EXPENSE') return false;
       if (filterReceipt === 'with') return entry.hasReceipt;
@@ -192,6 +220,7 @@ export function ExpensesPage() {
       if (sortField === 'type') return a.type.localeCompare(b.type) * dir;
       return 0;
     });
+
 
   // Расчет сальдо: доходы минус расходы (в валютах)
   const saldoByCurrency = filtered.reduce((acc, entry) => {
@@ -250,6 +279,17 @@ export function ExpensesPage() {
       await api.delete('/expenses', { params: { expenseId: id } });
     }
     await loadData();
+  };
+
+  const applyReportPreset = (preset: ReportPreset) => {
+    setReportPreset(preset);
+    if (canViewAll) setScope('all');
+    setFilterUser('all');
+    setFilterEntryType('all');
+    setFilterCategory('all');
+    setFilterSubcategory('all');
+    setFilterReceipt('all');
+    setHidePerDiem(false);
   };
 
   const handleExportXLSX = () => {
@@ -463,6 +503,40 @@ export function ExpensesPage() {
 
       {/* Фильтры */}
       <div className="card p-4 animate-fade-in">
+        <div className="mb-4">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Шаблоны отчетов</div>
+          <div className="flex flex-wrap gap-2">
+            {([
+              ['1', '📊 Отчет 1', 'Все доходы и расходы'],
+              ['2', '🏠 Отчет 2', 'Хоз.нужды + суточные'],
+              ['3', '🧾 Отчет 3', 'Доходы + расходы без чека + сверхсуточные'],
+            ] as const).map(([preset, label, hint]) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => applyReportPreset(preset)}
+                title={hint}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all border ${
+                  reportPreset === preset
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200 dark:shadow-indigo-900/30'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            {reportPreset && (
+              <button
+                type="button"
+                onClick={() => setReportPreset(null)}
+                className="px-3 py-2 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+              >
+                Сбросить отчет
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Предустановки дат */}
         <div className="flex flex-wrap gap-2 mb-3">
           <button

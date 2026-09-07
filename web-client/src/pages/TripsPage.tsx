@@ -210,13 +210,11 @@ export function TripsPage() {
       
       const existingExpenses = expensesRes.data || [];
       
-      // Создаем карту существующих суточных по датам
-      const existingPerDiemDates = new Set<string>();
-      existingExpenses.forEach((exp: any) => {
-        if (exp.type === 'per_diem' || exp.type === 'perdiem') {
-          existingPerDiemDates.add(exp.date);
-        }
-      });
+      const isPerDiemExpense = (exp: any) => {
+        const type = String(exp.type || '').toUpperCase();
+        return type === 'PER_DIEM' || type === 'PER_DIEM_EXTRA' || type === 'PER_DIEM_EXCESS' ||
+          String(exp.name || '').toLowerCase().replace(/ё/g, 'е').includes('суточные сверх');
+      };
       
       // Генерируем список дат в интервале
       const datesInRange: string[] = [];
@@ -228,30 +226,51 @@ export function TripsPage() {
         currentDate.setDate(currentDate.getDate() + 1);
       }
       
-      // Удаляем существующие суточные в этом интервале
+      // Удаляем существующие обычные и сверхсуточные, чтобы повторный перерасчет не создавал дубли.
       const deletePromises = existingExpenses
-        .filter((exp: any) => exp.type === 'per_diem' || exp.type === 'perdiem')
+        .filter((exp: any) => isPerDiemExpense(exp))
         .map((exp: any) => api.delete('/expenses', { params: { expenseId: exp.id } }));
-      
+
       await Promise.all(deletePromises);
-      
-      // Создаем новые суточные для каждого дня в интервале
-      const newExpenses = datesInRange.map(date => ({
-        id: generateUUID(),
-        userId: selectedTrip.userId,
-        projectId: selectedTrip.projectId,
-        projectName: selectedTrip.projectName || '',
-        date: date,
-        type: 'per_diem',
-        name: 'Суточные',
-        amount: recalcParams.rate,
-        currency: 'RUB',
-        comment: `Автоматическое начисление суточных за командировку (${selectedTrip.type}) от ${selectedTrip.date}`,
-        receiptSubmitted: false,
-        hasReceiptPhoto: false,
-      }));
-      
-      // Отправляем новые суточные пачкой
+
+      const standardRate = 750;
+      const extraRate = Math.max(0, recalcParams.rate - standardRate);
+
+      // За каждый день: базовые 750 ₽ (или текущая ставка, если она ниже 750)
+      // и отдельная запись со сверхсуточными при ставке выше 750 ₽.
+      const newExpenses = datesInRange.flatMap(date => {
+        const baseExpense = {
+          id: generateUUID(),
+          userId: selectedTrip.userId,
+          projectId: selectedTrip.projectId,
+          projectName: selectedTrip.projectName || '',
+          date,
+          type: 'PER_DIEM',
+          name: 'Суточные',
+          amount: recalcParams.rate > standardRate ? standardRate : recalcParams.rate,
+          currency: 'RUB',
+          comment: `Автоматическое начисление суточных за командировку (${selectedTrip.type}) от ${selectedTrip.date}`,
+          receiptSubmitted: false,
+          hasReceiptPhoto: false,
+          category: 'WORK',
+        };
+
+        if (extraRate <= 0) return [baseExpense];
+
+        return [
+          baseExpense,
+          {
+            ...baseExpense,
+            id: generateUUID(),
+            type: 'PER_DIEM_EXTRA',
+            name: 'Суточные сверх.',
+            amount: extraRate,
+            comment: `Сверхсуточные: ${recalcParams.rate} ₽ − ${standardRate} ₽ за ${date}`,
+          },
+        ];
+      });
+
+      // Отправляем новые записи пачкой
       for (const expense of newExpenses) {
         try {
           await api.post('/expenses', expense);
@@ -260,9 +279,15 @@ export function TripsPage() {
           console.error(`Ошибка создания суточных на ${expense.date}:`, errorMsg);
         }
       }
-      
-      alert(`✅ Перерасчет выполнен!\n\nПериод: ${recalcParams.dateFrom} — ${recalcParams.dateTo}\nСтавка: ${recalcParams.rate} ₽\nДобавлено дней: ${datesInRange.length}`);
-      
+
+      alert(
+        `✅ Перерасчет выполнен!\n\nПериод: ${recalcParams.dateFrom} — ${recalcParams.dateTo}\n` +
+        `Указанная ставка: ${recalcParams.rate} ₽\n` +
+        `Стандартные суточные: ${Math.min(recalcParams.rate, standardRate)} ₽/день\n` +
+        `Сверхсуточные: ${extraRate} ₽/день\n` +
+        `Добавлено дней: ${datesInRange.length}`
+      );
+
       setShowPerDiemRecalc(false);
       await loadData();
     } catch (err) {
