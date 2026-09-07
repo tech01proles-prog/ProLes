@@ -55,9 +55,11 @@ data class UserPermissionOverrideDto(
  */
 object ExpenseTypes {
     val ALL = listOf(
+        "HOUSEHOLD" to "🏠 Хоз.нужды",
         "CONTRACTORS" to "👷 Подрядчики",
         "ROAD" to "🚗 Дорога",
         "PER_DIEM" to "💵 Суточные",
+        "PER_DIEM_EXTRA" to "🔴 Суточные сверх.",
         "CASH" to "💰 Наличные",
         "CARD" to "💳 Карта",
         "OTHER" to "📦 Прочее"

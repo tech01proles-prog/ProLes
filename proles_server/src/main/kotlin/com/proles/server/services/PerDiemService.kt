@@ -36,7 +36,10 @@ import kotlin.time.Duration.Companion.days
 object PerDiemService {
 
     private const val PER_DIEM_TYPE = "PER_DIEM"
+    private const val PER_DIEM_EXTRA_TYPE = "PER_DIEM_EXTRA"
     private const val PER_DIEM_NAME = "Суточные"
+    private const val PER_DIEM_EXTRA_NAME = "Суточные сверх."
+    private const val STANDARD_PER_DIEM = 750.0
 
     fun startScheduler() {
         println("⏰ PerDiemService: запуск планировщика...")
@@ -117,7 +120,7 @@ object PerDiemService {
                             .where {
                                 (ExpensesTable.userId eq UUID.fromString(userId)) and
                                     (ExpensesTable.date eq today) and
-                                    (ExpensesTable.type eq PER_DIEM_TYPE)
+                                    (ExpensesTable.type inList listOf(PER_DIEM_TYPE, PER_DIEM_EXTRA_TYPE))
                             }
                             .firstOrNull()
                     }
@@ -128,7 +131,9 @@ object PerDiemService {
                         return@forEach
                     }
 
-                    // Создаём запись о расходе "Суточные"
+                    val standardAmount = if (perDiemRate > STANDARD_PER_DIEM) STANDARD_PER_DIEM else perDiemRate
+                    val extraAmount = (perDiemRate - STANDARD_PER_DIEM).coerceAtLeast(0.0)
+
                     transaction {
                         ExpensesTable.insert {
                             it[ExpensesTable.id] = UUID.randomUUID()
@@ -137,17 +142,36 @@ object PerDiemService {
                             it[ExpensesTable.date] = today
                             it[ExpensesTable.type] = PER_DIEM_TYPE
                             it[ExpensesTable.name] = PER_DIEM_NAME
-                            it[ExpensesTable.amount] = perDiemRate
+                            it[ExpensesTable.amount] = standardAmount
                             it[ExpensesTable.currency] = "RUB"
                             it[ExpensesTable.comment] = "Автоматическое начисление суточных за командировку ($tripType) от $tripDate"
                             it[ExpensesTable.receiptSubmitted] = false
                             it[ExpensesTable.hasReceiptPhoto] = false
+                            it[ExpensesTable.category] = "WORK"
                             it[ExpensesTable.createdAt] = System.currentTimeMillis()
+                        }
+
+                        if (extraAmount > 0.0) {
+                            ExpensesTable.insert {
+                                it[ExpensesTable.id] = UUID.randomUUID()
+                                it[ExpensesTable.userId] = UUID.fromString(userId)
+                                it[ExpensesTable.projectId] = UUID.fromString(projectId)
+                                it[ExpensesTable.date] = today
+                                it[ExpensesTable.type] = PER_DIEM_EXTRA_TYPE
+                                it[ExpensesTable.name] = PER_DIEM_EXTRA_NAME
+                                it[ExpensesTable.amount] = extraAmount
+                                it[ExpensesTable.currency] = "RUB"
+                                it[ExpensesTable.comment] = "Сверхсуточные: $perDiemRate ₽ − ${STANDARD_PER_DIEM.toInt()} ₽"
+                                it[ExpensesTable.receiptSubmitted] = false
+                                it[ExpensesTable.hasReceiptPhoto] = false
+                                it[ExpensesTable.category] = "WORK"
+                                it[ExpensesTable.createdAt] = System.currentTimeMillis()
+                            }
                         }
                     }
 
                     createdCount++
-                    println("✅ PerDiemService: начислено $perDiemRate руб. суточных для $userName (проект: $projectName)")
+                    println("✅ PerDiemService: начислено $standardAmount руб. суточных и $extraAmount руб. сверхсуточных для $userName (проект: $projectName)")
 
                 } catch (e: Exception) {
                     println("❌ PerDiemService: ошибка при обработке командировки: ${e.message}")
