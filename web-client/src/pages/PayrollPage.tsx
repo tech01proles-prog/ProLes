@@ -212,6 +212,17 @@ export function PayrollPage() {
   const handleAddComponent = async () => {
     const targetUserId = editingForUserId || user?.id;
     if (!targetUserId) return;
+
+    const isEditing = Boolean(editingComponentId);
+    if (isEditing && !can('payroll', 'edit')) {
+      addToast('Нет права на редактирование компонентов зарплаты', 'error');
+      return;
+    }
+    if (!isEditing && !can('payroll', 'create')) {
+      addToast('Нет права на добавление компонентов зарплаты', 'error');
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -289,89 +300,8 @@ export function PayrollPage() {
         <p className="text-sm text-slate-500 mt-1">Расчёт, компоненты и история выплат</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-xl p-1 border border-slate-200 w-fit">
-        <button onClick={() => setTab('my')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'my' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>
-          👤 Моя зарплата
-        </button>
-        {canManageEmployeePayroll && (
-          <button onClick={() => setTab('all')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>
-            👥 Все сотрудники
-          </button>
-        )}
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>
-      ) : tab === 'my' ? (
-        <>
-          {/* Калькулятор */}
-          <div className="card p-6 bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200">
-            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-5 bg-emerald-500 rounded-full"></span>
-              Рассчитать зарплату
-            </h3>
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-600">Год</label>
-                <input type="number" value={calcPeriod.year} onChange={(e) => setCalcPeriod({ ...calcPeriod, year: parseInt(e.target.value) })} className="input w-32" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-600">Месяц</label>
-                <select value={calcPeriod.month} onChange={(e) => setCalcPeriod({ ...calcPeriod, month: parseInt(e.target.value) })} className="input w-40 bg-white">
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                    <option key={m} value={m}>{monthName(m)}</option>
-                  ))}
-                </select>
-              </div>
-              <button onClick={handleCalculate} disabled={calculating} className="btn-primary px-6 py-2.5">
-                {calculating ? '⏳ Расчёт...' : '🧮 Рассчитать'}
-              </button>
-            </div>
-
-            {breakdown && (
-              <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-3 animate-fade-in">
-                <div className="bg-white rounded-xl p-3 border border-blue-100">
-                  <div className="text-[10px] text-blue-600 font-bold uppercase">Фикс</div>
-                  <div className="text-lg font-bold text-blue-900">{formatMoney(breakdown.fixed)}</div>
-                </div>
-                <div className="bg-white rounded-xl p-3 border border-indigo-100">
-                  <div className="text-[10px] text-indigo-600 font-bold uppercase">Почасовая</div>
-                  <div className="text-lg font-bold text-indigo-900">{formatMoney(breakdown.hourly)}</div>
-                </div>
-                <div className="bg-white rounded-xl p-3 border border-orange-100">
-                  <div className="text-[10px] text-orange-600 font-bold uppercase">Сдельная</div>
-                  <div className="text-lg font-bold text-orange-900">{formatMoney(breakdown.piece)}</div>
-                </div>
-                <div className="bg-white rounded-xl p-3 border border-emerald-100">
-                  <div className="text-[10px] text-emerald-600 font-bold uppercase">Бонус</div>
-                  <div className="text-lg font-bold text-emerald-900">{formatMoney(breakdown.bonus)}</div>
-                </div>
-                <div className="bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl p-3 text-white col-span-2 md:col-span-1">
-                  <div className="text-[10px] font-bold uppercase opacity-90">Итого</div>
-                  <div className="text-2xl font-black">{formatMoney(breakdown.total)}</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ═══════════ КОМПОНЕНТЫ ЗАРПЛАТЫ (с RBAC) ═══════════ */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <span className="w-1 h-4 bg-indigo-500 rounded-full"></span>
-                Мои компоненты ({myComponents.length})
-              </h3>
-              {/* 🔐 Кнопка видна только при наличии права payroll.create */}
-              {can('payroll', 'create') && (
-                <button onClick={() => { setEditingForUserId(user!.id); setShowForm(!showForm); }} className="btn-primary px-4 py-2 text-sm">
-                  {showForm ? '✕' : '＋ Добавить'}
-                </button>
-              )}
-            </div>
-
-            {/* 🌲 PROLES MODAL: Компонент зарплаты */}
-            {showForm && can('payroll', 'create') && createPortal(
+      {/* 🌲 PROLES MODAL: Компонент зарплаты — общий для вкладок */}
+            {showForm && (can('payroll', 'create') || can('payroll', 'edit')) && createPortal(
               <div className="proles-modal-backdrop" onClick={() => setShowForm(false)}>
                 <div className="proles-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '36rem' }}>
                   <div className="proles-modal-header">
@@ -488,6 +418,88 @@ export function PayrollPage() {
               </div>,
               document.body
             )}
+
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-white rounded-xl p-1 border border-slate-200 w-fit">
+        <button onClick={() => setTab('my')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'my' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>
+          👤 Моя зарплата
+        </button>
+        {canManageEmployeePayroll && (
+          <button onClick={() => setTab('all')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>
+            👥 Все сотрудники
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>
+      ) : tab === 'my' ? (
+        <>
+          {/* Калькулятор */}
+          <div className="card p-6 bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200">
+            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <span className="w-1.5 h-5 bg-emerald-500 rounded-full"></span>
+              Рассчитать зарплату
+            </h3>
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600">Год</label>
+                <input type="number" value={calcPeriod.year} onChange={(e) => setCalcPeriod({ ...calcPeriod, year: parseInt(e.target.value) })} className="input w-32" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-600">Месяц</label>
+                <select value={calcPeriod.month} onChange={(e) => setCalcPeriod({ ...calcPeriod, month: parseInt(e.target.value) })} className="input w-40 bg-white">
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <option key={m} value={m}>{monthName(m)}</option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={handleCalculate} disabled={calculating} className="btn-primary px-6 py-2.5">
+                {calculating ? '⏳ Расчёт...' : '🧮 Рассчитать'}
+              </button>
+            </div>
+
+            {breakdown && (
+              <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-3 animate-fade-in">
+                <div className="bg-white rounded-xl p-3 border border-blue-100">
+                  <div className="text-[10px] text-blue-600 font-bold uppercase">Фикс</div>
+                  <div className="text-lg font-bold text-blue-900">{formatMoney(breakdown.fixed)}</div>
+                </div>
+                <div className="bg-white rounded-xl p-3 border border-indigo-100">
+                  <div className="text-[10px] text-indigo-600 font-bold uppercase">Почасовая</div>
+                  <div className="text-lg font-bold text-indigo-900">{formatMoney(breakdown.hourly)}</div>
+                </div>
+                <div className="bg-white rounded-xl p-3 border border-orange-100">
+                  <div className="text-[10px] text-orange-600 font-bold uppercase">Сдельная</div>
+                  <div className="text-lg font-bold text-orange-900">{formatMoney(breakdown.piece)}</div>
+                </div>
+                <div className="bg-white rounded-xl p-3 border border-emerald-100">
+                  <div className="text-[10px] text-emerald-600 font-bold uppercase">Бонус</div>
+                  <div className="text-lg font-bold text-emerald-900">{formatMoney(breakdown.bonus)}</div>
+                </div>
+                <div className="bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl p-3 text-white col-span-2 md:col-span-1">
+                  <div className="text-[10px] font-bold uppercase opacity-90">Итого</div>
+                  <div className="text-2xl font-black">{formatMoney(breakdown.total)}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ═══════════ КОМПОНЕНТЫ ЗАРПЛАТЫ (с RBAC) ═══════════ */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <span className="w-1 h-4 bg-indigo-500 rounded-full"></span>
+                Мои компоненты ({myComponents.length})
+              </h3>
+              {/* 🔐 Кнопка видна только при наличии права payroll.create */}
+              {can('payroll', 'create') && (
+                <button onClick={() => { setEditingForUserId(user!.id); setShowForm(!showForm); }} className="btn-primary px-4 py-2 text-sm">
+                  {showForm ? '✕' : '＋ Добавить'}
+                </button>
+              )}
+            </div>
 
             {/* Список компонентов */}
             {myComponents.length === 0 ? (
