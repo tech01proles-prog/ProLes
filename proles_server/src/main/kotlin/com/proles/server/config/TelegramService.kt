@@ -101,7 +101,7 @@ object TelegramService {
 
         return try {
             val url = "https://api.telegram.org/bot$botToken/sendDocument"
-            
+
             // Определяем MIME-тип по расширению
             val ext = fileName.substringAfterLast('.', "").lowercase()
             val mimeType = when (ext) {
@@ -119,49 +119,48 @@ object TelegramService {
             // Формируем multipart/form-data запрос вручную
             val boundary = "----WebKitFormBoundary${System.currentTimeMillis()}"
             val crlf = "\r\n"
-            
-            // Для caption используем тот же подход экранирования, что и в sendMessage
-            val escapedCaption = caption
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("&lt;b&gt;", "<b>").replace("&lt;/b&gt;", "</b>")
-                .replace("&lt;i&gt;", "<i>").replace("&lt;/i&gt;", "</i>")
-                .replace("&lt;u&gt;", "<u>").replace("&lt;/u&gt;", "</u>")
-                .replace("&lt;a ", "<a ").replace("&lt;/a&gt;", "</a>")
-                .replace("&lt;code&gt;", "<code>").replace("&lt;/code&gt;", "</code>")
-                .replace("&lt;pre&gt;", "<pre>").replace("&lt;/pre&gt;", "</pre>")
-            
-            val parseMode = "HTML"
-            
+
+            // parse_mode намеренно не передаём: Telegram на части инсталляций возвращал
+            // "unsupported parse_mode" для этого multipart-запроса. Делаем caption обычным текстом.
+            val plainCaption = caption
+                .replace(Regex("<[^>]*>"), "")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .trim()
+                .take(1024)
+
+            val safeFileName = fileName
+                .replace("\\", "_")
+                .replace("/", "_")
+                .replace("\"", "_")
+                .replace("\r", "_")
+                .replace("\n", "_")
+                .ifBlank { "document" }
+
             // Собираем все части multipart запроса
             val fullBody = ByteArrayOutputStream()
-            
+
             // Часть для chat_id
             fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("Content-Disposition: form-data; name=\"chat_id\"$crlf$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("$chatId$crlf".toByteArray(Charsets.UTF_8))
-            
+
             // Часть для caption
             fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("Content-Disposition: form-data; name=\"caption\"$crlf$crlf".toByteArray(Charsets.UTF_8))
-            fullBody.write("$escapedCaption$crlf".toByteArray(Charsets.UTF_8))
-            
-            // Часть для parse_mode
-            fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
-            fullBody.write("Content-Disposition: form-data; name=\"parse_mode\"$crlf$crlf".toByteArray(Charsets.UTF_8))
-            fullBody.write("$parseMode$crlf".toByteArray(Charsets.UTF_8))
-            
+            fullBody.write("$plainCaption$crlf".toByteArray(Charsets.UTF_8))
+
             // Часть для файла
             fullBody.write("--$boundary$crlf".toByteArray(Charsets.UTF_8))
-            fullBody.write("Content-Disposition: form-data; name=\"document\"; filename=\"$fileName\"$crlf".toByteArray(Charsets.UTF_8))
+            fullBody.write("Content-Disposition: form-data; name=\"document\"; filename=\"$safeFileName\"$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("Content-Type: $mimeType$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write("Content-Transfer-Encoding: binary$crlf$crlf".toByteArray(Charsets.UTF_8))
             fullBody.write(fileBytes)
-            
+
             // Закрывающий boundary
             fullBody.write("$crlf--$boundary--$crlf".toByteArray(Charsets.UTF_8))
-            
+
             val request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "multipart/form-data; boundary=$boundary")
