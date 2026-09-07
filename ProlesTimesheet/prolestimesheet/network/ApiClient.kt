@@ -722,6 +722,42 @@ object ApiClient {
     }
 
     // 🆕 НОВЫЙ ПОДХОД: Base64 вместо multipart
+    suspend fun uploadExpenseAttachment(
+        expenseId: String,
+        fileBytes: ByteArray,
+        fileName: String,
+        fileType: String
+    ): Result<String> {
+        return try {
+            val base64File = java.util.Base64.getEncoder().encodeToString(fileBytes)
+            val requestBody = mapOf(
+                "expenseId" to expenseId,
+                "fileBase64" to base64File,
+                "fileName" to fileName,
+                "fileType" to fileType
+            )
+
+            Log.d("ApiClient", "📎 uploadExpenseAttachment: $fileName, ${fileBytes.size / 1024} KB, type=$fileType")
+
+            val response = client.post("$BASE_URL/expenses/upload-attachment") {
+                setBody(requestBody)
+                authToken?.let { header("X-Session-Token", it) }
+            }
+
+            Log.d("ApiClient", "📎 uploadExpenseAttachment response: ${response.status}")
+            if (response.status == HttpStatusCode.Created) {
+                val body = response.body<Map<String, String>>()
+                Result.success(body["url"] ?: "")
+            } else {
+                val error = runCatching { response.bodyAsText() }.getOrNull() ?: "Unknown error"
+                Result.failure(Exception("Attachment upload failed: ${response.status}: $error"))
+            }
+        } catch (e: Exception) {
+            Log.e("ApiClient", "💥 uploadExpenseAttachment exception", e)
+            Result.failure(e)
+        }
+    }
+
     suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray, userFullName: String): Result<String> {
         return try {
             // Конвертируем ByteArray в Base64 строку
@@ -1407,14 +1443,14 @@ object ApiClient {
             var receiptBase64: String? = null
             var receiptFileName: String? = null
             var receiptFileType: String? = null
-            
+
             if (receiptUri != null) {
                 val receiptStream = contentResolver.openInputStream(receiptUri)
                 if (receiptStream != null) {
                     val receiptBytes = receiptStream.readBytes()
                     receiptStream.close()
                     receiptBase64 = java.util.Base64.getEncoder().encodeToString(receiptBytes)
-                    
+
                     // Получаем имя файла чека
                     contentResolver.query(receiptUri, null, null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) {
@@ -1422,7 +1458,7 @@ object ApiClient {
                             if (nameIndex >= 0) receiptFileName = cursor.getString(nameIndex)
                         }
                     }
-                    
+
                     // Получаем MIME-тип чека
                     receiptFileType = contentResolver.getType(receiptUri) ?: "application/octet-stream"
                 }
