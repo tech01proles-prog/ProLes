@@ -322,7 +322,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         }
     }
     fun getTotalHoursForDate(date: LocalDate, userId: String? = null): Float {
-        return entries.value.filter { 
+        return entries.value.filter {
             it.date == date && (userId == null || it.userId == userId)
         }.sumOf { it.hours.toDouble() }.toFloat()
     }
@@ -341,7 +341,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
             return AddEntryResult.Error("Нельзя добавлять часы за будущие даты")
         }
         if (hours <= 0f) return AddEntryResult.Error("Часы должны быть больше 0")
-        
+
         // 🔥 ПРОВЕРКА: не превышаем ли 24 часа в дне (только для текущего пользователя)
         val totalHoursAfterAdd = getTotalHoursForDate(date, currentUser.id) + hours
         if (totalHoursAfterAdd > 24f) {
@@ -527,35 +527,64 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
     }
 
     // 📤 Загрузить все прикреплённые файлы после создания расхода
-    fun uploadPendingExpenseFiles(expenseId: String, tempId: String, context: Context) {
-        viewModelScope.launch {
-            val files = _pendingExpenseFiles.value[tempId] ?: emptyList()
-            if (files.isEmpty()) return@launch
+    private suspend fun uploadPendingExpenseFiles(expenseId: String, tempId: String, context: Context) {
+        val files = _pendingExpenseFiles.value[tempId] ?: emptyList()
+        if (files.isEmpty()) return
 
-            // Получаем имя текущего пользователя для формирования пути на сервере
-            val userFullName = user.value?.let { u ->
-                "${u.lastName} ${u.firstName.firstOrNull()?.uppercase()}${if (u.middleName.isNotEmpty()) u.middleName.firstOrNull()?.uppercase() else ""}".trim()
-            } ?: "Unknown_User"
+        val userFullName = user.value?.let { u ->
+            "${u.lastName} ${u.firstName.firstOrNull()?.uppercase() ?: ""}${if (u.middleName.isNotEmpty()) u.middleName.firstOrNull()?.uppercase() else ""}".trim()
+        } ?: "Unknown_User"
 
-            files.forEach { file ->
-                try {
-                    val inputStream = context.contentResolver.openInputStream(file.uri)
-                    val bytes = inputStream?.readBytes()
-                    inputStream?.close()
-                    if (bytes != null) {
-                        if (file.isPhoto) {
-                            repository.uploadReceiptPhoto(expenseId, bytes, userFullName)
-                        } else {
-                            // Для документов можно вызвать отдельный метод репозитория
-                            // repository.attachDocumentToExpense(expenseId, bytes, file.uri.toString())
-                            Toast.makeText(context, "📎 Файл прикреплён (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                } catch (e: Exception) {
-                    Toast.makeText(context, "❌ Ошибка загрузки файла: ${e.message}", Toast.LENGTH_SHORT).show()
+        var allUploaded = true
+        files.forEach { file ->
+            try {
+                val bytes = context.contentResolver.openInputStream(file.uri)?.use { it.readBytes() }
+                if (bytes == null || bytes.isEmpty()) {
+                    allUploaded = false
+                    Log.e("TimesheetViewModel", "❌ Пустой/недоступный файл: ${file.uri}")
+                    return@forEach
                 }
+
+                val fileName = runCatching {
+                    context.contentResolver.query(
+                        file.uri,
+                        arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                        null,
+                        null,
+                        null
+                    )?.use { cursor ->
+                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+                    }
+                }.getOrNull()?.takeIf { it.isNotBlank() } ?: "attachment_${System.currentTimeMillis()}"
+
+                val mimeType = context.contentResolver.getType(file.uri)
+                    ?: if (file.isPhoto) "image/jpeg" else "application/octet-stream"
+
+                val result = if (file.isPhoto) {
+                    repository.uploadReceiptPhoto(expenseId, bytes, userFullName)
+                } else {
+                    repository.uploadExpenseAttachment(expenseId, bytes, fileName, mimeType)
+                }
+
+                result.onSuccess {
+                    Toast.makeText(context, "✅ $fileName загружен", Toast.LENGTH_SHORT).show()
+                }.onFailure { error ->
+                    allUploaded = false
+                    Toast.makeText(
+                        context,
+                        "❌ Не удалось загрузить $fileName: ${error.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: Exception) {
+                allUploaded = false
+                Log.e("TimesheetViewModel", "❌ Ошибка загрузки ${file.uri}", e)
+                Toast.makeText(context, "❌ Ошибка загрузки файла: ${e.message}", Toast.LENGTH_LONG).show()
             }
-            // Очищаем временное хранилище после успешной загрузки
+        }
+
+        if (allUploaded) {
             clearPendingExpenseFiles(tempId)
         }
     }
@@ -572,8 +601,8 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         comment: String = "",
         category: String = "WORK",
         subcategory: String? = null,
-        tempId: String? = null, // Временный ID для прикрепления файлов
-        context: Context? = null // Контекст для загрузки файлов
+        tempId: String? = null,
+        context: Context? = null
     ) {
         val currentUser = user.value ?: return
         viewModelScope.launch {
@@ -590,12 +619,19 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 category = category,
                 subcategory = subcategory
             )
+
             repository.addExpense(expense)
-            
-            // Если есть временный ID и контекст — загружаем прикреплённые файлы
-            if (tempId != null && context != null) {
-                uploadPendingExpenseFiles(expense.id, tempId, context)
-            }
+                .onSuccess { createdExpense ->
+                    if (tempId != null && context != null) {
+                        uploadPendingExpenseFiles(createdExpense.id, tempId, context)
+                    }
+                }
+                .onFailure { error ->
+                    Log.e("TimesheetViewModel", "❌ Не удалось создать расход", error)
+                    if (tempId != null && context != null) {
+                        Toast.makeText(context, "❌ Расход не создан: ${error.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
         }
     }
 
@@ -621,6 +657,9 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 "Unknown"
             }
             repository.uploadReceiptPhoto(expenseId, imageBytes, userFullName)
+                .onFailure { error ->
+                    Log.e("TimesheetViewModel", "❌ Ошибка загрузки фото чека", error)
+                }
         }
     }
 
