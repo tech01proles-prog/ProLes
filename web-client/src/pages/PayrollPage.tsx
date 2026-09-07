@@ -39,6 +39,10 @@ export function PayrollPage() {
   const [exportData, setExportData] = useState<PayrollExportResponse | null>(null);
   const [allUsers, setAllUsers] = useState<UserDto[]>([]);
   const [allProjects, setAllProjects] = useState<ProjectDto[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [employeeComponents, setEmployeeComponents] = useState<SalaryComponentDto[]>([]);
+  const [employeeBreakdown, setEmployeeBreakdown] = useState<SalaryBreakdownResponse | null>(null);
+  const [employeeLoading, setEmployeeLoading] = useState(false);
   const [exportPeriod, setExportPeriod] = useState(() => {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() + 1 };
@@ -63,6 +67,46 @@ export function PayrollPage() {
 
   const { can } = usePermissions();
   const { addToast } = useToast();
+  const canManageEmployeePayroll = can('payroll', 'view') && (can('payroll', 'create') || can('payroll', 'edit') || can('payroll', 'delete'));
+
+  const loadEmployeeComponents = useCallback(async (employeeId: string) => {
+    if (!employeeId) {
+      setEmployeeComponents([]);
+      setEmployeeBreakdown(null);
+      return;
+    }
+    setEmployeeLoading(true);
+    try {
+      const { data } = await api.get<SalaryComponentDto[]>(`/payroll/components/${employeeId}`);
+      setEmployeeComponents(data || []);
+      setEmployeeBreakdown(null);
+    } catch (err) {
+      console.error(err);
+      addToast('Не удалось загрузить компоненты сотрудника', 'error');
+    } finally {
+      setEmployeeLoading(false);
+    }
+  }, [addToast]);
+
+  const handleCalculateEmployee = async () => {
+    if (!selectedEmployeeId) return;
+    setCalculating(true);
+    try {
+      const { data } = await api.post<SalaryBreakdownResponse>('/payroll/calculate', {
+        userId: selectedEmployeeId,
+        year: exportPeriod.year,
+        month: exportPeriod.month,
+      });
+      setEmployeeBreakdown(data);
+      await Promise.all([loadAdminData(), loadMyData()]);
+      addToast(`Зарплата сотрудника рассчитана за ${monthName(exportPeriod.month)} ${exportPeriod.year}`, 'success');
+    } catch (err) {
+      console.error(err);
+      addToast('Ошибка расчёта зарплаты сотрудника', 'error');
+    } finally {
+      setCalculating(false);
+    }
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem('proles_user');
@@ -80,9 +124,10 @@ export function PayrollPage() {
     if (!user) return;
     setLoading(true);
 
-    const [projRes, usersRes] = await Promise.allSettled([
+    const [projRes, usersRes, payrollUsersRes] = await Promise.allSettled([
       api.get<ProjectDto[]>('/projects'),
       isAdmin ? api.get<UserDto[]>('/users') : Promise.resolve({ data: [] }),
+      canManageEmployeePayroll ? api.get<UserDto[]>('/payroll/users') : Promise.resolve({ data: [] }),
     ]);
     setAllProjects(projRes.status === 'fulfilled' ? projRes.value.data : []);
     setAllUsers(usersRes.status === 'fulfilled' ? usersRes.value.data : []);
@@ -102,18 +147,23 @@ export function PayrollPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, isAdmin, canManageEmployeePayroll]);
 
   const loadAdminData = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isAdmin && !canManageEmployeePayroll) return;
     setLoading(true);
     try {
-      const [usersRes, projRes, recRes] = await Promise.allSettled([
+      const [usersRes, projRes, recRes, payrollUsersRes] = await Promise.allSettled([
         api.get<UserDto[]>('/users'),
         api.get<ProjectDto[]>('/projects'),
         api.get<SalaryRecordDto[]>('/payroll/records'),
+        canManageEmployeePayroll ? api.get<UserDto[]>('/payroll/users') : Promise.resolve({ data: [] }),
       ]);
-      setAllUsers(usersRes.status === 'fulfilled' ? usersRes.value.data : []);
+      setAllUsers(
+        usersRes.status === 'fulfilled' && usersRes.value.data.length > 0
+          ? usersRes.value.data
+          : payrollUsersRes.status === 'fulfilled' ? payrollUsersRes.value.data : []
+      );
       setAllProjects(projRes.status === 'fulfilled' ? projRes.value.data : []);
       setAllRecords(recRes.status === 'fulfilled' ? recRes.value.data : []);
     } catch (err) {
@@ -121,7 +171,7 @@ export function PayrollPage() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, canManageEmployeePayroll]);
 
   useEffect(() => {
     if (tab === 'my') loadMyData();
@@ -193,6 +243,7 @@ export function PayrollPage() {
       setForm({ type: 'HOURLY', amount: '', projectId: '', ratePerHour: '', ratePerUnit: '', description: '', effectiveFrom: new Date().toISOString().slice(0, 10) });
       if (tab === 'my') await loadMyData();
       else await loadAdminData();
+      if (selectedEmployeeId) await loadEmployeeComponents(selectedEmployeeId);
       addToast(`Компонент зарплаты "${COMPONENT_TYPES[payload.type].label}" успешно ${editingComponentId ? 'обновлен' : 'добавлен'}`, 'success');
     } catch (err) {
       addToast('Ошибка сохранения компонента зарплаты', 'error');
@@ -221,6 +272,7 @@ export function PayrollPage() {
     await api.delete(`/payroll/components/${id}`);
     if (tab === 'my') await loadMyData();
     else await loadAdminData();
+    if (selectedEmployeeId) await loadEmployeeComponents(selectedEmployeeId);
     addToast('Компонент зарплаты успешно удален', 'success');
   };
 
@@ -243,7 +295,7 @@ export function PayrollPage() {
         <button onClick={() => setTab('my')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'my' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>
           👤 Моя зарплата
         </button>
-        {isAdmin && (
+        {canManageEmployeePayroll && (
           <button onClick={() => setTab('all')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>
             👥 Все сотрудники
           </button>
@@ -554,6 +606,100 @@ export function PayrollPage() {
       ) : (
         // ═══════════ АДМИН-ВКЛАДКА ═══════════
         <>
+          {canManageEmployeePayroll && (
+            <div className="card p-5 border-indigo-200 bg-gradient-to-br from-indigo-50/70 to-white dark:from-slate-900 dark:to-slate-900">
+              <div className="flex flex-col gap-4">
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100">👤 Зарплата сотрудника</h3>
+                  <p className="text-xs text-slate-500 mt-1">Выберите сотрудника, настройте компоненты и сразу рассчитайте итоговую зарплату за месяц.</p>
+                </div>
+                <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-end">
+                  <div className="space-y-1.5 flex-1">
+                    <label className="text-xs font-medium text-slate-600">Сотрудник</label>
+                    <select
+                      value={selectedEmployeeId}
+                      onChange={(e) => { setSelectedEmployeeId(e.target.value); loadEmployeeComponents(e.target.value); }}
+                      className="input w-full bg-white dark:bg-slate-900"
+                    >
+                      <option value="">Выберите сотрудника...</option>
+                      {allUsers.map(u => <option key={u.id} value={u.id}>{u.name || `${u.lastName} ${u.firstName}`}{u.position ? ` — ${u.position}` : ''}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-600">Месяц расчёта</label>
+                    <select value={exportPeriod.month} onChange={(e) => setExportPeriod({ ...exportPeriod, month: parseInt(e.target.value) })} className="input w-40 bg-white dark:bg-slate-900">
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{monthName(m)}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-600">Год</label>
+                    <input type="number" value={exportPeriod.year} onChange={(e) => setExportPeriod({ ...exportPeriod, year: parseInt(e.target.value) })} className="input w-28" />
+                  </div>
+                  {can('payroll', 'create') && (
+                    <button disabled={!selectedEmployeeId} onClick={() => { setEditingComponentId(null); setEditingForUserId(selectedEmployeeId); setShowForm(true); }} className="btn-primary px-4 py-2.5 whitespace-nowrap disabled:opacity-50">
+                      ＋ Компонент
+                    </button>
+                  )}
+                  {can('payroll', 'create') && (
+                    <button disabled={!selectedEmployeeId || calculating} onClick={handleCalculateEmployee} className="btn-primary px-5 py-2.5 whitespace-nowrap disabled:opacity-50 bg-emerald-600 hover:bg-emerald-700">
+                      {calculating ? '⏳ Расчёт...' : '🧮 Рассчитать зарплату'}
+                    </button>
+                  )}
+                </div>
+
+                {selectedEmployeeId && (
+                  <div className="border-t border-indigo-100 pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="font-semibold text-slate-900">{allUsers.find(u => u.id === selectedEmployeeId)?.name || 'Сотрудник'}</div>
+                        <div className="text-xs text-slate-500">Компоненты зарплаты</div>
+                      </div>
+                      <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full">{employeeComponents.length} шт.</span>
+                    </div>
+                    {employeeLoading ? (
+                      <div className="text-sm text-slate-400 py-4 text-center">Загрузка компонентов…</div>
+                    ) : employeeComponents.length === 0 ? (
+                      <div className="text-sm text-slate-400 py-5 text-center border border-dashed border-slate-200 rounded-xl">Компоненты ещё не настроены</div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        {employeeComponents.map(c => {
+                          const cfg = COMPONENT_TYPES[c.type as keyof typeof COMPONENT_TYPES];
+                          return (
+                            <div key={c.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg?.color || 'bg-slate-100 text-slate-700 border-slate-200'}`}>{cfg?.label || c.type}</span>
+                                <div className="flex gap-1">
+                                  {can('payroll', 'edit') && <button onClick={() => handleEditComponent(c)} className="text-blue-500 hover:text-blue-700 text-sm" title="Редактировать">✏️</button>}
+                                  {can('payroll', 'delete') && <button onClick={() => handleDeleteComponent(c.id)} className="text-red-500 hover:text-red-700 text-sm" title="Удалить">🗑</button>}
+                                </div>
+                              </div>
+                              <div className="text-lg font-bold mt-2">{formatMoney(c.amount)}</div>
+                              {c.ratePerHour != null && c.ratePerHour > 0 && <div className="text-xs text-slate-500">⏱ {formatMoney(c.ratePerHour)}/час</div>}
+                              {c.ratePerUnit != null && c.ratePerUnit > 0 && <div className="text-xs text-slate-500">🔨 {formatMoney(c.ratePerUnit)}/ед.</div>}
+                              {c.description && <div className="text-xs text-slate-600 mt-1 truncate">{c.description}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {employeeBreakdown && (
+                      <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div>
+                            <div className="font-bold text-emerald-900">Расчёт за {monthName(exportPeriod.month)} {exportPeriod.year}</div>
+                            <div className="text-xs text-emerald-700 mt-1">Фикс {formatMoney(employeeBreakdown.fixed)} · Часы {formatMoney(employeeBreakdown.hourly)} · Сдельная {formatMoney(employeeBreakdown.piece)} · Бонус {formatMoney(employeeBreakdown.bonus)}{employeeBreakdown.penalty ? ` · Штраф −${formatMoney(employeeBreakdown.penalty)}` : ''}</div>
+                          </div>
+                          <div className="text-2xl font-black text-emerald-700">{formatMoney(employeeBreakdown.total)}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="card p-5">
             <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-3">📊 Экспорт за период</h3>
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
