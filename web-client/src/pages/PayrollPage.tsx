@@ -124,10 +124,9 @@ export function PayrollPage() {
     if (!user) return;
     setLoading(true);
 
-    const [projRes, usersRes, payrollUsersRes] = await Promise.allSettled([
+    const [projRes, usersRes] = await Promise.allSettled([
       api.get<ProjectDto[]>('/projects'),
       isAdmin ? api.get<UserDto[]>('/users') : Promise.resolve({ data: [] }),
-      canManageEmployeePayroll ? api.get<UserDto[]>('/payroll/users') : Promise.resolve({ data: [] }),
     ]);
     setAllProjects(projRes.status === 'fulfilled' ? projRes.value.data : []);
     setAllUsers(usersRes.status === 'fulfilled' ? usersRes.value.data : []);
