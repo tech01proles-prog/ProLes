@@ -154,6 +154,7 @@ export interface SalaryBreakdownResponse {
   piece: number;
   hourly: number;
   bonus: number;
+  penalty?: number;
   total: number;
 }
 
