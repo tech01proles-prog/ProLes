@@ -12,6 +12,7 @@ object SalaryCalculator {
         val piece: Double,
         val hourly: Double,
         val bonus: Double,
+        val penalty: Double,
         val total: Double
     )
 
@@ -36,6 +37,11 @@ object SalaryCalculator {
             // 2. BONUS (премия) — СУММИРУЕМ все компоненты
             val bonus = components
                 .filter { it[SalaryComponentsTable.type] == "BONUS" }
+                .sumOf { it[SalaryComponentsTable.amount] }
+
+            // Штрафы уменьшают итоговую зарплату.
+            val penalty = components
+                .filter { it[SalaryComponentsTable.type] == "PENALTY" }
                 .sumOf { it[SalaryComponentsTable.amount] }
 
             // 3. PIECE (сдельная) — ratePerUnit × количество ЗАПИСЕЙ за месяц
@@ -94,7 +100,8 @@ object SalaryCalculator {
                 piece = piece,
                 hourly = hourly,
                 bonus = bonus,
-                total = fixed + piece + hourly + bonus
+                penalty = penalty,
+                total = fixed + piece + hourly + bonus - penalty
             )
         }
     }
