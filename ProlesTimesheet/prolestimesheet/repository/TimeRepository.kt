@@ -51,7 +51,7 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
 
     private val _incomes = MutableStateFlow<List<Income>>(emptyList())
     val incomesFlow: StateFlow<List<Income>> = _incomes.asStateFlow()
-    
+
     // 🔥 Делаем _incomes public для доступа из ViewModel
     val incomes: MutableStateFlow<List<Income>> = _incomes
 
@@ -609,8 +609,8 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
         }
     }
 
-    suspend fun addExpense(expense: Expense) {
-        apiClient.createExpense(expense).onSuccess { created ->
+    suspend fun addExpense(expense: Expense): Result<Expense> {
+        return apiClient.createExpense(expense).onSuccess { created ->
             _expenses.value = listOf(created) + _expenses.value
         }
     }
@@ -674,13 +674,28 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
         loadNotifications()
     }
 
-    suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray, userFullName: String) {
-        apiClient.uploadReceiptPhoto(expenseId, imageBytes, userFullName).onSuccess {
+    suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray, userFullName: String): Result<String> {
+        return apiClient.uploadReceiptPhoto(expenseId, imageBytes, userFullName).onSuccess {
             val expense = _expenses.value.firstOrNull { it.id == expenseId } ?: return@onSuccess
             val updated = expense.copy(hasReceiptPhoto = true, receiptSubmitted = true)
             _expenses.value = _expenses.value.map { if (it.id == expenseId) updated else it }
         }.onFailure { e ->
             Log.e("Repository", "❌ Upload failed", e)
+        }
+    }
+
+    suspend fun uploadExpenseAttachment(
+        expenseId: String,
+        fileBytes: ByteArray,
+        fileName: String,
+        fileType: String
+    ): Result<String> {
+        return apiClient.uploadExpenseAttachment(expenseId, fileBytes, fileName, fileType).onSuccess {
+            val expense = _expenses.value.firstOrNull { it.id == expenseId } ?: return@onSuccess
+            val updated = expense.copy(receiptSubmitted = true)
+            _expenses.value = _expenses.value.map { if (it.id == expenseId) updated else it }
+        }.onFailure { e ->
+            Log.e("Repository", "❌ Attachment upload failed", e)
         }
     }
 
