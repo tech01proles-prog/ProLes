@@ -51,7 +51,7 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
 
     private val _incomes = MutableStateFlow<List<Income>>(emptyList())
     val incomesFlow: StateFlow<List<Income>> = _incomes.asStateFlow()
-
+    
     // 🔥 Делаем _incomes public для доступа из ViewModel
     val incomes: MutableStateFlow<List<Income>> = _incomes
 
@@ -674,8 +674,8 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
         loadNotifications()
     }
 
-    suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray, userFullName: String): Result<String> {
-        return apiClient.uploadReceiptPhoto(expenseId, imageBytes, userFullName).onSuccess {
+    suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray, userFullName: String) {
+        apiClient.uploadReceiptPhoto(expenseId, imageBytes, userFullName).onSuccess {
             val expense = _expenses.value.firstOrNull { it.id == expenseId } ?: return@onSuccess
             val updated = expense.copy(hasReceiptPhoto = true, receiptSubmitted = true)
             _expenses.value = _expenses.value.map { if (it.id == expenseId) updated else it }
@@ -688,14 +688,25 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
         expenseId: String,
         fileBytes: ByteArray,
         fileName: String,
-        fileType: String
+        mimeType: String,
+        userFullName: String
     ): Result<String> {
-        return apiClient.uploadExpenseAttachment(expenseId, fileBytes, fileName, fileType).onSuccess {
-            val expense = _expenses.value.firstOrNull { it.id == expenseId } ?: return@onSuccess
-            val updated = expense.copy(receiptSubmitted = true)
-            _expenses.value = _expenses.value.map { if (it.id == expenseId) updated else it }
-        }.onFailure { e ->
-            Log.e("Repository", "❌ Attachment upload failed", e)
+        return apiClient.uploadExpenseAttachment(
+            expenseId = expenseId,
+            fileBytes = fileBytes,
+            fileName = fileName,
+            mimeType = mimeType,
+            userFullName = userFullName
+        ).onSuccess {
+            val expense = _expenses.value.firstOrNull { it.id == expenseId }
+            if (expense != null) {
+                val isImage = mimeType.startsWith("image/")
+                val updated = expense.copy(
+                    hasReceiptPhoto = expense.hasReceiptPhoto || isImage,
+                    receiptSubmitted = true
+                )
+                _expenses.value = _expenses.value.map { if (it.id == expenseId) updated else it }
+            }
         }
     }
 

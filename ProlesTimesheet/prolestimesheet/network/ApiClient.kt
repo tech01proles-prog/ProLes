@@ -721,76 +721,59 @@ object ApiClient {
         }
     }
 
-    // 🆕 НОВЫЙ ПОДХОД: Base64 вместо multipart
+    @Serializable
+    private data class ExpenseAttachmentUploadRequest(
+        val expenseId: String,
+        val fileBase64: String,
+        val fileName: String,
+        val mimeType: String,
+        val userFullName: String
+    )
+
     suspend fun uploadExpenseAttachment(
         expenseId: String,
         fileBytes: ByteArray,
         fileName: String,
-        fileType: String
+        mimeType: String,
+        userFullName: String
     ): Result<String> {
         return try {
-            val base64File = java.util.Base64.getEncoder().encodeToString(fileBytes)
-            val requestBody = mapOf(
-                "expenseId" to expenseId,
-                "fileBase64" to base64File,
-                "fileName" to fileName,
-                "fileType" to fileType
-            )
-
-            Log.d("ApiClient", "📎 uploadExpenseAttachment: $fileName, ${fileBytes.size / 1024} KB, type=$fileType")
-
+            val encoded = java.util.Base64.getEncoder().encodeToString(fileBytes)
             val response = client.post("$BASE_URL/expenses/upload-attachment") {
-                setBody(requestBody)
+                contentType(ContentType.Application.Json)
+                setBody(ExpenseAttachmentUploadRequest(
+                    expenseId = expenseId,
+                    fileBase64 = encoded,
+                    fileName = fileName.ifBlank { "attachment" },
+                    mimeType = mimeType.ifBlank { "application/octet-stream" },
+                    userFullName = userFullName
+                ))
                 authToken?.let { header("X-Session-Token", it) }
             }
 
-            Log.d("ApiClient", "📎 uploadExpenseAttachment response: ${response.status}")
-            if (response.status == HttpStatusCode.Created) {
+            if (response.status == HttpStatusCode.Created || response.status == HttpStatusCode.OK) {
                 val body = response.body<Map<String, String>>()
-                Result.success(body["url"] ?: "")
+                Result.success(body["url"] ?: body["id"] ?: "")
             } else {
-                val error = runCatching { response.bodyAsText() }.getOrNull() ?: "Unknown error"
-                Result.failure(Exception("Attachment upload failed: ${response.status}: $error"))
+                Result.failure(Exception("Server error ${response.status}: ${response.bodyAsText()}"))
             }
         } catch (e: Exception) {
-            Log.e("ApiClient", "💥 uploadExpenseAttachment exception", e)
+            Log.e("ApiClient", "❌ uploadExpenseAttachment failed", e)
             Result.failure(e)
         }
     }
 
+    // 📸 Загрузка фото чека (совместимый wrapper)
     suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray, userFullName: String): Result<String> {
-        return try {
-            // Конвертируем ByteArray в Base64 строку
-            val base64Image = java.util.Base64.getEncoder().encodeToString(imageBytes)
-
-            val requestBody = mapOf(
-                "expenseId" to expenseId,
-                "imageBase64" to base64Image,
-                "userFullName" to userFullName
-            )
-
-            Log.d("ApiClient", "📡 uploadReceiptPhoto: размер ${imageBytes.size / 1024} КБ, Base64: ${base64Image.length / 1024} КБ, пользователь: $userFullName")
-
-            val response = client.post("$BASE_URL/expenses/upload-receipt") {
-                setBody(requestBody)
-                authToken?.let { header("X-Session-Token", it) }
-            }
-
-            Log.d("ApiClient", "📡 uploadReceiptPhoto response: ${response.status}")
-
-            if (response.status == HttpStatusCode.Created) {
-                val body = response.body<Map<String, String>>()
-                Result.success(body["url"] ?: "")
-            } else {
-                val error = runCatching { response.bodyAsText() }.getOrNull() ?: "Unknown error"
-                Log.e("ApiClient", "❌ Upload failed: $error")
-                Result.failure(Exception("Upload failed: ${response.status}"))
-            }
-        } catch (e: Exception) {
-            Log.e("ApiClient", "💥 uploadReceiptPhoto exception", e)
-            Result.failure(e)
-        }
+        return uploadExpenseAttachment(
+            expenseId = expenseId,
+            fileBytes = imageBytes,
+            fileName = "receipt_${System.currentTimeMillis()}.jpg",
+            mimeType = "image/jpeg",
+            userFullName = userFullName
+        )
     }
+
 
 
     // ═══════════════════════════════════════════════════════════
@@ -1443,14 +1426,14 @@ object ApiClient {
             var receiptBase64: String? = null
             var receiptFileName: String? = null
             var receiptFileType: String? = null
-
+            
             if (receiptUri != null) {
                 val receiptStream = contentResolver.openInputStream(receiptUri)
                 if (receiptStream != null) {
                     val receiptBytes = receiptStream.readBytes()
                     receiptStream.close()
                     receiptBase64 = java.util.Base64.getEncoder().encodeToString(receiptBytes)
-
+                    
                     // Получаем имя файла чека
                     contentResolver.query(receiptUri, null, null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) {
@@ -1458,7 +1441,7 @@ object ApiClient {
                             if (nameIndex >= 0) receiptFileName = cursor.getString(nameIndex)
                         }
                     }
-
+                    
                     // Получаем MIME-тип чека
                     receiptFileType = contentResolver.getType(receiptUri) ?: "application/octet-stream"
                 }

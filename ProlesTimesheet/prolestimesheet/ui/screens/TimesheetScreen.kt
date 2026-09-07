@@ -797,16 +797,19 @@ fun TimesheetScreen(
         val pendingFilesCount by viewModel.pendingExpenseFiles.collectAsState(initial = emptyMap())
         val currentPendingFiles = pendingFilesCount[tempExpenseId] ?: emptyList()
 
-        // Вспомогательная функция для сохранения Bitmap во временный URI
-        fun saveBitmapToTempUri(bitmap: Bitmap, context: Context): Uri? {
+        // 📸 Камера возвращает Bitmap напрямую — сохраняем байты в память.
+        // Это убирает зависимость от FileProvider и ошибку "Failed to find configured root".
+        fun bitmapToJpegBytes(bitmap: Bitmap): ByteArray? {
             return try {
-                val file = java.io.File(context.cacheDir, "temp_photo_${System.currentTimeMillis()}.jpg")
-                val stream = java.io.FileOutputStream(file)
+                val stream = java.io.ByteArrayOutputStream()
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
-                stream.close()
-                androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                stream.toByteArray()
             } catch (e: Exception) {
-                Toast.makeText(context, "❌ Ошибка сохранения фото: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    "❌ Ошибка подготовки фото: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
                 null
             }
         }
@@ -818,11 +821,16 @@ fun TimesheetScreen(
             val expenseId = currentPhotoExpenseId
             currentPhotoExpenseId = null
             if (bitmap != null && expenseId != null) {
-                // Сохраняем фото во временное хранилище вместо немедленной отправки
-                // Фото будет отправлено после создания расхода
-                val tempUri = saveBitmapToTempUri(bitmap, context)
-                if (tempUri != null) {
-                    viewModel.addPendingExpenseFile(tempExpenseId, tempUri, isPhoto = true)
+                // Сохраняем фото во временное состояние вместо немедленной отправки.
+                // Фото будет отправлено после создания расхода.
+                val bytes = bitmapToJpegBytes(bitmap)
+                if (bytes != null) {
+                    viewModel.addPendingExpenseBytes(
+                        tempId = tempExpenseId,
+                        bytes = bytes,
+                        fileName = "receipt_${System.currentTimeMillis()}.jpg",
+                        mimeType = "image/jpeg"
+                    )
                 }
                 uploadingPhoto = false
             } else if (bitmap == null) {
@@ -840,7 +848,14 @@ fun TimesheetScreen(
             if (uris.isNotEmpty() && expenseId != null) {
                 // Сохраняем все выбранные фото во временное хранилище
                 uris.forEach { uri ->
-                    viewModel.addPendingExpenseFile(tempExpenseId, uri, isPhoto = true)
+                    val mimeType = context.contentResolver.getType(uri) ?: "image/*"
+                    viewModel.addPendingExpenseFile(
+                        tempId = tempExpenseId,
+                        uri = uri,
+                        isPhoto = true,
+                        fileName = "photo_${System.currentTimeMillis()}.jpg",
+                        mimeType = mimeType
+                    )
                 }
                 uploadingPhoto = false
             } else {
@@ -864,7 +879,16 @@ fun TimesheetScreen(
                     } catch (e: Exception) {
                         false
                     }
-                    viewModel.addPendingExpenseFile(tempExpenseId, uri, isPhoto = isPhoto)
+                    val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                    val fileName = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null }
+                        ?: "attachment_${System.currentTimeMillis()}"
+                    viewModel.addPendingExpenseFile(
+                        tempId = tempExpenseId,
+                        uri = uri,
+                        isPhoto = isPhoto,
+                        fileName = fileName,
+                        mimeType = mimeType
+                    )
                 }
                 uploadingPhoto = false
             } else {
@@ -886,7 +910,16 @@ fun TimesheetScreen(
                 } catch (e: Exception) {
                     false
                 }
-                viewModel.addPendingExpenseFile(tempExpenseId, uri, isPhoto = isPhoto)
+                val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                val fileName = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null }
+                    ?: "attachment_${System.currentTimeMillis()}"
+                viewModel.addPendingExpenseFile(
+                    tempId = tempExpenseId,
+                    uri = uri,
+                    isPhoto = isPhoto,
+                    fileName = fileName,
+                    mimeType = mimeType
+                )
                 uploadingPhoto = false
             } else {
                 Toast.makeText(context, "❌ Не удалось загрузить файл", Toast.LENGTH_SHORT).show()

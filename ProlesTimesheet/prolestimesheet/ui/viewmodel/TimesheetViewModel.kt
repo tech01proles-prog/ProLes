@@ -50,7 +50,13 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
     private val _pendingExpenseFiles = MutableStateFlow<Map<String, List<PendingExpenseFile>>>(emptyMap())
     val pendingExpenseFiles: StateFlow<Map<String, List<PendingExpenseFile>>> = _pendingExpenseFiles.asStateFlow()
 
-    data class PendingExpenseFile(val uri: Uri, val isPhoto: Boolean)
+    data class PendingExpenseFile(
+        val uri: Uri? = null,
+        val bytes: ByteArray? = null,
+        val isPhoto: Boolean,
+        val fileName: String = "receipt.jpg",
+        val mimeType: String = "image/jpeg"
+    )
 
     val notifications: StateFlow<List<Notification>> = repository.notificationsFlow
     // 🔥 Реактивный unreadCount — Compose автоматически отслеживает изменения
@@ -322,7 +328,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         }
     }
     fun getTotalHoursForDate(date: LocalDate, userId: String? = null): Float {
-        return entries.value.filter {
+        return entries.value.filter { 
             it.date == date && (userId == null || it.userId == userId)
         }.sumOf { it.hours.toDouble() }.toFloat()
     }
@@ -341,7 +347,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
             return AddEntryResult.Error("Нельзя добавлять часы за будущие даты")
         }
         if (hours <= 0f) return AddEntryResult.Error("Часы должны быть больше 0")
-
+        
         // 🔥 ПРОВЕРКА: не превышаем ли 24 часа в дне (только для текущего пользователя)
         val totalHoursAfterAdd = getTotalHoursForDate(date, currentUser.id) + hours
         if (totalHoursAfterAdd > 24f) {
@@ -503,10 +509,43 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
     }
 
     // 📎 Добавить файл к расходу (временное хранение до создания записи)
-    fun addPendingExpenseFile(tempId: String, uri: Uri, isPhoto: Boolean) {
+    fun addPendingExpenseFile(
+        tempId: String,
+        uri: Uri,
+        isPhoto: Boolean,
+        fileName: String = "receipt",
+        mimeType: String = "application/octet-stream"
+    ) {
         val currentMap = _pendingExpenseFiles.value
         val currentList = currentMap[tempId] ?: emptyList()
-        _pendingExpenseFiles.value = currentMap + (tempId to (currentList + PendingExpenseFile(uri, isPhoto)))
+        _pendingExpenseFiles.value = currentMap + (
+            tempId to (currentList + PendingExpenseFile(
+                uri = uri,
+                bytes = null,
+                isPhoto = isPhoto,
+                fileName = fileName,
+                mimeType = mimeType
+            ))
+        )
+    }
+
+    fun addPendingExpenseBytes(
+        tempId: String,
+        bytes: ByteArray,
+        fileName: String = "receipt.jpg",
+        mimeType: String = "image/jpeg"
+    ) {
+        val currentMap = _pendingExpenseFiles.value
+        val currentList = currentMap[tempId] ?: emptyList()
+        _pendingExpenseFiles.value = currentMap + (
+            tempId to (currentList + PendingExpenseFile(
+                uri = null,
+                bytes = bytes,
+                isPhoto = true,
+                fileName = fileName,
+                mimeType = mimeType
+            ))
+        )
     }
 
     // 🗑️ Удалить файл из временного хранилища
@@ -527,65 +566,50 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
     }
 
     // 📤 Загрузить все прикреплённые файлы после создания расхода
-    private suspend fun uploadPendingExpenseFiles(expenseId: String, tempId: String, context: Context) {
-        val files = _pendingExpenseFiles.value[tempId] ?: emptyList()
-        if (files.isEmpty()) return
+    fun uploadPendingExpenseFiles(expenseId: String, tempId: String, context: Context) {
+        viewModelScope.launch {
+            val files = _pendingExpenseFiles.value[tempId] ?: emptyList()
+            if (files.isEmpty()) return@launch
 
-        val userFullName = user.value?.let { u ->
-            "${u.lastName} ${u.firstName.firstOrNull()?.uppercase() ?: ""}${if (u.middleName.isNotEmpty()) u.middleName.firstOrNull()?.uppercase() else ""}".trim()
-        } ?: "Unknown_User"
+            // Получаем имя текущего пользователя для формирования пути на сервере
+            val userFullName = user.value?.let { u ->
+                "${u.lastName} ${u.firstName.firstOrNull()?.uppercase()}${if (u.middleName.isNotEmpty()) u.middleName.firstOrNull()?.uppercase() else ""}".trim()
+            } ?: "Unknown_User"
 
-        var allUploaded = true
-        files.forEach { file ->
-            try {
-                val bytes = context.contentResolver.openInputStream(file.uri)?.use { it.readBytes() }
-                if (bytes == null || bytes.isEmpty()) {
-                    allUploaded = false
-                    Log.e("TimesheetViewModel", "❌ Пустой/недоступный файл: ${file.uri}")
-                    return@forEach
-                }
-
-                val fileName = runCatching {
-                    context.contentResolver.query(
-                        file.uri,
-                        arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
-                        null,
-                        null,
-                        null
-                    )?.use { cursor ->
-                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                        if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+            var allUploaded = true
+            files.forEach { file ->
+                try {
+                    val bytes = file.bytes ?: file.uri?.let { uri ->
+                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     }
-                }.getOrNull()?.takeIf { it.isNotBlank() } ?: "attachment_${System.currentTimeMillis()}"
-
-                val mimeType = context.contentResolver.getType(file.uri)
-                    ?: if (file.isPhoto) "image/jpeg" else "application/octet-stream"
-
-                val result = if (file.isPhoto) {
-                    repository.uploadReceiptPhoto(expenseId, bytes, userFullName)
-                } else {
-                    repository.uploadExpenseAttachment(expenseId, bytes, fileName, mimeType)
-                }
-
-                result.onSuccess {
-                    Toast.makeText(context, "✅ $fileName загружен", Toast.LENGTH_SHORT).show()
-                }.onFailure { error ->
+                    if (bytes == null || bytes.isEmpty()) {
+                        allUploaded = false
+                        Toast.makeText(context, "❌ Не удалось прочитать ${file.fileName}", Toast.LENGTH_SHORT).show()
+                    } else {
+                        repository.uploadExpenseAttachment(
+                            expenseId = expenseId,
+                            fileBytes = bytes,
+                            fileName = file.fileName,
+                            mimeType = file.mimeType,
+                            userFullName = userFullName
+                        ).onFailure { e ->
+                            allUploaded = false
+                            Toast.makeText(
+                                context,
+                                "❌ Ошибка загрузки ${file.fileName}: ${e.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                } catch (e: Exception) {
                     allUploaded = false
-                    Toast.makeText(
-                        context,
-                        "❌ Не удалось загрузить $fileName: ${error.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(context, "❌ Ошибка загрузки файла: ${e.message}", Toast.LENGTH_LONG).show()
                 }
-            } catch (e: Exception) {
-                allUploaded = false
-                Log.e("TimesheetViewModel", "❌ Ошибка загрузки ${file.uri}", e)
-                Toast.makeText(context, "❌ Ошибка загрузки файла: ${e.message}", Toast.LENGTH_LONG).show()
             }
-        }
-
-        if (allUploaded) {
-            clearPendingExpenseFiles(tempId)
+            if (allUploaded) {
+                clearPendingExpenseFiles(tempId)
+                Toast.makeText(context, "✅ Все чеки загружены (${files.size})", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -601,8 +625,8 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         comment: String = "",
         category: String = "WORK",
         subcategory: String? = null,
-        tempId: String? = null,
-        context: Context? = null
+        tempId: String? = null, // Временный ID для прикрепления файлов
+        context: Context? = null // Контекст для загрузки файлов
     ) {
         val currentUser = user.value ?: return
         viewModelScope.launch {
@@ -619,19 +643,84 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 category = category,
                 subcategory = subcategory
             )
-
             repository.addExpense(expense)
                 .onSuccess { createdExpense ->
                     if (tempId != null && context != null) {
                         uploadPendingExpenseFiles(createdExpense.id, tempId, context)
                     }
                 }
-                .onFailure { error ->
-                    Log.e("TimesheetViewModel", "❌ Не удалось создать расход", error)
-                    if (tempId != null && context != null) {
-                        Toast.makeText(context, "❌ Расход не создан: ${error.message}", Toast.LENGTH_LONG).show()
+                .onFailure { e ->
+                    if (tempId != null) {
+                        Toast.makeText(
+                            context,
+                            "❌ Не удалось создать расход: ${e.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
+        }
+    }
+
+    fun uploadExpenseAttachment(
+        expenseId: String,
+        fileBytes: ByteArray,
+        fileName: String,
+        mimeType: String,
+        context: Context,
+        onFinished: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val currentUser = user.value
+            val userFullName = currentUser?.let {
+                "${it.lastName} ${it.firstName} ${it.middleName}".trim()
+            } ?: "Unknown"
+            repository.uploadExpenseAttachment(
+                expenseId, fileBytes, fileName, mimeType, userFullName
+            ).onSuccess {
+                Toast.makeText(context, "✅ ${fileName} загружен", Toast.LENGTH_SHORT).show()
+                onFinished(true)
+            }.onFailure { e ->
+                Toast.makeText(context, "❌ Ошибка загрузки: ${e.message}", Toast.LENGTH_LONG).show()
+                onFinished(false)
+            }
+        }
+    }
+
+    fun uploadExpenseUris(
+        expenseId: String,
+        uris: List<Uri>,
+        context: Context,
+        onFinished: (Int) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val currentUser = user.value
+            val userFullName = currentUser?.let {
+                "${it.lastName} ${it.firstName} ${it.middleName}".trim()
+            } ?: "Unknown"
+            var uploaded = 0
+            uris.forEach { uri ->
+                try {
+                    val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    val fileBytes = bytes ?: return@forEach
+                    if (fileBytes.isEmpty()) return@forEach
+                    val fileName = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null }
+                        ?: "attachment_${System.currentTimeMillis()}"
+                    repository.uploadExpenseAttachment(
+                        expenseId, fileBytes, fileName, mimeType, userFullName
+                    ).onSuccess {
+                        uploaded++
+                    }.onFailure { e ->
+                        Toast.makeText(context, "❌ $fileName: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "❌ Ошибка чтения файла: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+            if (uploaded > 0) {
+                Toast.makeText(context, "✅ Загружено файлов: $uploaded из ${uris.size}", Toast.LENGTH_SHORT).show()
+            }
+            onFinished(uploaded)
         }
     }
 
@@ -657,9 +746,6 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 "Unknown"
             }
             repository.uploadReceiptPhoto(expenseId, imageBytes, userFullName)
-                .onFailure { error ->
-                    Log.e("TimesheetViewModel", "❌ Ошибка загрузки фото чека", error)
-                }
         }
     }
 

@@ -272,8 +272,8 @@ fun ProfileScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             NavigationTile(
-                title = "Расходы/Доходы",
-                subtitle = "${userExpenses.size + incomes.filter { it.userId == user?.id }.size} записей",
+                title = "Сальдо",
+                subtitle = "${userExpenses.size + incomes.filter { it.userId == user?.id }.size} операций",
                 emoji = "💰",
                 gradientColors = listOf(Color(0xFFB3E5FC), Color(0xFF81D4FA)),
                 onClick = onNavigateToExpensesIncomes,

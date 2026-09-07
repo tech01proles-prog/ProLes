@@ -1,7 +1,12 @@
 package com.example.prolestimesheet.ui.screens
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,14 +15,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.Expense
 import com.example.prolestimesheet.model.Income
@@ -26,10 +32,10 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
+import java.io.ByteArrayOutputStream
 import java.time.YearMonth
 
-// Объединённая модель для расходов и доходов
-private data class ExpenseIncomeItem(
+private data class BalanceItem(
     val id: String,
     val isExpense: Boolean,
     val date: LocalDate,
@@ -37,10 +43,11 @@ private data class ExpenseIncomeItem(
     val currency: String,
     val name: String,
     val projectName: String?,
-    val userId: String
+    val expense: Expense? = null
 )
 
-// Справочник типов расходов
+private enum class BalanceFilter { ALL, INCOME, EXPENSE }
+
 private val EXPENSE_TYPE_LABELS = mapOf(
     "CONTRACTORS" to ("Подрядчики" to "👷"),
     "ROAD" to ("Дорога" to "🚗"),
@@ -60,87 +67,77 @@ fun ExpensesIncomesListScreen(
     val user by viewModel.user.collectAsState()
     val expenses by viewModel.expenses.collectAsState()
     val incomes by viewModel.incomes.collectAsState()
-    
+
     val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
-    val currentYearMonth = YearMonth.of(today.year, today.monthNumber)
-    
-    // Состояние для выбранного месяца
+    val currentYearMonth = remember(today) { YearMonth.of(today.year, today.monthNumber) }
     var selectedYearMonth by remember { mutableStateOf(currentYearMonth) }
+    var filter by remember { mutableStateOf(BalanceFilter.ALL) }
+    var sortAscending by remember { mutableStateOf(false) }
     var showMonthPicker by remember { mutableStateOf(false) }
-    
-    // Состояние для фильтрации и сортировки
-    var filterType by remember { mutableStateOf("all") } // all, income, expense
-    var sortBy by remember { mutableStateOf("date") } // date, amount, type
-    var sortDescending by remember { mutableStateOf(true) }
-    
-    // Фильтруем данные по выбранному месяцу и типу
-    val filteredExpenses = expenses.filter {
-        val itemMonth = YearMonth.of(it.date.year, it.date.monthNumber)
-        itemMonth == selectedYearMonth && (user?.role in listOf("admin", "director", "superadmin") || it.userId == user?.id)
+    var selectedExpenseForReceipt by remember { mutableStateOf<Expense?>(null) }
+
+    val visibleExpenses = expenses.filter {
+        val ym = YearMonth.of(it.date.year, it.date.monthNumber)
+        ym == selectedYearMonth && it.userId == user?.id
     }
-    
-    val filteredIncomes = incomes.filter {
-        val itemMonth = YearMonth.of(it.date.year, it.date.monthNumber)
-        itemMonth == selectedYearMonth && (user?.role in listOf("admin", "director", "superadmin") || it.userId == user?.id)
+    val visibleIncomes = incomes.filter {
+        val ym = YearMonth.of(it.date.year, it.date.monthNumber)
+        ym == selectedYearMonth && it.userId == user?.id
     }
-    
-    val combinedList = mutableListOf<ExpenseIncomeItem>()
-    
-    filteredExpenses.forEach { exp ->
-        combinedList.add(
-            ExpenseIncomeItem(
-                id = exp.id,
-                isExpense = true,
-                date = exp.date,
-                amount = exp.amount,
-                currency = exp.currency,
-                name = if (exp.type == "ROAD") "🚗 Дорога" else exp.name.ifBlank { "Другое" },
-                projectName = exp.projectName,
-                userId = exp.userId
+
+    val items = buildList {
+        visibleExpenses.forEach { exp ->
+            add(
+                BalanceItem(
+                    id = exp.id,
+                    isExpense = true,
+                    date = exp.date,
+                    amount = exp.amount,
+                    currency = exp.currency,
+                    name = if (exp.type == "ROAD") "🚗 Дорога" else exp.name.ifBlank { "Прочий расход" },
+                    projectName = exp.projectName,
+                    expense = exp
+                )
             )
-        )
-    }
-    
-    filteredIncomes.forEach { inc ->
-        combinedList.add(
-            ExpenseIncomeItem(
-                id = inc.id,
-                isExpense = false,
-                date = inc.date,
-                amount = inc.amount,
-                currency = inc.currency,
-                name = inc.name.ifBlank { "Доход" },
-                projectName = inc.projectName,
-                userId = inc.userId
+        }
+        visibleIncomes.forEach { inc ->
+            add(
+                BalanceItem(
+                    id = inc.id,
+                    isExpense = false,
+                    date = inc.date,
+                    amount = inc.amount,
+                    currency = inc.currency,
+                    name = inc.name.ifBlank { "Доход" },
+                    projectName = inc.projectName
+                )
             )
-        )
+        }
+    }.filter {
+        when (filter) {
+            BalanceFilter.ALL -> true
+            BalanceFilter.INCOME -> !it.isExpense
+            BalanceFilter.EXPENSE -> it.isExpense
+        }
+    }.sortedWith(
+        if (sortAscending) compareBy<BalanceItem> { it.date }.thenBy { it.id }
+        else compareByDescending<BalanceItem> { it.date }.thenByDescending { it.id }
+    )
+
+    val totalIncome = visibleIncomes.groupBy { it.currency }
+        .mapValues { (_, list) -> list.sumOf { it.amount } }
+    val totalExpense = visibleExpenses.groupBy { it.currency }
+        .mapValues { (_, list) -> list.sumOf { it.amount } }
+    val balanceByCurrency = (totalIncome.keys + totalExpense.keys).distinct().associateWith { currency ->
+        (totalIncome[currency] ?: 0.0) - (totalExpense[currency] ?: 0.0)
     }
-    
-    // Применяем фильтрацию по типу
-    val typedList = when (filterType) {
-        "income" -> combinedList.filter { !it.isExpense }
-        "expense" -> combinedList.filter { it.isExpense }
-        else -> combinedList
-    }
-    
-    // Применяем сортировку
-    val sortedList = when (sortBy) {
-        "amount" -> typedList.sortedWith(compareBy({ it.amount }, { it.date }))
-        "type" -> typedList.sortedWith(compareBy({ it.isExpense }, { it.date }))
-        else -> typedList.sortedByDescending { it.date }
-    }.let { if (sortDescending && sortBy != "date") it.reversed() else it }
-    
-    // Итоги за месяц
-    val totalExpenses = filteredExpenses.sumOf { it.amount }
-    val totalIncomes = filteredIncomes.sumOf { it.amount }
-    val balance = totalIncomes - totalExpenses
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("💰 Расходы/Доходы", style = MaterialTheme.typography.titleLarge)
+                        Text("Сальдо", style = MaterialTheme.typography.titleLarge)
                         Text(
                             "${selectedYearMonth.month} ${selectedYearMonth.year}",
                             style = MaterialTheme.typography.labelSmall,
@@ -154,7 +151,6 @@ fun ExpensesIncomesListScreen(
                     }
                 },
                 actions = {
-                    // Кнопка выбора месяца
                     IconButton(onClick = { showMonthPicker = true }) {
                         Icon(Icons.Default.CalendarMonth, "Выбрать месяц")
                     }
@@ -167,126 +163,55 @@ fun ExpensesIncomesListScreen(
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            // Панель с итогами
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text("Доходы", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF2E7D32))
-                            Text("%.0f ₽".format(totalIncomes), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("Расходы", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFC62828))
-                            Text("%.0f ₽".format(totalExpenses), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Divider()
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Баланс", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "%.0f ₽".format(balance),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = if (balance >= 0) Color(0xFF2E7D32) else Color(0xFFC62828)
-                        )
-                    }
-                }
-            }
-            
-            // Фильтры и сортировка
+            BalanceSummaryCard(
+                income = totalIncome,
+                expense = totalExpense,
+                balance = balanceByCurrency
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Фильтр по типу
-                FilterChip(
-                    selected = filterType == "all",
-                    onClick = { filterType = "all" },
-                    label = { Text("Все") }
-                )
-                FilterChip(
-                    selected = filterType == "income",
-                    onClick = { filterType = "income" },
-                    label = { Text("Доходы") }
-                )
-                FilterChip(
-                    selected = filterType == "expense",
-                    onClick = { filterType = "expense" },
-                    label = { Text("Расходы") }
-                )
-                
+                FilterChip(selected = filter == BalanceFilter.ALL, onClick = { filter = BalanceFilter.ALL }, label = { Text("Все") })
+                FilterChip(selected = filter == BalanceFilter.INCOME, onClick = { filter = BalanceFilter.INCOME }, label = { Text("Доходы") })
+                FilterChip(selected = filter == BalanceFilter.EXPENSE, onClick = { filter = BalanceFilter.EXPENSE }, label = { Text("Расходы") })
                 Spacer(Modifier.weight(1f))
-                
-                // Сортировка
-                IconButton(onClick = {
-                    sortBy = when (sortBy) {
-                        "date" -> "amount"
-                        "amount" -> "type"
-                        else -> "date"
-                    }
-                }) {
+                IconButton(onClick = { sortAscending = !sortAscending }) {
                     Icon(
-                        when (sortBy) {
-                            "amount" -> Icons.Default.AttachMoney
-                            "type" -> Icons.Default.Label
-                            else -> Icons.Default.CalendarToday
-                        },
-                        "Сортировка: $sortBy",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                
-                IconButton(onClick = { sortDescending = !sortDescending }) {
-                    Icon(
-                        if (sortDescending) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                        if (sortAscending) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                         "Порядок",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
-            
-            // Список
-            if (sortedList.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Нет данных за выбранный период", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            if (items.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "Нет операций за выбранный период",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(sortedList) { item ->
-                        ExpenseIncomeListItem(item)
+                    items(items, key = { it.id }) { item ->
+                        BalanceRow(
+                            item = item,
+                            onReceiptClick = { item.expense?.let { selectedExpenseForReceipt = it } },
+                            onDelete = { if (item.isExpense) viewModel.removeExpense(item.id) else viewModel.removeIncome(item.id) }
+                        )
                     }
                 }
             }
         }
-        
-        // Диалог выбора месяца
+
         if (showMonthPicker) {
             MonthPickerDialog(
                 currentYearMonth = selectedYearMonth,
@@ -294,80 +219,282 @@ fun ExpensesIncomesListScreen(
                 onDismiss = { showMonthPicker = false }
             )
         }
+
+        selectedExpenseForReceipt?.let { expense ->
+            ReceiptAttachmentsDialog(
+                expense = expense,
+                viewModel = viewModel,
+                onDismiss = { selectedExpenseForReceipt = null }
+            )
+        }
     }
 }
 
 @Composable
-private fun ExpenseIncomeListItem(item: ExpenseIncomeItem) {
-    val backgroundColor = if (item.isExpense) {
-        Color(0xFFFFEBEE)
-    } else {
-        Color(0xFFE8F5E9)
+private fun BalanceSummaryCard(
+    income: Map<String, Double>,
+    expense: Map<String, Double>,
+    balance: Map<String, Double>
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text("Сальдо за выбранный месяц", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+            BalanceAmountsLine("Доходы", income, Color(0xFF2E7D32))
+            Spacer(Modifier.height(4.dp))
+            BalanceAmountsLine("Расходы", expense, Color(0xFFC62828))
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
+            BalanceAmountsLine("Сальдо", balance, if (balance.values.all { it >= 0 }) Color(0xFF2E7D32) else Color(0xFFC62828), bold = true)
+        }
     }
-    val iconColor = if (item.isExpense) {
-        Color(0xFFC62828)
-    } else {
-        Color(0xFF2E7D32)
+}
+
+@Composable
+private fun BalanceAmountsLine(label: String, values: Map<String, Double>, color: Color, bold: Boolean = false) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text(label, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium)
+        Text(
+            text = if (values.isEmpty()) "0" else values.entries.joinToString(" + ") { (currency, amount) -> "${"%.0f".format(amount)} $currency" },
+            color = color,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium
+        )
     }
-    
+}
+
+@Composable
+private fun BalanceRow(
+    item: BalanceItem,
+    onReceiptClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val expense = item.expense
+    val isExpense = item.isExpense
+    val background = if (isExpense) Color(0xFFFFF7F7) else Color(0xFFF4FBF5)
+    val accent = if (isExpense) Color(0xFFC62828) else Color(0xFF2E7D32)
+    val receiptColor = when {
+        !isExpense -> MaterialTheme.colorScheme.onSurfaceVariant
+        expense?.hasReceiptPhoto == true -> Color(0xFF2E7D32)
+        else -> Color(0xFFC62828)
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor)
+        colors = CardDefaults.cardColors(containerColor = background),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(start = 12.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
+            Column(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Icon(
-                    if (item.isExpense) Icons.Default.RemoveCircle else Icons.Default.AddCircle,
-                    contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(32.dp)
-                )
-                Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        item.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (!item.projectName.isNullOrBlank()) {
-                        Text(
-                            "📁 ${item.projectName}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        "${item.date.dayOfMonth}.${item.date.monthNumber}.${item.date.year}",
+                        text = "${item.date.dayOfMonth.toString().padStart(2, '0')}.${item.date.monthNumber.toString().padStart(2, '0')}.${item.date.year}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-            Column(horizontalAlignment = Alignment.End) {
+
                 Text(
-                    if (item.isExpense) "-%.0f".format(item.amount) else "+%.0f".format(item.amount),
-                    style = MaterialTheme.typography.titleMedium,
+                    text = item.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                if (!item.projectName.isNullOrBlank()) {
+                    Text(
+                        text = item.projectName!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(10.dp))
+            if (isExpense) {
+                IconButton(
+                    onClick = onReceiptClick,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ReceiptLong,
+                        contentDescription = if (expense?.hasReceiptPhoto == true) {
+                            "Чек прикреплён"
+                        } else {
+                            "Прикрепить чек"
+                        },
+                        tint = receiptColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(10.dp))
+            
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.width(86.dp)
+            ) {
+                Text(
+                    text = if (isExpense) "-${"%.0f".format(item.amount)}" else "+${"%.0f".format(item.amount)}",
+                    color = accent,
                     fontWeight = FontWeight.Bold,
-                    color = iconColor
+                    style = MaterialTheme.typography.bodyLarge
                 )
                 Text(
-                    item.currency,
+                    text = item.currency,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.Delete,
+                    "Удалить",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReceiptAttachmentsDialog(
+    expense: Expense,
+    viewModel: TimesheetViewModel,
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var busy by remember { mutableStateOf(false) }
+    var selectedCount by remember { mutableStateOf(0) }
+    var currentSource by remember { mutableStateOf<String?>(null) }
+
+    fun uploadBytes(bytes: ByteArray, fileName: String, mimeType: String) {
+        busy = true
+        viewModel.uploadExpenseAttachment(
+            expenseId = expense.id,
+            fileBytes = bytes,
+            fileName = fileName,
+            mimeType = mimeType,
+            context = context,
+            onFinished = { success ->
+                busy = false
+                if (success) selectedCount++
+            }
+        )
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        currentSource = null
+        if (bitmap != null) {
+            val stream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
+            uploadBytes(stream.toByteArray(), "receipt_${System.currentTimeMillis()}.jpg", "image/jpeg")
+        }
+    }
+
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)) { uris ->
+        currentSource = null
+        if (uris.isNotEmpty()) {
+            busy = true
+            viewModel.uploadExpenseUris(expense.id, uris, context) { uploaded ->
+                busy = false
+                selectedCount += uploaded
+            }
+        }
+    }
+
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        currentSource = null
+        if (uris.isNotEmpty()) {
+            busy = true
+            viewModel.uploadExpenseUris(expense.id, uris, context) { uploaded ->
+                busy = false
+                selectedCount += uploaded
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text("Чеки и вложения") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Можно добавить несколько фото и файлов. Они будут привязаны к расходу сразу после успешной загрузки.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (expense.hasReceiptPhoto) {
+                    Text("✅ У расхода уже есть чек. Можно добавить ещё вложения.", color = Color(0xFF2E7D32), fontWeight = FontWeight.Medium)
+                }
+                if (selectedCount > 0) {
+                    Text("Загружено сейчас: $selectedCount", style = MaterialTheme.typography.bodySmall)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { currentSource = "camera"; cameraLauncher.launch(null) },
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.CameraAlt, null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Камера")
+                    }
+                    OutlinedButton(
+                        onClick = { currentSource = "photos"; photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.PhotoLibrary, null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Фото")
+                    }
+                }
+                OutlinedButton(
+                    onClick = { currentSource = "files"; filePicker.launch("*/*") },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.AttachFile, null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Фото / PDF / DOC и другие файлы")
+                }
+                if (busy) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Загрузка…")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text("Готово") }
+        }
+    )
 }
 
 @Composable
@@ -377,155 +504,17 @@ private fun MonthPickerDialog(
     onDismiss: () -> Unit
 ) {
     var tempYearMonth by remember { mutableStateOf(currentYearMonth) }
-    
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Выберите месяц") },
         text = {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { tempYearMonth = tempYearMonth.minusMonths(1) }) {
-                        Icon(Icons.Default.ChevronLeft, "Предыдущий месяц")
-                    }
-                    Text(
-                        "${tempYearMonth.month} ${tempYearMonth.year}",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    IconButton(onClick = { tempYearMonth = tempYearMonth.plusMonths(1) }) {
-                        Icon(Icons.Default.ChevronRight, "Следующий месяц")
-                    }
-                }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { tempYearMonth = tempYearMonth.minusMonths(1) }) { Icon(Icons.Default.ChevronLeft, "Предыдущий") }
+                Text("${tempYearMonth.month} ${tempYearMonth.year}", style = MaterialTheme.typography.titleLarge)
+                IconButton(onClick = { tempYearMonth = tempYearMonth.plusMonths(1) }) { Icon(Icons.Default.ChevronRight, "Следующий") }
             }
         },
-        confirmButton = {
-            Button(onClick = { onMonthSelected(tempYearMonth) }) {
-                Text("OK")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Отмена")
-            }
-        }
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AddExpenseDialog(
-    defaultDate: LocalDate,
-    onDismiss: () -> Unit,
-    onSave: (type: String, name: String, amount: Double, currency: String, comment: String) -> Unit
-) {
-    var selectedType by remember { mutableStateOf("OTHER") }
-    var name by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
-    var currency by remember { mutableStateOf("RUB") }
-    var comment by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("➕ Новый расход") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Тип расхода
-                Text("Тип расхода", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
-                var typeExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = typeExpanded,
-                    onExpandedChange = { typeExpanded = !typeExpanded }
-                ) {
-                    val currentLabel = EXPENSE_TYPE_LABELS[selectedType]?.let { "${it.second} ${it.first}" } ?: selectedType
-                    OutlinedTextField(
-                        value = currentLabel,
-                        onValueChange = {},
-                        readOnly = true,
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(typeExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(expanded = typeExpanded, onDismissRequest = { typeExpanded = false }) {
-                        EXPENSE_TYPE_LABELS.forEach { (key, value) ->
-                            val (label, icon) = value
-                            DropdownMenuItem(
-                                text = { Text("$icon $label") },
-                                onClick = {
-                                    selectedType = key
-                                    typeExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Название (опционально)
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Название (опционально)") },
-                    placeholder = { Text("Например: Цемент 50 мешков") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-
-                // Сумма + валюта
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = amount,
-                        onValueChange = {
-                            if (it.isEmpty() || it.all { c -> c.isDigit() || c == '.' || c == ',' }) {
-                                amount = it.replace(',', '.')
-                            }
-                        },
-                        label = { Text("Сумма *") },
-                        modifier = Modifier.weight(2f),
-                        singleLine = true
-                    )
-                    var curExpanded by remember { mutableStateOf(false) }
-                    Box(Modifier.weight(1f)) {
-                        OutlinedButton(
-                            onClick = { curExpanded = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text(currency) }
-                        DropdownMenu(expanded = curExpanded, onDismissRequest = { curExpanded = false }) {
-                            listOf("RUB", "BYN", "USD", "EUR").forEach { cur ->
-                                DropdownMenuItem(
-                                    text = { Text(cur) },
-                                    onClick = { currency = cur; curExpanded = false }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Комментарий
-                OutlinedTextField(
-                    value = comment,
-                    onValueChange = { comment = it },
-                    label = { Text("Комментарий") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 3
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val amountValue = amount.toDoubleOrNull() ?: 0.0
-                    if (amountValue > 0) {
-                        onSave(selectedType, name, amountValue, currency, comment)
-                    }
-                },
-                enabled = (amount.toDoubleOrNull() ?: 0.0) > 0
-            ) { Text("Добавить") }
-        },
+        confirmButton = { Button(onClick = { onMonthSelected(tempYearMonth) }) { Text("OK") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
     )
 }
