@@ -3,6 +3,7 @@ package com.example.prolestimesheet.ui.screens
 import android.annotation.SuppressLint
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -192,69 +193,154 @@ fun ProfileScreen(
 //        Spacer(Modifier.height(24.dp))
 
         // 📊 Статистика сотрудника
-        Text("Статистика", style = MaterialTheme.typography.titleMedium)
-//        Spacer(Modifier.height(4.dp))
+        Text(
+            "Статистика",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
 
         // Переключатель периода
         var statsPeriod by remember { mutableStateOf(StatsPeriod.MONTH) }
-        Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             StatsPeriod.entries.forEach { period ->
                 FilterChip(
                     selected = statsPeriod == period,
                     onClick = { statsPeriod = period },
-                    label = { Text(when(period) {
-                        StatsPeriod.MONTH -> "Месяц"
-                        StatsPeriod.ALL -> "Всё время"
-                    }) }
+                    label = {
+                        Text(
+                            when (period) {
+                                StatsPeriod.MONTH -> "Месяц"
+                                StatsPeriod.ALL -> "Всё время"
+                            }
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = when (period) {
+                                StatsPeriod.MONTH -> Icons.Default.DateRange
+                                StatsPeriod.ALL -> Icons.Default.AllInclusive
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
 
-        // 🆕 Считаем статистику напрямую из потоков
         val entries by viewModel.entries.collectAsState()
-        val myEntries = entries.filter { it.userId == user?.id }
-        val totalHours = myEntries.sumOf { it.hours.toDouble() }
-        val workDays = myEntries.map { it.date }.distinct().size
-        val totalDays = java.time.LocalDate.now().dayOfMonth
+        val myEntriesAll = entries.filter { it.userId == user?.id }
+        val myExpensesAll = expenses.filter { it.userId == user?.id }
+        val myIncomesAll = incomes.filter { it.userId == user?.id }
 
-        // 🆕 getEmployeeStats больше не существует, считаем напрямую
-        val userExpenses = expenses.filter { it.userId == user?.id }
-        val totalExpenses = userExpenses.sumOf { it.amount }
-        val expensesByCurrency = userExpenses.groupBy { it.currency }
-            .mapValues { (_, list) -> list.sumOf { it.amount } }
+        val periodEntries = if (statsPeriod == StatsPeriod.MONTH) {
+            myEntriesAll.filter { it.date.year == currentYear && it.date.monthNumber == currentMonth }
+        } else {
+            myEntriesAll
+        }
+        val periodExpensesList = if (statsPeriod == StatsPeriod.MONTH) {
+            myExpensesAll.filter { it.date.year == currentYear && it.date.monthNumber == currentMonth }
+        } else {
+            myExpensesAll
+        }
+        val periodIncomesList = if (statsPeriod == StatsPeriod.MONTH) {
+            myIncomesAll.filter { it.date.year == currentYear && it.date.monthNumber == currentMonth }
+        } else {
+            myIncomesAll
+        }
 
-        // 🔹 Строка 1: Часы + Дни
-        Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(8.dp)) {
+        val periodHours = periodEntries.sumOf { it.hours.toDouble() }
+        val periodWorkDays = periodEntries.map { it.date }.distinct().size
+        val periodExpensesAmount = periodExpensesList.sumOf { it.amount }
+        val periodIncomesAmount = periodIncomesList.sumOf { it.amount }
+        val periodExpensesWithReceipt = periodExpensesList.count { it.receiptSubmitted }
+        val periodExpensesWithoutReceipt = periodExpensesList.count { !it.receiptSubmitted }
+        val avgHoursPerDay = if (periodWorkDays > 0) periodHours / periodWorkDays else 0.0
+        val receiptRate = if (periodExpensesList.isNotEmpty()) {
+            periodExpensesWithReceipt.toDouble() / periodExpensesList.size.toDouble()
+        } else {
+            1.0
+        }
+        val rhythmScore = (avgHoursPerDay / 8.0 * 100.0).coerceAtMost(100.0)
+        val periodLabel = if (statsPeriod == StatsPeriod.MONTH) monthDisplayName else "за всё время"
+
+        // 🌲 Визуальная сводка в стиле web analytics
+        ProfileAnalyticsSummaryCard(
+            periodLabel = periodLabel,
+            hours = periodHours,
+            workDays = periodWorkDays,
+            expenses = periodExpensesAmount,
+            incomes = periodIncomesAmount,
+            avgHoursPerDay = avgHoursPerDay,
+            rhythmScore = rhythmScore,
+            receiptRate = receiptRate
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        // Четыре главные метрики
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             StatCard(
                 icon = Icons.Default.AccessTime,
                 title = "Часы",
-                value = "${"%.1f".format(totalHours)} ч.",
+                value = "${"%.1f".format(periodHours)} ч.",
                 subtitle = "отработано",
                 color = Color(0xFF2E7D32),
-                modifier = Modifier.weight(1f)  // ✅ ДОБАВЛЕНО
+                modifier = Modifier.weight(1f)
             )
             StatCard(
                 icon = Icons.Default.CalendarToday,
                 title = "Дни",
-                value = "$workDays",
-                subtitle = "из $totalDays с записями",
+                value = "$periodWorkDays",
+                subtitle = if (statsPeriod == StatsPeriod.MONTH) "в этом месяце" else "с записями",
                 color = Color(0xFF0277BD),
-                modifier = Modifier.weight(1f)  // ✅ ДОБАВЛЕНО
+                modifier = Modifier.weight(1f)
             )
         }
 
         Spacer(Modifier.height(8.dp))
 
-        // 🔹 Строка 2: Расходы + Среднее
-        Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(8.dp)) {
-            ExpenseBreakdownCard(
-                totalAmount = totalExpenses,
-                currencyBreakdown = expensesByCurrency,
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            StatCard(
+                icon = Icons.Default.TrendingDown,
+                title = "Расходы",
+                value = "${"%.0f".format(periodExpensesAmount)} ₽",
+                subtitle = if (periodExpensesList.isEmpty()) "нет операций"
+                else "${periodExpensesList.size} операций",
+                color = Color(0xFFEF6C00),
+                modifier = Modifier.weight(1f)
+            )
+            StatCard(
+                icon = Icons.AutoMirrored.Filled.TrendingUp,
+                title = "Доходы",
+                value = "${"%.0f".format(periodIncomesAmount)} ₽",
+                subtitle = if (periodIncomesList.isEmpty()) "нет поступлений"
+                else "${periodIncomesList.size} операций",
+                color = Color(0xFF2E7D32),
+                modifier = Modifier.weight(1f)
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
+
+        // Короткие аналитические выводы
+        ProfileAnalyticsInsightRow(
+            avgHoursPerDay = avgHoursPerDay,
+            rhythmScore = rhythmScore,
+            receiptRate = receiptRate,
+            expensesWithoutReceipt = periodExpensesWithoutReceipt
+        )
+
 
         // ═══════════════════════════════════════════════════════════
         // 🔘 Быстрый доступ — сетка 2×2
@@ -355,6 +441,241 @@ fun ProfileScreen(
             Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
             Text("Выйти из аккаунта")
         }
+    }
+}
+
+
+@Composable
+private fun ProfileAnalyticsSummaryCard(
+    periodLabel: String,
+    hours: Double,
+    workDays: Int,
+    expenses: Double,
+    incomes: Double,
+    avgHoursPerDay: Double,
+    rhythmScore: Double,
+    receiptRate: Double
+) {
+    val summary = when {
+        workDays == 0 -> "Пока нет рабочих записей за выбранный период."
+        avgHoursPerDay >= 8.0 && receiptRate >= 0.9 -> "Ритм стабильный: хорошая загрузка и порядок с расходными документами."
+        avgHoursPerDay >= 8.0 -> "Загрузка высокая. Стоит проверить несколько операций без подтверждающих документов."
+        avgHoursPerDay >= 6.0 -> "Рабочий ритм ровный, но есть резерв для более плотной загрузки."
+        else -> "Рабочая нагрузка пока невысокая — период стоит оценивать вместе с графиком задач."
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF1D976C),
+                            Color(0xFF2196F3)
+                        )
+                    )
+                )
+                .padding(16.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Личная аналитика",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            periodLabel,
+                            color = Color.White.copy(alpha = 0.78f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.18f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "${rhythmScore.roundToInt()}%",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "ритм",
+                                color = Color.White.copy(alpha = 0.82f),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AnalyticsMiniMetric(
+                        modifier = Modifier.weight(1f),
+                        title = "Рабочий ритм",
+                        value = if (workDays > 0) "${"%.1f".format(avgHoursPerDay)} ч/д" else "—",
+                        tint = Color.White
+                    )
+                    AnalyticsMiniMetric(
+                        modifier = Modifier.weight(1f),
+                        title = "Расходы",
+                        value = formatRubles(expenses),
+                        tint = Color.White
+                    )
+                    AnalyticsMiniMetric(
+                        modifier = Modifier.weight(1f),
+                        title = "Доходы",
+                        value = formatRubles(incomes),
+                        tint = Color.White
+                    )
+                }
+
+                Text(
+                    summary,
+                    color = Color.White.copy(alpha = 0.9f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnalyticsMiniMetric(
+    modifier: Modifier = Modifier,
+    title: String,
+    value: String,
+    tint: Color
+) {
+    Column(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.medium)
+            .background(Color.White.copy(alpha = 0.12f))
+            .padding(10.dp)
+    ) {
+        Text(
+            title,
+            color = tint.copy(alpha = 0.78f),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            value,
+            color = tint,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun ProfileAnalyticsInsightRow(
+    avgHoursPerDay: Double,
+    rhythmScore: Double,
+    receiptRate: Double,
+    expensesWithoutReceipt: Int
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        InsightChip(
+            modifier = Modifier.weight(1f),
+            icon = Icons.Default.Speed,
+            title = "Темп",
+            value = if (avgHoursPerDay > 0) "${"%.1f".format(avgHoursPerDay)} ч/день" else "Нет данных",
+            color = if (avgHoursPerDay >= 8.0) Color(0xFF2E7D32) else Color(0xFF0277BD)
+        )
+        InsightChip(
+            modifier = Modifier.weight(1f),
+            icon = Icons.Default.Assessment,
+            title = "Ритм",
+            value = "${rhythmScore.roundToInt()}% от 8 ч",
+            color = if (rhythmScore >= 90) Color(0xFF2E7D32) else Color(0xFF6A1B9A)
+        )
+        InsightChip(
+            modifier = Modifier.weight(1f),
+            icon = if (expensesWithoutReceipt > 0) Icons.Default.Warning else Icons.Default.CheckCircle,
+            title = "Чеки",
+            value = if (expensesWithoutReceipt > 0) "$expensesWithoutReceipt без чека"
+                    else "${(receiptRate * 100).roundToInt()}% подтверждено",
+            color = if (expensesWithoutReceipt > 0) Color(0xFFC62828) else Color(0xFF2E7D32)
+        )
+    }
+}
+
+@Composable
+private fun InsightChip(
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    value: String,
+    color: Color
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = color.copy(alpha = 0.08f)
+        ),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.18f))
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 9.dp, vertical = 9.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(7.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    value,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+private fun formatRubles(value: Double): String {
+    return when {
+        value >= 1_000_000 -> "${"%.1f".format(value / 1_000_000.0)} млн ₽"
+        value >= 1_000 -> "${"%.1f".format(value / 1_000.0)} тыс. ₽"
+        else -> "${"%.0f".format(value)} ₽"
     }
 }
 
