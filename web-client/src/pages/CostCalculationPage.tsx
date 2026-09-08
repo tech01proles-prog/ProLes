@@ -1,10 +1,51 @@
 import { useState, useEffect, useMemo } from 'react';
+import type { KeyboardEvent } from 'react';
 import api from '../api/client';
 import type { ProjectDto, ExpenseDto, TimeEntryDto, UserDto, SalaryComponentDto } from '../types';
 import { formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+
+interface CostPayrollData {
+  employees: UserDto[];
+  components: SalaryComponentDto[];
+}
+
+interface PeriodBounds {
+  start: Date;
+  end: Date;
+}
+
+const getPeriodBounds = (periodType: 'month' | 'quarter' | 'year', selectedPeriod: string): PeriodBounds | null => {
+  if (!selectedPeriod) return null;
+  if (periodType === 'month') {
+    const [year, month] = selectedPeriod.split('-').map(Number);
+    if (!year || !month) return null;
+    return { start: new Date(year, month - 1, 1), end: new Date(year, month, 0, 23, 59, 59, 999) };
+  }
+  if (periodType === 'quarter') {
+    const [yearStr, quarterStr] = selectedPeriod.split('-Q');
+    const year = Number(yearStr);
+    const quarter = Number(quarterStr);
+    if (!year || !quarter) return null;
+    const startMonth = (quarter - 1) * 3;
+    return { start: new Date(year, startMonth, 1), end: new Date(year, startMonth + 3, 0, 23, 59, 59, 999) };
+  }
+  const year = Number(selectedPeriod);
+  if (!year) return null;
+  return { start: new Date(year, 0, 1), end: new Date(year, 11, 31, 23, 59, 59, 999) };
+};
+
+const normalizeExpenseType = (value: string) => value.trim().toUpperCase().replace(/-/g, '_');
+const isPerDiemType = (value: string) => {
+  const t = normalizeExpenseType(value);
+  return t === 'PER_DIEM' || t === 'PERDIEM' || t === 'PER_DIEM_EXTRA';
+};
+const isTicketExpense = (expense: ExpenseDto) => {
+  const haystack = `${expense.name} ${expense.comment}`.toLowerCase();
+  return haystack.includes('билет') || haystack.includes('ticket');
+};
 
 interface CostRow {
   project: ProjectDto;
@@ -58,19 +99,18 @@ export function CostCalculationPage() {
   }>>({});
   const [editingCell, setEditingCell] = useState<{ projectId: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [projectSearch, setProjectSearch] = useState('');
+  const [showOnlyNegative, setShowOnlyNegative] = useState(false);
 
-  // Инициализация выбранного периода - текущий месяц
+  // При смене типа периода автоматически формируем корректное значение выбранного периода.
   useEffect(() => {
-    if (!selectedPeriod) {
-      const now = new Date();
-      if (periodType === 'month') {
-        setSelectedPeriod(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
-      } else if (periodType === 'quarter') {
-        const quarter = Math.floor(now.getMonth() / 3) + 1;
-        setSelectedPeriod(`${now.getFullYear()}-Q${quarter}`);
-      } else {
-        setSelectedPeriod(`${now.getFullYear()}`);
-      }
+    const now = new Date();
+    if (periodType === 'month') {
+      setSelectedPeriod(prev => /^\d{4}-\d{2}$/.test(prev) ? prev : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    } else if (periodType === 'quarter') {
+      setSelectedPeriod(prev => /^\d{4}-Q[1-4]$/.test(prev) ? prev : `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`);
+    } else {
+      setSelectedPeriod(prev => /^\d{4}$/.test(prev) ? prev : `${now.getFullYear()}`);
     }
   }, [periodType]);
 
@@ -80,33 +120,17 @@ export function CostCalculationPage() {
       return { expenses: allExpenses, timeEntries: allTimeEntries };
     }
 
-    let startDate: Date;
-    let endDate: Date;
-
-    if (periodType === 'month') {
-      const [year, month] = selectedPeriod.split('-').map(Number);
-      startDate = new Date(year, month - 1, 1);
-      endDate = new Date(year, month, 0, 23, 59, 59, 999);
-    } else if (periodType === 'quarter') {
-      const [year, quarterStr] = selectedPeriod.split('-Q');
-      const quarter = parseInt(quarterStr, 10);
-      const startMonth = (quarter - 1) * 3;
-      startDate = new Date(+year, startMonth, 1);
-      endDate = new Date(+year, startMonth + 3, 0, 23, 59, 59, 999);
-    } else {
-      const year = parseInt(selectedPeriod, 10);
-      startDate = new Date(year, 0, 1);
-      endDate = new Date(year, 11, 31, 23, 59, 59, 999);
-    }
+    const bounds = getPeriodBounds(periodType, selectedPeriod);
+    if (!bounds) return { expenses: allExpenses, timeEntries: allTimeEntries };
 
     const filteredExpenses = allExpenses.filter(e => {
       const entryDate = new Date(e.date);
-      return entryDate >= startDate && entryDate <= endDate;
+      return entryDate >= bounds.start && entryDate <= bounds.end;
     });
 
     const filteredTimeEntries = allTimeEntries.filter(t => {
       const entryDate = new Date(t.date);
-      return entryDate >= startDate && entryDate <= endDate;
+      return entryDate >= bounds.start && entryDate <= bounds.end;
     });
 
     return { expenses: filteredExpenses, timeEntries: filteredTimeEntries };
@@ -116,54 +140,27 @@ export function CostCalculationPage() {
     if (!canView) return;
     (async () => {
       setLoading(true);
-      const [projRes, expRes, timeRes, usersRes, salaryRes] = await Promise.allSettled([
+      const [projRes, expRes, timeRes, payrollRes] = await Promise.allSettled([
         api.get<ProjectDto[]>('/projects'),
         api.get<ExpenseDto[]>('/expenses/all'),
         api.get<TimeEntryDto[]>('/entries/all'),
-        api.get<UserDto[]>('/users'),
-        api.get<SalaryComponentDto[]>('/payroll/components/all'),
+        api.get<CostPayrollData>('/project-costs/payroll-data'),
       ]);
       setProjects(projRes.status === 'fulfilled' ? (projRes.value.data || []).filter((p: ProjectDto) => p.isActive) : []);
       setAllExpenses(expRes.status === 'fulfilled' ? (expRes.value.data || []) : []);
       setAllTimeEntries(timeRes.status === 'fulfilled' ? (timeRes.value.data || []) : []);
-      setAllUsers(usersRes.status === 'fulfilled' ? (usersRes.value.data || []) : []);
-      setAllSalaryComponents(salaryRes.status === 'fulfilled' ? (salaryRes.value.data || []) : []);
-      
-      // 🔍 DEBUG: проверяем загрузку компонентов зарплаты
-      if (salaryRes.status === 'fulfilled') {
-        console.log('📊 Salary components loaded:', salaryRes.status, (salaryRes.value.data || []).length, 'items');
-        console.log('💾 Raw salary components data:', salaryRes.value.data);
-        const salaryCompData = salaryRes.value.data || [];
-        console.log('🧾 All salary components:', salaryCompData.map((c: SalaryComponentDto) => ({id: c.id, userId: c.userId, type: c.type, amount: c.amount, isActive: c.isActive})));
-        
-        // 🔍 DEBUG: проверяем совпадение userId компонента с employee users
-        if (salaryCompData.length > 0 && usersRes.status === 'fulfilled') {
-          const firstComp = salaryCompData[0];
-          const empUsers = (usersRes.value.data || []).filter((u: UserDto) => u.role === 'employee');
-          console.log('👷 Employee users:', empUsers.length, empUsers.map((u: UserDto) => ({id: u.id, name: u.name})));
-          const employeeIds = empUsers.map((u: UserDto) => u.id);
-          console.log('🔍 First component userId:', firstComp.userId);
-          console.log('🔍 Employee user IDs:', employeeIds);
-          console.log('🔍 Is component userId in employee IDs?', employeeIds.includes(firstComp.userId));
-          
-          // Проверяем все пользователи с этим userId
-          const compUser = (usersRes.value.data || []).find((u: UserDto) => u.id === firstComp.userId);
-          console.log('🔍 User with component userId:', compUser ? {id: compUser.id, name: compUser.name, role: compUser.role} : 'NOT FOUND');
-        }
-      }
-      if (usersRes.status === 'fulfilled') {
-        console.log('👥 Users loaded:', usersRes.status, (usersRes.value.data || []).length, 'items');
-      }
+      setAllUsers(payrollRes.status === 'fulfilled' ? (payrollRes.value.data?.employees || []) : []);
+      setAllSalaryComponents(payrollRes.status === 'fulfilled' ? (payrollRes.value.data?.components || []) : []);
       
       // Загружаем сохраненные ручные данные из проектов
       const manual: Record<string, { salePrice: number; materials: number; transportToClient: number; contractors: number; creditPercent: number }> = {};
       projRes.status === 'fulfilled' && projRes.value.data.forEach((p: ProjectDto) => {
         manual[p.id] = {
-          salePrice: (p as any).salePrice || 0,
-          materials: (p as any).materials || 0,
+          salePrice: p.sellingPrice || 0,
+          materials: p.materials || 0,
           transportToClient: p.transportToClient || 0,
-          contractors: (p as any).contractors || 0,
-          creditPercent: (p as any).creditPercent || 0,
+          contractors: p.contractors || 0,
+          creditPercent: p.creditPercent || 0,
         };
       });
       setManualData(manual);
@@ -171,157 +168,116 @@ export function CostCalculationPage() {
     })();
   }, [canView]);
 
+  const salaryByProject = useMemo(() => {
+    const result = new Map<string, number>();
+    const employeeIds = new Set((allUsers || []).filter(u => u.role === 'employee').map(u => u.id));
+    const bounds = getPeriodBounds(periodType, selectedPeriod);
+    if (!bounds) return result;
+
+    const periodEntries = (timeEntries || []).filter(t => employeeIds.has(t.userId) && t.hours > 0);
+    const totalHoursByUser = new Map<string, number>();
+    const projectHoursByUser = new Map<string, Map<string, number>>();
+
+    for (const entry of periodEntries) {
+      totalHoursByUser.set(entry.userId, (totalHoursByUser.get(entry.userId) || 0) + entry.hours);
+      if (!projectHoursByUser.has(entry.userId)) projectHoursByUser.set(entry.userId, new Map());
+      const byProject = projectHoursByUser.get(entry.userId)!;
+      byProject.set(entry.projectId, (byProject.get(entry.projectId) || 0) + entry.hours);
+    }
+
+    const isEffective = (component: SalaryComponentDto) => {
+      if (!component.isActive) return false;
+      const from = component.effectiveFrom ? new Date(`${component.effectiveFrom}T00:00:00`) : null;
+      const to = component.effectiveTo ? new Date(`${component.effectiveTo}T23:59:59`) : null;
+      return (!from || from <= bounds.end) && (!to || to >= bounds.start);
+    };
+
+    const activeComponents = (allSalaryComponents || []).filter(c => employeeIds.has(c.userId) && isEffective(c));
+    for (const component of activeComponents) {
+      const explicitProjectId = component.projectId || null;
+      const userProjectHours = projectHoursByUser.get(component.userId) || new Map<string, number>();
+      const userTotalHours = totalHoursByUser.get(component.userId) || 0;
+      const projectsForUser = explicitProjectId
+        ? new Map([[explicitProjectId, userProjectHours.get(explicitProjectId) || 0]])
+        : userProjectHours;
+
+      if (component.type === 'FIXED' || component.type === 'BONUS' || component.type === 'PENALTY') {
+        const signedAmount = component.type === 'PENALTY' ? -(component.amount || 0) : (component.amount || 0);
+        if (explicitProjectId) {
+          result.set(explicitProjectId, (result.get(explicitProjectId) || 0) + signedAmount);
+        } else if (userTotalHours > 0) {
+          for (const [projectId, hours] of projectsForUser) {
+            result.set(projectId, (result.get(projectId) || 0) + signedAmount * (hours / userTotalHours));
+          }
+        }
+      } else if (component.type === 'HOURLY') {
+        const rate = component.ratePerHour || 0;
+        for (const [projectId, hours] of projectsForUser) {
+          result.set(projectId, (result.get(projectId) || 0) + hours * rate);
+        }
+      } else if (component.type === 'PIECE') {
+        const rate = component.ratePerUnit || 0;
+        if (explicitProjectId) {
+          const count = periodEntries.filter(t => t.userId === component.userId && t.projectId === explicitProjectId).length;
+          result.set(explicitProjectId, (result.get(explicitProjectId) || 0) + count * rate);
+        } else {
+          const counts = new Map<string, number>();
+          for (const entry of periodEntries) {
+            if (entry.userId !== component.userId) continue;
+            counts.set(entry.projectId, (counts.get(entry.projectId) || 0) + 1);
+          }
+          for (const [projectId, count] of counts) {
+            result.set(projectId, (result.get(projectId) || 0) + count * rate);
+          }
+        }
+      }
+    }
+    return result;
+  }, [allSalaryComponents, allUsers, periodType, selectedPeriod, timeEntries]);
+
   const projectData = useMemo((): CostRow[] => {
+    const employeeIds = new Set((allUsers || []).filter(u => u.role === 'employee').map(u => u.id));
     return projects.map(project => {
       const projectExpenses = (expenses || []).filter(e => e.projectId === project.id);
-      
-      // Расходы сотрудников (все кроме HOUSEHOLD, PER_DIEM, ROAD)
-      // Включая OTHER и остальные типы расходов
-      const employeeExpenses = projectExpenses
-        .filter(e => e.type !== 'HOUSEHOLD' && e.type !== 'PER_DIEM' && e.type !== 'ROAD')
-        .reduce((sum, e) => sum + e.amount, 0);
-      
-      // Хоз.нужды
+      const tickets = projectExpenses.filter(isTicketExpense).reduce((sum, e) => sum + e.amount, 0);
       const household = projectExpenses
-        .filter(e => e.type === 'HOUSEHOLD')
+        .filter(e => normalizeExpenseType(e.type) === 'HOUSEHOLD')
         .reduce((sum, e) => sum + e.amount, 0);
-      
-      // Авансы (заглушка - 0)
-      const advances = 0;
-      
-      // Билеты (расходы на билеты)
-      const tickets = projectExpenses
-        .filter(e => e.name.toLowerCase().includes('билет') || e.name.toLowerCase().includes('ticket'))
-        .reduce((sum, e) => sum + e.amount, 0);
-      
-      // Проживание (суточные - PER_DIEM, per_diem, perdiem)
       const perDiem = projectExpenses
-        .filter(e => {
-          const typeUpper = e.type.toUpperCase();
-          return typeUpper === 'PER_DIEM' || typeUpper === 'PERDIEM' || e.type.toLowerCase() === 'per_diem';
-        })
+        .filter(e => isPerDiemType(e.type))
         .reduce((sum, e) => sum + e.amount, 0);
-      
-      // Иные расходы (теперь пусто, т.к. всё включено в Расходы)
-      const other = 0;
-      
-      const expensesTotal = employeeExpenses + household + advances + tickets + perDiem + other;
-      
-      // Транспорт ТО (ROAD)
       const techTransport = projectExpenses
-        .filter(e => e.type === 'ROAD')
+        .filter(e => normalizeExpenseType(e.type) === 'ROAD')
         .reduce((sum, e) => sum + e.amount, 0);
-      
-      // Транспорт другое (заглушка)
+      const employeeExpenses = projectExpenses
+        .filter(e => normalizeExpenseType(e.type) !== 'HOUSEHOLD' && !isPerDiemType(e.type) && normalizeExpenseType(e.type) !== 'ROAD' && !isTicketExpense(e))
+        .reduce((sum, e) => sum + e.amount, 0);
+      const advances = 0;
+      const other = 0;
+      const expensesTotal = employeeExpenses + household + advances + tickets + perDiem + other;
       const transportOther = 0;
       const transportTotal = techTransport + transportOther;
-      
-      // Часы ТО (сумма часов всех сотрудников роли employee по этому проекту)
       const techHours = (timeEntries || [])
-        .filter(t => t.projectId === project.id)
+        .filter(t => t.projectId === project.id && employeeIds.has(t.userId))
         .reduce((sum, t) => sum + t.hours, 0);
-      
-      // Расчет зарплаты тех.отдела (сотрудники с ролью 'employee')
-      // Включая все типы компонентов: FIXED, PIECE, HOURLY, BONUS (как в SalaryCalculator.kt)
-      // Фильтруем компоненты зарплаты по периоду
-      
-      // Находим сотрудников тех.отдела (роль 'employee')
-      const techEmployees = (allUsers || []).filter(u => u.role === 'employee');
-      const techEmployeeIds = new Set(techEmployees.map(e => e.id));
-      
-      // Фильтруем компоненты зарплаты: только для тех.сотрудников и активные
-      // Как в SalaryCalculator.kt — берем ВСЕ активные компоненты, без фильтрации по period
-      // Период учитывается только при подсчете часов/дней для PIECE и HOURLY
-      const techSalaryComponents = (allSalaryComponents || []).filter(c => 
-        techEmployeeIds.has(c.userId) &&
-        c.isActive
-      );
-      
-      // Считаем зарплату по аналогии с SalaryCalculator.kt
-      let techSalary = 0;
-      
-      // 🔍 DEBUG: лог для отладки расчета зарплаты
-      console.log('🔢 Calculating techSalary for project:', project.name, 'techSalaryComponents count:', techSalaryComponents.length);
-      console.log('  - FIXED components:', techSalaryComponents.filter(c => c.type === 'FIXED').length);
-      console.log('  - BONUS components:', techSalaryComponents.filter(c => c.type === 'BONUS').length);
-      console.log('  - PIECE components:', techSalaryComponents.filter(c => c.type === 'PIECE').length);
-      console.log('  - HOURLY components:', techSalaryComponents.filter(c => c.type === 'HOURLY').length);
-      
-      // 1. FIXED (оклад) — суммируем все компоненты
-      const fixedComponents = techSalaryComponents.filter(c => c.type === 'FIXED');
-      for (const component of fixedComponents) {
-        techSalary += component.amount || 0;
-      }
-      
-      // 2. BONUS (премия) — суммируем все компоненты
-      const bonusComponents = techSalaryComponents.filter(c => c.type === 'BONUS');
-      for (const component of bonusComponents) {
-        techSalary += component.amount || 0;
-      }
-      
-      // 3. PIECE (сдельная) — ratePerUnit × количество записей (дней) за ПЕРИОД
-      const pieceComponents = techSalaryComponents.filter(c => c.type === 'PIECE');
-      for (const component of pieceComponents) {
-        const projectId = component.projectId;
-        const ratePerUnit = component.ratePerUnit || 0;
-        
-        // Считаем количество записей (дней с часами) за ПЕРИОД для этого сотрудника
-        const entryCount = (timeEntries || [])
-          .filter(t => 
-            t.userId === component.userId && 
-            (!projectId || t.projectId === projectId) &&
-            t.hours > 0
-          )
-          .length;
-        
-        techSalary += entryCount * ratePerUnit;
-      }
-      
-      // 4. HOURLY (почасовая) — ratePerHour × сумма часов за ПЕРИОД
-      const hourlyComponents = techSalaryComponents.filter(c => c.type === 'HOURLY');
-      for (const component of hourlyComponents) {
-        const projectId = component.projectId;
-        const ratePerHour = component.ratePerHour || 0;
-        
-        const totalHours = (timeEntries || [])
-          .filter(t => 
-            t.userId === component.userId && 
-            (!projectId || t.projectId === projectId)
-          )
-          .reduce((sum, t) => sum + t.hours, 0);
-        
-        techSalary += totalHours * ratePerHour;
-      }
-      
-      console.log('✅ Final techSalary for', project.name, ':', techSalary);
-      
-      // Ручные данные
-      const manual = manualData[project.id] || { salePrice: 0, materials: 0, transportToClient: 0, contractors: 0, creditPercent: 0 };
-      
-      // Затраты на реализацию = материалы + расходы + транспорт ТО + зарплата тех.отдела
+      const techSalary = salaryByProject.get(project.id) || 0;
+      const manual = manualData[project.id] || {
+        salePrice: project.sellingPrice || 0,
+        materials: project.materials || 0,
+        transportToClient: project.transportToClient || 0,
+        contractors: project.contractors || 0,
+        creditPercent: project.creditPercent || 0,
+      };
       const totalCost = manual.materials + expensesTotal + transportTotal + manual.transportToClient + manual.contractors + manual.creditPercent + techSalary;
       const marginalIncome = manual.salePrice - totalCost;
-      
       return {
         project,
         salePriceManual: manual.salePrice,
         materialsManual: manual.materials,
         techHours,
         techSalary,
-        expenses: {
-          employeeExpenses,
-          household,
-          advances,
-          tickets,
-          perDiem,
-          other,
-          total: expensesTotal,
-        },
-        transport: {
-          techTransport,
-          other: transportOther,
-          total: transportTotal,
-        },
+        expenses: { employeeExpenses, household, advances, tickets, perDiem, other, total: expensesTotal },
+        transport: { techTransport, other: transportOther, total: transportTotal },
         transportToClientManual: manual.transportToClient,
         contractorsManual: manual.contractors,
         creditPercentManual: manual.creditPercent,
@@ -329,7 +285,7 @@ export function CostCalculationPage() {
         marginalIncome,
       };
     });
-  }, [projects, expenses, timeEntries, manualData, allSalaryComponents, allUsers, periodType, selectedPeriod]);
+  }, [projects, expenses, timeEntries, manualData, salaryByProject, allUsers]);
 
   const totals = useMemo(() => {
     return projectData.reduce((acc, row) => ({
@@ -359,6 +315,26 @@ export function CostCalculationPage() {
     });
   }, [projectData]);
 
+  const filteredProjectData = useMemo(() => {
+    const query = projectSearch.trim().toLowerCase();
+    return projectData.filter(row => {
+      const matchesSearch = !query || `${row.project.name} ${row.project.client || ''} ${row.project.projectNumber || ''} ${row.project.projectCode || ''}`.toLowerCase().includes(query);
+      const matchesNegative = !showOnlyNegative || row.marginalIncome < 0;
+      return matchesSearch && matchesNegative;
+    });
+  }, [projectData, projectSearch, showOnlyNegative]);
+
+  const overview = useMemo(() => {
+    const marginPercent = totals.salePriceManual > 0 ? (totals.marginalIncome / totals.salePriceManual) * 100 : 0;
+    const costPerHour = totals.techHours > 0 ? totals.totalCost / totals.techHours : 0;
+    return {
+      marginPercent,
+      costPerHour,
+      negativeProjects: projectData.filter(r => r.marginalIncome < 0).length,
+      totalProjects: projectData.length,
+    };
+  }, [projectData, totals]);
+
   const handleCellEdit = (projectId: string, field: string, currentValue: number) => {
     if (!canEdit) return;
     setEditingCell({ projectId, field });
@@ -386,18 +362,25 @@ export function CostCalculationPage() {
         updatedManual.creditPercent = parseFloat(editValue) || 0;
       }
 
-      setManualData(prev => ({ ...prev, [editingCell.projectId]: updatedManual }));
+      // Сохраняем только финансовые поля через отдельный endpoint.
+      // Это не требует общего права projects.edit — достаточно cost_calculation.edit.
+      await api.put(`/project-costs/${project.id}`, {
+        sellingPrice: updatedManual.salePrice,
+        transportToClient: updatedManual.transportToClient,
+        materials: updatedManual.materials,
+        contractors: updatedManual.contractors,
+        creditPercent: updatedManual.creditPercent,
+      });
 
-      // Сохраняем в проект
       const updatedProject = {
         ...project,
-        salePrice: updatedManual.salePrice,
+        sellingPrice: updatedManual.salePrice,
         transportToClient: updatedManual.transportToClient,
         materials: updatedManual.materials,
         contractors: updatedManual.contractors,
         creditPercent: updatedManual.creditPercent,
       };
-      await api.put('/projects', updatedProject);
+      setManualData(prev => ({ ...prev, [editingCell.projectId]: updatedManual }));
       setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
     } catch (err) {
       console.error('Ошибка сохранения:', err);
@@ -407,7 +390,7 @@ export function CostCalculationPage() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleCellSave();
     } else if (e.key === 'Escape') {
@@ -561,7 +544,7 @@ export function CostCalculationPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">🧮 Расчёт себестоимости</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {projectData.length} проектов • Нажмите на ячейку для редактирования (требуются права редактора)
+            {projectData.length} проектов • Нажмите на финансовую ячейку для редактирования • зарплата и фактические расходы рассчитываются автоматически
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -613,6 +596,22 @@ export function CostCalculationPage() {
               </select>
             )}
           </div>
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-2 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+            <span className="text-xs text-slate-500 dark:text-slate-400">Проект:</span>
+            <input
+              value={projectSearch}
+              onChange={(e) => setProjectSearch(e.target.value)}
+              placeholder="Поиск..."
+              className="w-36 text-xs border-0 bg-transparent text-slate-900 dark:text-slate-100 focus:outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowOnlyNegative(v => !v)}
+            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${showOnlyNegative ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300' : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'}`}
+          >
+            {showOnlyNegative ? '🔻 Только убыточные' : 'Все проекты'}
+          </button>
           <button
             onClick={handleExportXLSX}
             className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-md transition-all duration-300 flex items-center gap-2 text-sm font-medium"
@@ -623,6 +622,34 @@ export function CostCalculationPage() {
             Экспорт в XLSX
           </button>
         </div>
+      </div>
+
+      {/* Аналитическая шапка */}
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+        {[
+          { label: 'Продажи', value: formatMoney(totals.salePriceManual), icon: '💰', tone: 'text-slate-900 dark:text-slate-100' },
+          { label: 'Себестоимость', value: formatMoney(totals.totalCost), icon: '🧾', tone: 'text-slate-900 dark:text-slate-100' },
+          { label: 'Маржинальный доход', value: formatMoney(totals.marginalIncome), icon: totals.marginalIncome >= 0 ? '📈' : '📉', tone: totals.marginalIncome >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400' },
+          { label: 'Маржа', value: `${overview.marginPercent.toFixed(1)}%`, icon: '🎯', tone: overview.marginPercent >= 20 ? 'text-emerald-600 dark:text-emerald-400' : overview.marginPercent >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400' },
+          { label: 'ЗП тех. отдела', value: formatMoney(totals.techSalary), icon: '👷', tone: 'text-indigo-600 dark:text-indigo-400' },
+          { label: 'Стоимость часа', value: formatMoney(overview.costPerHour), icon: '⏱️', tone: 'text-purple-600 dark:text-purple-400' },
+        ].map(card => (
+          <div key={card.label} className="card p-4 border border-slate-200/80 dark:border-slate-700/80 bg-white/80 dark:bg-slate-900/70">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400">{card.label}</span>
+              <span>{card.icon}</span>
+            </div>
+            <div className={`mt-2 text-lg font-bold tabular-nums ${card.tone}`}>{card.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <div className="text-xs text-slate-500 dark:text-slate-400">
+          Показано <span className="font-semibold text-slate-700 dark:text-slate-200">{filteredProjectData.length}</span> из {overview.totalProjects} проектов
+          {overview.negativeProjects > 0 && <span className="ml-2 text-red-600 dark:text-red-400">• {overview.negativeProjects} убыточных</span>}
+        </div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">ЗП распределяется по проектам по фактическим часам; проектные компоненты относятся напрямую к проекту</div>
       </div>
 
       {/* Таблица в стиле Excel */}
@@ -643,7 +670,7 @@ export function CostCalculationPage() {
               </th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">Транспорт до клиента</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">Услуги подрядчиков</th>
-              <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">% по кредиту</th>
+              <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px]">Кредит / финансирование</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px] bg-emerald-50 dark:bg-emerald-900/30">Итого с/с</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px] bg-amber-50 dark:bg-amber-900/30">Марж. доход</th>
               <th rowSpan={2} className="border border-slate-300 dark:border-slate-600 p-2 text-right font-semibold text-slate-700 dark:text-slate-300 w-[120px] bg-purple-50 dark:bg-purple-900/30">% менеджеру</th>
@@ -674,7 +701,7 @@ export function CostCalculationPage() {
             </tr>
           </thead>
           <tbody>
-            {projectData.map((row) => {
+            {filteredProjectData.map((row) => {
               return (
                 <tr key={row.project.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all duration-300">
                   {/* Проект */}
@@ -890,6 +917,15 @@ export function CostCalculationPage() {
                 </tr>
               );
             })}
+            {filteredProjectData.length === 0 && (
+              <tr>
+                <td colSpan={(3 + 2 + (showExpensesDetail ? 6 : 1) + (showTransportDetail ? 2 : 1) + 4)} className="border border-slate-200 dark:border-slate-700 p-10 text-center text-slate-500 dark:text-slate-400">
+                  <div className="text-3xl mb-2">🔎</div>
+                  <div className="font-medium text-slate-700 dark:text-slate-300">Проекты не найдены</div>
+                  <div className="text-xs mt-1">Измените поиск или отключите фильтр убыточных проектов</div>
+                </td>
+              </tr>
+            )}
           </tbody>
           <tfoot>
             <tr className="bg-slate-100 dark:bg-slate-800 font-bold">
@@ -935,16 +971,17 @@ export function CostCalculationPage() {
         <ul className="space-y-1">
           <li><span className="font-medium">Материалы</span> — заполняется вручную администратором</li>
           <li><span className="font-medium">Часы ТО</span> — сумма часов тех.отдела (роль employee) из табеля</li>
-          <li><span className="font-medium">Затраты на реализацию</span> — сумма: Материалы + Расходы + Транспорт ТО</li>
-          <li><span className="font-medium">Расходы</span> — сумма расходов всех сотрудников к проекту (кроме хоз.нужд, суточных, транспорта)</li>
+          <li><span className="font-medium">Итого с/с</span> — Материалы + Расходы + Транспорт + Транспорт до клиента + Подрядчики + Финансирование + ЗП ТО</li>
+          <li><span className="font-medium">Расходы</span> — обычные расходы, без хоз.нужд, суточных, сверхсуточных, дорожных расходов и билетов (билеты показаны отдельно)</li>
           <li><span className="font-medium">Хоз.нужды</span> — расходы типа HOUSEHOLD</li>
           <li><span className="font-medium">Авансы</span> — выплаты сотрудникам по авансам (пока заглушка 0)</li>
           <li><span className="font-medium">Билеты</span> — расходы по билетам</li>
-          <li><span className="font-medium">Проживание</span> — суточные (тип PER_DIEM)</li>
+          <li><span className="font-medium">Проживание</span> — обычные и сверхсуточные (PER_DIEM / PER_DIEM_EXTRA)</li>
           <li><span className="font-medium">Транспорт ТО</span> — расходы тех.отдела на дорогу (тип ROAD)</li>
           <li><span className="font-medium">Транспорт до клиента</span> — заполняется вручную администратором</li>
           <li><span className="font-medium">Услуги подрядчиков</span> — заполняется вручную администратором</li>
-          <li><span className="font-medium">% по кредиту</span> — заполняется вручную администратором</li>
+          <li><span className="font-medium">ЗП ТО</span> — оклад/бонус/штраф распределяются по часам проекта, почасовая и сдельная — по фактическим работам</li>
+          <li><span className="font-medium">Кредит / финансирование</span> — сумма финансовых затрат за выбранный период</li>
         </ul>
       </div>
     </div>
