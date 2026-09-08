@@ -173,12 +173,6 @@ export function AnalyticsPage() {
     }
   }
 
-  const allDates = useMemo(() => [...expenses.map(x => x.date), ...incomes.map(x => x.date), ...entries.map(x => x.date)].filter(Boolean).sort(), [expenses, incomes, entries]);
-  const availableMonths = useMemo(() => {
-    const set = new Set(allDates.map(monthKey));
-    set.add(monthKey(new Date().toISOString()));
-    return Array.from(set).sort().slice(-12);
-  }, [allDates]);
   const period = useMemo(() => {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
