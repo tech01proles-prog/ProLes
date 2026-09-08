@@ -30,8 +30,8 @@ const findIncomeType = (key: string) => INCOME_TYPES.find(t => t.key === key);
 const findExpenseType = (key: string) => EXPENSE_TYPES.find(t => t.key === key);
 
 type ReportPreset = '1' | '2' | '3';
-const PER_DIEM_TYPES = new Set(['PER_DIEM', 'per_diem', 'PERDIEM', 'perdiem']);
-const EXTRA_PER_DIEM_TYPES = new Set(['PER_DIEM_EXTRA', 'per_diem_extra', 'PER_DIEM_EXCESS', 'per_diem_excess']);
+const PER_DIEM_TYPES = new Set(['PER_DIEM']);
+const EXTRA_PER_DIEM_TYPES = new Set(['PER_DIEM_EXTRA']);
 const isPerDiem = (entry: CombinedEntry) =>
   entry.type === 'EXPENSE' && PER_DIEM_TYPES.has(entry.subcategory || '');
 const isExtraPerDiem = (entry: CombinedEntry) =>

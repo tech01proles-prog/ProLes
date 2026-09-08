@@ -212,7 +212,7 @@ export function TripsPage() {
       
       const isPerDiemExpense = (exp: any) => {
         const type = String(exp.type || '').toUpperCase();
-        return type === 'PER_DIEM' || type === 'PER_DIEM_EXTRA' || type === 'PER_DIEM_EXCESS' ||
+        return type === 'PER_DIEM' || type === 'PER_DIEM_EXTRA' ||
           String(exp.name || '').toLowerCase().replace(/ё/g, 'е').includes('суточные сверх');
       };
       

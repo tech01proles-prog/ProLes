@@ -977,7 +977,7 @@ export function CostCalculationPage() {
           <li><span className="font-medium">Авансы</span> — выплаты сотрудникам по авансам (пока заглушка 0)</li>
           <li><span className="font-medium">Билеты</span> — расходы по билетам</li>
           <li><span className="font-medium">Проживание</span> — обычные и сверхсуточные (PER_DIEM / PER_DIEM_EXTRA)</li>
-          <li><span className="font-medium">Транспорт ТО</span> — расходы тех.отдела на дорогу (тип ROAD)</li>
+          <li><span className="font-medium">Транспорт ТО</span> — расходы тех. отдела на дорогу</li>
           <li><span className="font-medium">Транспорт до клиента</span> — заполняется вручную администратором</li>
           <li><span className="font-medium">Услуги подрядчиков</span> — заполняется вручную администратором</li>
           <li><span className="font-medium">ЗП ТО</span> — оклад/бонус/штраф распределяются по часам проекта, почасовая и сдельная — по фактическим работам</li>
