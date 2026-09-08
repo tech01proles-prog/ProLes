@@ -389,6 +389,78 @@ fun Route.dataRoutes() {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // 🧮 PROJECT COSTS — финансовые поля себестоимости
+    // ─────────────────────────────────────────────────────────────
+    route("/api/v1/project-costs") {
+        get("/payroll-data") {
+            if (!call.checkPermission(Permission.COST_CALCULATION, "view")) return@get
+            val data = transaction {
+                val employees = UsersTable.selectAll()
+                    .where { UsersTable.role eq "employee" }
+                    .orderBy(UsersTable.lastName to SortOrder.ASC, UsersTable.firstName to SortOrder.ASC)
+                    .map { row ->
+                        UserDto(
+                            id = row[UsersTable.id].value.toString(),
+                            lastName = row[UsersTable.lastName],
+                            firstName = row[UsersTable.firstName],
+                            middleName = row[UsersTable.middleName],
+                            name = row[UsersTable.name],
+                            login = row[UsersTable.login],
+                            role = row[UsersTable.role],
+                            position = row[UsersTable.position] ?: "",
+                            defaultRateType = row[UsersTable.defaultRateType],
+                            defaultRate = row[UsersTable.defaultRate],
+                            defaultCurrency = row[UsersTable.defaultCurrency]
+                        )
+                    }
+                val components = SalaryComponentsTable.selectAll()
+                    .orderBy(SalaryComponentsTable.type to SortOrder.ASC)
+                    .map { row ->
+                        SalaryComponentDto(
+                            id = row[SalaryComponentsTable.id].value.toString(),
+                            userId = row[SalaryComponentsTable.userId].value.toString(),
+                            type = row[SalaryComponentsTable.type],
+                            amount = row[SalaryComponentsTable.amount],
+                            projectId = row[SalaryComponentsTable.projectId]?.value?.toString(),
+                            ratePerHour = row[SalaryComponentsTable.ratePerHour],
+                            ratePerUnit = row[SalaryComponentsTable.ratePerUnit],
+                            description = row[SalaryComponentsTable.description],
+                            effectiveFrom = row[SalaryComponentsTable.effectiveFrom].toString(),
+                            effectiveTo = row[SalaryComponentsTable.effectiveTo]?.toString(),
+                            isActive = row[SalaryComponentsTable.isActive]
+                        )
+                    }
+                ProjectCostPayrollDataDto(employees, components)
+            }
+            call.respond(HttpStatusCode.OK, data)
+        }
+
+        put("/{projectId}") {
+            if (!call.checkPermission(Permission.COST_CALCULATION, "edit")) return@put
+            val projectId = runCatching { UUID.fromString(call.parameters["projectId"]) }.getOrNull()
+                ?: return@put call.respond(HttpStatusCode.BadRequest, "Invalid projectId")
+            val body = try { call.receive<ProjectCostUpdateDto>() }
+            catch (e: Exception) {
+                return@put call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}")
+            }
+
+            val updated = transaction {
+                val changed = ProjectsTable.update({ ProjectsTable.id eq projectId }) {
+                    it[ProjectsTable.sellingPrice] = body.sellingPrice.coerceAtLeast(0.0)
+                    it[ProjectsTable.transportToClient] = body.transportToClient.coerceAtLeast(0.0)
+                    it[ProjectsTable.materials] = body.materials.coerceAtLeast(0.0)
+                    it[ProjectsTable.contractors] = body.contractors.coerceAtLeast(0.0)
+                    it[ProjectsTable.creditPercent] = body.creditPercent.coerceAtLeast(0.0)
+                }
+                changed > 0
+            }
+
+            if (!updated) return@put call.respond(HttpStatusCode.NotFound, "Project not found")
+            call.respond(HttpStatusCode.OK, body)
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // 📦 PROJECTS
     // ─────────────────────────────────────────────────────────────
     route("/api/v1/projects") {
@@ -422,7 +494,10 @@ fun Route.dataRoutes() {
                             customer = row[ProjectsTable.customer],
                             productionCost = row[ProjectsTable.productionCost],
                             transportToClient = row[ProjectsTable.transportToClient],
-                            sellingPrice = row[ProjectsTable.sellingPrice]
+                            sellingPrice = row[ProjectsTable.sellingPrice],
+                            materials = row[ProjectsTable.materials],
+                            contractors = row[ProjectsTable.contractors],
+                            creditPercent = row[ProjectsTable.creditPercent]
                         )
                     }
             }
@@ -465,6 +540,9 @@ fun Route.dataRoutes() {
                     it[ProjectsTable.productionCost] = project.productionCost
                     it[ProjectsTable.transportToClient] = project.transportToClient
                     it[ProjectsTable.sellingPrice] = project.sellingPrice
+                    it[ProjectsTable.materials] = project.materials
+                    it[ProjectsTable.contractors] = project.contractors
+                    it[ProjectsTable.creditPercent] = project.creditPercent
                 }
                 project
             }
@@ -503,6 +581,9 @@ fun Route.dataRoutes() {
                     it[productionCost] = project.productionCost
                     it[transportToClient] = project.transportToClient
                     it[sellingPrice] = project.sellingPrice
+                    it[ProjectsTable.materials] = project.materials
+                    it[ProjectsTable.contractors] = project.contractors
+                    it[ProjectsTable.creditPercent] = project.creditPercent
                 }
                 project
             }

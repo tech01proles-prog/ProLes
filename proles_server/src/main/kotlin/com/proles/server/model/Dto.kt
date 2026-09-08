@@ -75,6 +75,21 @@ data class ExpenseDto(
 
 
 @Serializable
+data class ProjectCostPayrollDataDto(
+    val employees: List<UserDto> = emptyList(),
+    val components: List<SalaryComponentDto> = emptyList()
+)
+
+@Serializable
+data class ProjectCostUpdateDto(
+    val sellingPrice: Double = 0.0,
+    val transportToClient: Double = 0.0,
+    val materials: Double = 0.0,
+    val contractors: Double = 0.0,
+    val creditPercent: Double = 0.0
+)
+
+@Serializable
 data class ProjectDto(
     val id: String,
     val name: String,
@@ -99,7 +114,10 @@ data class ProjectDto(
     val customer: String = "",
     val productionCost: Double = 0.0,
     val transportToClient: Double = 0.0,
-    val sellingPrice: Double = 0.0
+    val sellingPrice: Double = 0.0,
+    val materials: Double = 0.0,
+    val contractors: Double = 0.0,
+    val creditPercent: Double = 0.0
 )
 
 @Serializable

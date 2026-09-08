@@ -6,6 +6,17 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
 
+/**
+ * Единая серверная модель расчёта зарплаты за календарный месяц.
+ *
+ * Правила:
+ * - берём только активные компоненты, действующие в выбранном месяце;
+ * - FIXED/BONUS суммируются;
+ * - PENALTY уменьшает итог;
+ * - PIECE = ставка за фактически выполненную запись (день) с часами > 0;
+ * - HOURLY = ставка × фактические часы;
+ * - projectId у PIECE/HOURLY ограничивает расчёт конкретным проектом.
+ */
 object SalaryCalculator {
     data class SalaryBreakdown(
         val fixed: Double,
@@ -17,83 +28,65 @@ object SalaryCalculator {
     )
 
     fun calculate(userId: UUID, year: Int, month: Int): SalaryBreakdown {
-        return transaction {
-            val components = SalaryComponentsTable.selectAll()
-                .where {
-                    (SalaryComponentsTable.userId eq userId) and
-                            (SalaryComponentsTable.isActive eq true)
-                }
-                .toList()
+        require(month in 1..12) { "Month must be 1..12" }
 
+        return transaction {
             val startDate = LocalDate(year, month, 1)
             val daysInMonth = java.time.YearMonth.of(year, month).lengthOfMonth()
             val endDate = LocalDate(year, month, daysInMonth)
 
-            // 1. FIXED (оклад) — СУММИРУЕМ все компоненты
+            val components = SalaryComponentsTable.selectAll()
+                .where {
+                    (SalaryComponentsTable.userId eq userId) and
+                        (SalaryComponentsTable.isActive eq true)
+                }
+                .toList()
+                .filter { row ->
+                    val effectiveFrom = row[SalaryComponentsTable.effectiveFrom]
+                    val effectiveTo = row[SalaryComponentsTable.effectiveTo]
+                    effectiveFrom <= endDate && (effectiveTo == null || effectiveTo >= startDate)
+                }
+
             val fixed = components
                 .filter { it[SalaryComponentsTable.type] == "FIXED" }
                 .sumOf { it[SalaryComponentsTable.amount] }
 
-            // 2. BONUS (премия) — СУММИРУЕМ все компоненты
             val bonus = components
                 .filter { it[SalaryComponentsTable.type] == "BONUS" }
                 .sumOf { it[SalaryComponentsTable.amount] }
 
-            // Штрафы уменьшают итоговую зарплату.
             val penalty = components
                 .filter { it[SalaryComponentsTable.type] == "PENALTY" }
                 .sumOf { it[SalaryComponentsTable.amount] }
 
-            // 3. PIECE (сдельная) — ratePerUnit × количество ЗАПИСЕЙ за месяц
-            val pieceComponents = components.filter {
-                it[SalaryComponentsTable.type] == "PIECE"
-            }
-            val piece = pieceComponents.sumOf { comp ->
-                val projectId = comp[SalaryComponentsTable.projectId]?.value
-                val ratePerUnit = comp[SalaryComponentsTable.ratePerUnit] ?: 0.0
+            val periodEntries = TimeEntriesTable.selectAll()
+                .where {
+                    (TimeEntriesTable.userId eq userId) and
+                        (TimeEntriesTable.date greaterEq startDate) and
+                        (TimeEntriesTable.date lessEq endDate) and
+                        (TimeEntriesTable.hours greater 0f)
+                }
+                .toList()
 
-                // Считаем количество записей (дней с часами) за месяц
-                val query = TimeEntriesTable.selectAll()
-                    .where {
-                        (TimeEntriesTable.userId eq userId) and
-                                (TimeEntriesTable.date greaterEq startDate) and
-                                (TimeEntriesTable.date lessEq endDate) and
-                                (TimeEntriesTable.hours greater 0f)
-                    }
-
-                val entryCount = if (projectId != null) {
-                    query.andWhere { TimeEntriesTable.projectId eq projectId }.count()
-                } else {
-                    query.count()
+            val piece = components
+                .filter { it[SalaryComponentsTable.type] == "PIECE" }
+                .sumOf { comp ->
+                    val projectId = comp[SalaryComponentsTable.projectId]?.value
+                    val ratePerUnit = comp[SalaryComponentsTable.ratePerUnit] ?: 0.0
+                    periodEntries.count { entry ->
+                        (projectId == null || entry[TimeEntriesTable.projectId].value == projectId)
+                    } * ratePerUnit
                 }
 
-                entryCount * ratePerUnit
-            }
-
-            // 4. HOURLY (почасовая) — ratePerHour × СУММА ЧАСОВ за месяц
-            val hourlyComponents = components.filter {
-                it[SalaryComponentsTable.type] == "HOURLY"
-            }
-            val hourly = hourlyComponents.sumOf { comp ->
-                val projectId = comp[SalaryComponentsTable.projectId]?.value
-                val ratePerHour = comp[SalaryComponentsTable.ratePerHour] ?: 0.0
-
-                val query = TimeEntriesTable.selectAll()
-                    .where {
-                        (TimeEntriesTable.userId eq userId) and
-                                (TimeEntriesTable.date greaterEq startDate) and
-                                (TimeEntriesTable.date lessEq endDate)
-                    }
-
-                val entries = if (projectId != null) {
-                    query.andWhere { TimeEntriesTable.projectId eq projectId }
-                } else {
-                    query
+            val hourly = components
+                .filter { it[SalaryComponentsTable.type] == "HOURLY" }
+                .sumOf { comp ->
+                    val projectId = comp[SalaryComponentsTable.projectId]?.value
+                    val ratePerHour = comp[SalaryComponentsTable.ratePerHour] ?: 0.0
+                    periodEntries
+                        .filter { entry -> projectId == null || entry[TimeEntriesTable.projectId].value == projectId }
+                        .sumOf { it[TimeEntriesTable.hours].toDouble() } * ratePerHour
                 }
-
-                val totalHours = entries.sumOf { it[TimeEntriesTable.hours].toDouble() }
-                totalHours * ratePerHour
-            }
 
             SalaryBreakdown(
                 fixed = fixed,

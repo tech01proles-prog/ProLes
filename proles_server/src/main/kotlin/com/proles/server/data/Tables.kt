@@ -43,6 +43,9 @@ object ProjectsTable : UUIDTable("projects") {
     val productionCost = double("production_cost").default(0.0)
     val transportToClient = double("transport_to_client").default(0.0)
     val sellingPrice = double("selling_price").default(0.0)
+    val materials = double("materials").default(0.0)
+    val contractors = double("contractors").default(0.0)
+    val creditPercent = double("credit_percent").default(0.0)
 
     // 🔥 Мета-поля
     val lead = varchar("lead", 150).default("")

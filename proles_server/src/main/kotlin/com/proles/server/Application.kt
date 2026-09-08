@@ -55,7 +55,7 @@ fun Application.module() {
     )
 
     transaction {
-        SchemaUtils.create(
+        SchemaUtils.createMissingTablesAndColumns(
             UsersTable, ProjectsTable, TimeEntriesTable, ExpensesTable,
             IncomesTable,  // 🆕
             VacationsTable, DayOffsTable, BusinessTripsTable,
@@ -65,6 +65,10 @@ fun Application.module() {
             TicketsTable, TicketRecipientsTable,
             SalaryComponentsTable, SalaryRecordsTable, SessionsTable
         )
+
+        // 🔥 Миграция старых вариантов типа суточных в единый PER_DIEM.
+        // Обновляем только значение типа — сами расходы, суммы и связи не затрагиваются.
+        exec("UPDATE expenses SET type = 'PER_DIEM' WHERE LOWER(type) IN ('per_diem', 'perdiem')")
 
         // 🔥 Инициализируем дефолтные роли
         initDefaultRoles()
