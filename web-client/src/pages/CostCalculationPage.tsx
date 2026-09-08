@@ -318,7 +318,7 @@ export function CostCalculationPage() {
   const filteredProjectData = useMemo(() => {
     const query = projectSearch.trim().toLowerCase();
     return projectData.filter(row => {
-      const matchesSearch = !query || `${row.project.name} ${row.project.client || ''} ${row.project.projectNumber || ''} ${row.project.projectCode || ''}`.toLowerCase().includes(query);
+      const matchesSearch = !query || `${row.project.name} ${row.project.client || ''} ${row.project.projectNumber || ''}`.toLowerCase().includes(query);
       const matchesNegative = !showOnlyNegative || row.marginalIncome < 0;
       return matchesSearch && matchesNegative;
     });
