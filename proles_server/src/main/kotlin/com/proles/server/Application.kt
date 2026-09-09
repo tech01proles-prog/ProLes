@@ -66,6 +66,59 @@ fun Application.module() {
             SalaryComponentsTable, SalaryRecordsTable, SessionsTable
         )
 
+        // 🔐 Идемпотентно приводим таблицу настроек уведомлений к актуальной схеме.
+        // Это защищает существующие БД, созданные до появления новых настроек.
+        exec("""
+            CREATE TABLE IF NOT EXISTS notification_preferences (
+                id UUID PRIMARY KEY,
+                user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                trip_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                vacation_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                dayoff_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                expense_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                payroll_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ticket_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                trip_visible_to_all BOOLEAN NOT NULL DEFAULT FALSE,
+                trip_telegram_broadcast BOOLEAN NOT NULL DEFAULT FALSE,
+                trip_change_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                vacation_decision_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                expense_created_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ticket_receipt_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                telegram_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                telegram_link_code VARCHAR(20) UNIQUE,
+                telegram_linked_at BIGINT,
+                telegram_chat_id VARCHAR(100) UNIQUE,
+                telegram_linked_username VARCHAR(100) NOT NULL DEFAULT '',
+                email_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                email VARCHAR(255) NOT NULL DEFAULT ''
+            )
+        """.trimIndent())
+        exec("""
+            ALTER TABLE notification_preferences
+                ADD COLUMN IF NOT EXISTS trip_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS vacation_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS dayoff_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS expense_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS payroll_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS ticket_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS trip_visible_to_all BOOLEAN NOT NULL DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS trip_telegram_broadcast BOOLEAN NOT NULL DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS trip_change_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS vacation_decision_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS expense_created_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS ticket_receipt_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS telegram_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS telegram_link_code VARCHAR(20),
+                ADD COLUMN IF NOT EXISTS telegram_linked_at BIGINT,
+                ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(100),
+                ADD COLUMN IF NOT EXISTS telegram_linked_username VARCHAR(100) NOT NULL DEFAULT '',
+                ADD COLUMN IF NOT EXISTS email_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS email VARCHAR(255) NOT NULL DEFAULT ''
+        """.trimIndent())
+        exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_user_id ON notification_preferences(user_id)")
+        exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_link_code ON notification_preferences(telegram_link_code) WHERE telegram_link_code IS NOT NULL")
+        exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_chat_id ON notification_preferences(telegram_chat_id) WHERE telegram_chat_id IS NOT NULL")
+
         // 🔥 Миграция старых вариантов типа суточных в единый PER_DIEM.
         // Обновляем только значение типа — сами расходы, суммы и связи не затрагиваются.
         exec("UPDATE expenses SET type = 'PER_DIEM' WHERE LOWER(type) IN ('per_diem', 'perdiem')")

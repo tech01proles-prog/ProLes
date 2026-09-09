@@ -1946,7 +1946,7 @@ fun Route.dataRoutes() {
     route("/api/v1/notification-preferences") {
         get {
             val session = call.checkSession() ?: return@get
-            val row = transaction { NotificationPreferencesTable.selectAll().where { NotificationPreferencesTable.userId eq session.userId }.singleOrNull() }
+            val row = transaction { NotificationPreferencesTable.selectAll().where { NotificationPreferencesTable.userId eq session.userId }.limit(1).firstOrNull() }
             call.respond(HttpStatusCode.OK, mapOf(
                 "tripEnabled" to (row?.get(NotificationPreferencesTable.tripEnabled) ?: true),
                 "vacationEnabled" to (row?.get(NotificationPreferencesTable.vacationEnabled) ?: true),
@@ -1972,7 +1972,7 @@ fun Route.dataRoutes() {
             val body = try { call.receive<Map<String, String>>() } catch (e: Exception) { return@put call.respond(HttpStatusCode.BadRequest, "Invalid JSON") }
             var generatedCode: String? = null
             transaction {
-                val existing = NotificationPreferencesTable.selectAll().where { NotificationPreferencesTable.userId eq session.userId }.singleOrNull()
+                val existing = NotificationPreferencesTable.selectAll().where { NotificationPreferencesTable.userId eq session.userId }.limit(1).firstOrNull()
                 val telegramEnabled = body["telegramEnabled"]?.toBoolean() ?: existing?.get(NotificationPreferencesTable.telegramEnabled) ?: false
                 generatedCode = if (telegramEnabled && existing?.get(NotificationPreferencesTable.telegramLinkCode).isNullOrBlank() && existing?.get(NotificationPreferencesTable.telegramChatId).isNullOrBlank()) {
                     (10000000L..99999999L).random().toString()
