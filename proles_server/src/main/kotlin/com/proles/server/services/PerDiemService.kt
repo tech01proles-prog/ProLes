@@ -98,7 +98,7 @@ object PerDiemService {
                 try {
                     val tripId = tripRow[BusinessTripsTable.id].value.toString()
                     val userId = tripRow[BusinessTripsTable.userId].value.toString()
-                    val projectId = tripRow[BusinessTripsTable.projectId].value.toString()
+                    val projectId = tripRow[BusinessTripsTable.projectId]?.value?.toString()
                     val perDiemRate = tripRow[BusinessTripsTable.perDiemRate]
                     val tripType = tripRow[BusinessTripsTable.type]
                     val tripDate = tripRow[BusinessTripsTable.date].toString()
@@ -108,9 +108,11 @@ object PerDiemService {
                         val user = UsersTable.selectAll()
                             .where { UsersTable.id eq UUID.fromString(userId) }
                             .firstOrNull()
-                        val project = ProjectsTable.selectAll()
-                            .where { ProjectsTable.id eq UUID.fromString(projectId) }
-                            .firstOrNull()
+                        val project = projectId?.let { pid ->
+                            ProjectsTable.selectAll()
+                                .where { ProjectsTable.id eq UUID.fromString(pid) }
+                                .firstOrNull()
+                        }
                         Pair(user?.get(UsersTable.name) ?: "Unknown", project?.get(ProjectsTable.name) ?: "Unknown")
                     }
 

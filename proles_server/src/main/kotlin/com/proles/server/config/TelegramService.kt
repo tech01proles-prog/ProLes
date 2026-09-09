@@ -4,6 +4,7 @@ import com.proles.server.data.NotificationPreferencesTable
 import com.proles.server.data.TelegramLinksTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.net.http.HttpClient

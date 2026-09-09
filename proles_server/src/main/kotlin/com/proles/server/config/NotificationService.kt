@@ -93,10 +93,12 @@ object NotificationService {
                         .singleOrNull()
                     val enabled = pref?.get(NotificationPreferencesTable.telegramEnabled) ?: false
                     val chatId = pref?.get(NotificationPreferencesTable.telegramChatId)
-                    enabled && !chatId.isNullOrBlank() to chatId
+                    Pair(enabled && !chatId.isNullOrBlank(), chatId)
                 }
                 if (telegram.first) {
-                    TelegramService.sendMessageToChat(telegram.second!!, "<b>$title</b>\n\n${escapeTelegram(message)}")
+                    telegram.second?.let { chatId ->
+                        TelegramService.sendMessageToChat(chatId, "<b>$title</b>\n\n${escapeTelegram(message)}")
+                    }
                 }
             }
         }

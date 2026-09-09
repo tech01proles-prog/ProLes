@@ -24,6 +24,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.proles.server.config.FirebaseService
+import com.proles.server.config.NotificationService
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import io.ktor.http.HttpStatusCode
