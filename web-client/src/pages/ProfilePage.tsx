@@ -15,7 +15,7 @@ export function ProfilePage() {
 
   // 🔐 Редактировать профиль можно только при наличии права employees.edit
   // (обычно это админ, но в будущем можно дать сотрудникам право редактировать себя)
-  const canEditProfile = !permLoading && can('employees', 'edit');
+  const canEditProfile = !permLoading;
   const isSuperAdmin = !permLoading && can('permissions', 'delete');
   const canViewAll = !permLoading && can('expenses_all', 'view');
 
@@ -24,6 +24,10 @@ export function ProfilePage() {
     lastName: '',
     middleName: '',
     position: '',
+    email: '',
+    phone: '',
+    telegramUsername: '',
+    birthDate: '',
   });
 
   const [passwordForm, setPasswordForm] = useState({
@@ -63,6 +67,7 @@ export function ProfilePage() {
           lastName: u.lastName || '',
           middleName: u.middleName || '',
           position: u.position || '',
+          email: u.email || '', phone: u.phone || '', telegramUsername: u.telegramUsername || '', birthDate: u.birthDate || '',
         });
       } catch {}
     }
@@ -122,7 +127,7 @@ export function ProfilePage() {
         ...form,
         name: [form.lastName, form.firstName, form.middleName].filter(Boolean).join(' '),
       };
-      await api.put('/users', updated);
+      await api.put('/users/profile', updated);
       localStorage.setItem('proles_user', JSON.stringify(updated));
       setUser(updated);
       setMessage({ type: 'success', text: '✅ Профиль обновлён' });
@@ -235,6 +240,10 @@ export function ProfilePage() {
                 <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Должность</label>
                 <input type="text" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} className="input" />
               </div>
+              <div className="space-y-1.5"><label className="text-xs font-medium text-slate-600 dark:text-slate-400">Email</label><input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="input" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-medium text-slate-600 dark:text-slate-400">Телефон</label><input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="input" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-medium text-slate-600 dark:text-slate-400">Telegram</label><input type="text" value={form.telegramUsername} onChange={e => setForm({ ...form, telegramUsername: e.target.value.replace(/^@/, '') })} className="input" placeholder="username" /></div>
+              <div className="space-y-1.5"><label className="text-xs font-medium text-slate-600 dark:text-slate-400">Дата рождения</label><input type="date" value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })} className="input" /></div>
             </div>
             <div className="flex justify-end pt-4 mt-4 border-t border-slate-100 dark:border-slate-800">
               <button onClick={handleSaveProfile} disabled={saving} className="btn-primary px-6 py-2.5">

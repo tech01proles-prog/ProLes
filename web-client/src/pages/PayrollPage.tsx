@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
 import type {
   SalaryComponentDto, SalaryBreakdownResponse, SalaryRecordDto,
-  PayrollExportResponse, UserDto, ProjectDto
+  PayrollExportResponse, UserDto, ProjectDto, TimeEntryDto
 } from '../types';
 import { generateUUID, formatMoney, monthName } from '../lib/utils';
 import { exportPayrollToExcel, exportPayrollToPdf, exportMySalaryToExcel, exportMySalaryToPdf } from '../lib/export';
@@ -42,6 +42,8 @@ export function PayrollPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [employeeComponents, setEmployeeComponents] = useState<SalaryComponentDto[]>([]);
   const [employeeBreakdown, setEmployeeBreakdown] = useState<SalaryBreakdownResponse | null>(null);
+  const [employeeEntries, setEmployeeEntries] = useState<TimeEntryDto[]>([]);
+  const [employeeHoursLoading, setEmployeeHoursLoading] = useState(false);
   const [employeeLoading, setEmployeeLoading] = useState(false);
   const [exportPeriod, setExportPeriod] = useState(() => {
     const d = new Date();
@@ -69,10 +71,33 @@ export function PayrollPage() {
   const { addToast } = useToast();
   const canManageEmployeePayroll = can('payroll', 'view') && (can('payroll', 'create') || can('payroll', 'edit') || can('payroll', 'delete'));
 
+  const loadEmployeeHours = useCallback(async (employeeId: string) => {
+    if (!employeeId) {
+      setEmployeeEntries([]);
+      return;
+    }
+    setEmployeeHoursLoading(true);
+    try {
+      const from = `${exportPeriod.year}-${String(exportPeriod.month).padStart(2, '0')}-01`;
+      const lastDay = new Date(exportPeriod.year, exportPeriod.month, 0).getDate();
+      const to = `${exportPeriod.year}-${String(exportPeriod.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      const { data } = await api.get<TimeEntryDto[]>('/entries', {
+        params: { userId: employeeId, dateFrom: from, dateTo: to },
+      });
+      setEmployeeEntries(data || []);
+    } catch (err) {
+      console.error(err);
+      setEmployeeEntries([]);
+    } finally {
+      setEmployeeHoursLoading(false);
+    }
+  }, [exportPeriod.month, exportPeriod.year]);
+
   const loadEmployeeComponents = useCallback(async (employeeId: string) => {
     if (!employeeId) {
       setEmployeeComponents([]);
       setEmployeeBreakdown(null);
+      setEmployeeEntries([]);
       return;
     }
     setEmployeeLoading(true);
@@ -176,6 +201,10 @@ export function PayrollPage() {
     if (tab === 'my') loadMyData();
     else loadAdminData();
   }, [tab, loadMyData, loadAdminData]);
+
+  useEffect(() => {
+    if (selectedEmployeeId) loadEmployeeHours(selectedEmployeeId);
+  }, [selectedEmployeeId, exportPeriod.year, exportPeriod.month, loadEmployeeHours]);
 
   const handleCalculate = async () => {
     if (!user) return;
@@ -629,7 +658,7 @@ export function PayrollPage() {
                     <label className="text-xs font-medium text-slate-600">Сотрудник</label>
                     <select
                       value={selectedEmployeeId}
-                      onChange={(e) => { setSelectedEmployeeId(e.target.value); loadEmployeeComponents(e.target.value); }}
+                      onChange={(e) => { setSelectedEmployeeId(e.target.value); loadEmployeeComponents(e.target.value); loadEmployeeHours(e.target.value); }}
                       className="input w-full bg-white dark:bg-slate-900"
                     >
                       <option value="">Выберите сотрудника...</option>
@@ -692,6 +721,18 @@ export function PayrollPage() {
                           );
                         })}
                       </div>
+                    )}
+
+                    {/* 🕒 Подробные часы выбранного сотрудника за период */}
+                    {selectedEmployeeId && (
+                      <EmployeeHoursDetails
+                        entries={employeeEntries}
+                        projects={allProjects}
+                        components={employeeComponents}
+                        year={exportPeriod.year}
+                        month={exportPeriod.month}
+                        loading={employeeHoursLoading}
+                      />
                     )}
 
                     {employeeBreakdown && (
@@ -821,3 +862,107 @@ export function PayrollPage() {
     </div>
   );
 }
+
+function formatPayrollHours(hours: number): string {
+  const minutes = Math.round(hours * 60);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} ч ${m} мин` : `${h} ч`;
+}
+
+function EmployeeHoursDetails({
+  entries,
+  projects,
+  components,
+  year,
+  month,
+  loading,
+}: {
+  entries: TimeEntryDto[];
+  projects: ProjectDto[];
+  components: SalaryComponentDto[];
+  year: number;
+  month: number;
+  loading: boolean;
+}) {
+  const projectRows = useMemo(() => {
+    const map = new Map<string, { projectId: string; projectName: string; hours: number; days: number; entries: TimeEntryDto[] }>();
+    entries.forEach(entry => {
+      const projectName = entry.projectName || projects.find(p => p.id === entry.projectId)?.name || 'Без проекта';
+      const current = map.get(entry.projectId) || { projectId: entry.projectId, projectName, hours: 0, days: 0, entries: [] };
+      current.hours += entry.hours;
+      current.entries.push(entry);
+      map.set(entry.projectId, current);
+    });
+    return Array.from(map.values()).map(row => ({
+      ...row,
+      days: new Set(row.entries.map(e => e.date)).size,
+      linked: components.filter(c => c.projectId === row.projectId && c.isActive),
+    })).sort((a, b) => b.hours - a.hours);
+  }, [entries, projects, components]);
+
+  const totalHours = entries.reduce((sum, e) => sum + e.hours, 0);
+
+  return (
+    <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50/60 overflow-hidden">
+      <div className="px-4 py-3 border-b border-blue-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <div className="font-bold text-blue-900">🕒 Рабочее время по проектам</div>
+          <div className="text-xs text-blue-700 mt-0.5">{monthName(month)} {year} • {loading ? 'Загрузка часов…' : `${formatPayrollHours(totalHours)} всего`}</div>
+        </div>
+        {!loading && <div className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-blue-700 border border-blue-100">{projectRows.length} {projectRows.length === 1 ? 'проект' : 'проекта'}</div>}
+      </div>
+      {loading ? (
+        <div className="px-4 py-6 text-center text-sm text-blue-600">Загружаем рабочие записи…</div>
+      ) : projectRows.length === 0 ? (
+        <div className="px-4 py-6 text-center text-sm text-slate-500">За выбранный период часов нет.</div>
+      ) : (
+        <div className="p-3 space-y-2">
+          {projectRows.map(row => (
+            <div key={row.projectId} className="rounded-xl border border-blue-100 bg-white p-3">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-900 truncate">📁 {row.projectName}</div>
+                  <div className="text-xs text-slate-500 mt-1">{row.days} раб. дн. • {row.entries.length} записей</div>
+                </div>
+                <div className="text-lg font-black text-blue-700 whitespace-nowrap">{formatPayrollHours(row.hours)}</div>
+              </div>
+              {row.linked.length > 0 && (
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {row.linked.map(component => {
+                    const typeLabel = COMPONENT_TYPES[component.type]?.label || component.type;
+                    let calculated: number | null = null;
+                    let formula = '';
+                    if (component.type === 'HOURLY' && component.ratePerHour != null) {
+                      calculated = row.hours * component.ratePerHour;
+                      formula = `${formatPayrollHours(row.hours)} × ${formatMoney(component.ratePerHour)}/ч`;
+                    } else if (component.type === 'PIECE' && component.ratePerUnit != null && component.amount > 0) {
+                      calculated = component.ratePerUnit * component.amount;
+                      formula = `${component.amount} ед. × ${formatMoney(component.ratePerUnit)}`;
+                    } else if (component.type === 'MARGIN_PERCENT') {
+                      calculated = null;
+                      formula = `${component.amount}% от маржи проекта`;
+                    } else {
+                      calculated = component.amount;
+                      formula = 'фиксированная сумма';
+                    }
+                    return (
+                      <div key={component.id} className={`rounded-lg px-3 py-2 border ${component.type === 'PENALTY' ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-bold text-slate-600">{typeLabel}</span>
+                          <span className={`font-black ${component.type === 'PENALTY' ? 'text-red-700' : 'text-emerald-700'}`}>{calculated == null ? '—' : formatMoney(Math.abs(calculated))}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-1">{formula}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+

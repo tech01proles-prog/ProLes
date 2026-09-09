@@ -5,11 +5,17 @@ export interface UserDto {
   middleName: string;
   name: string;
   login: string;
+  email: string;
   role: string;
   position: string;
   defaultRateType: string;
   defaultRate: number;
   defaultCurrency: string;
+  phone: string;
+  telegramUsername: string;
+  birthDate: string | null;
+  positionId: string | null;
+  onVacation?: boolean;
   newPassword?: string;
 }
 
@@ -82,6 +88,7 @@ export interface ExpenseDto {
 
 export interface WaypointDto {
   order: number;
+  country?: string;
   city: string;
   address: string;
 }
@@ -89,8 +96,11 @@ export interface WaypointDto {
 export interface BusinessTripDto {
   id: string;
   userId: string;
-  projectId: string;
+  projectId: string | null;
   projectName: string;
+  projectNumber: string;
+  companyName: string;
+  country: string;
   type: 'DEPARTURE' | 'TRANSFER' | 'COMPLETION';
   date: string;
   city: string;
@@ -204,6 +214,10 @@ export interface VacationDto {
   userId: string;
   start: string;
   end: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  approvedBy: string | null;
+  approvedAt: number | null;
+  rejectionReason: string;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -271,7 +285,15 @@ export interface NotificationPreferencesDto {
   expenseEnabled: boolean;
   payrollEnabled: boolean;
   ticketEnabled: boolean;
+  tripVisibleToAll: boolean;
+  tripTelegramBroadcast: boolean;
+  tripChangeEnabled: boolean;
+  vacationDecisionEnabled: boolean;
+  expenseCreatedEnabled: boolean;
+  ticketReceiptEnabled: boolean;
   telegramEnabled: boolean;
+  telegramLinked: boolean;
+  telegramLinkCode: string | null;
   emailEnabled: boolean;
   email: string;
 }
@@ -287,6 +309,10 @@ export interface ProfileUpdateDto {
   defaultRateType?: string;
   defaultRate?: number;
   defaultCurrency?: string;
+  email?: string;
+  phone?: string;
+  telegramUsername?: string;
+  birthDate?: string | null;
   newPassword?: string;
 }
 
@@ -322,4 +348,13 @@ export interface UserEffectivePermissionDto {
   canEdit: boolean;
   canDelete: boolean;
   isOverride: boolean;
+}
+
+export interface PositionDto {
+  id: string;
+  name: string;
+  parentId: string | null;
+  parentName: string | null;
+  isActive: boolean;
+  sortOrder: number;
 }

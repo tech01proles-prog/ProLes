@@ -24,6 +24,7 @@ const SECTIONS: ManagementSection[] = [
     cards: [
       { to: '/projects', icon: '📁', title: 'Проекты', description: 'Реестр проектов и статусы', gradient: 'from-blue-500 to-indigo-500', permission: 'projects', action: 'view' },
       { to: '/employees', icon: '👥', title: 'Сотрудники', description: 'Профили и данные команды', gradient: 'from-emerald-500 to-teal-500', permission: 'employees', action: 'view' },
+      { to: '/positions', icon: '🧭', title: 'Должности', description: 'Иерархия должностей', gradient: 'from-violet-500 to-fuchsia-500', permission: 'employees', action: 'view' },
       { to: '/cost-calculation', icon: '🧮', title: 'Себестоимость', description: 'Расчёт маржи по проектам', gradient: 'from-pink-500 to-rose-500', permission: 'cost_calculation', action: 'view' },
     ],
   },

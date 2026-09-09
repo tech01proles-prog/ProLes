@@ -24,6 +24,7 @@ export function TripsPage() {
   const [allUsers, setAllUsers] = useState<UserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingTripId, setEditingTripId] = useState<string | null>(null);
 
   // Сортировка
   const [sortField, setSortField] = useState<'date' | 'type'>('date');
@@ -47,6 +48,9 @@ export function TripsPage() {
   // Форма
   const [form, setForm] = useState({
     projectId: '',
+    projectNumber: '',
+    companyName: '',
+    country: 'РФ',
     type: 'DEPARTURE' as keyof typeof TRIP_TYPES,
     date: new Date().toISOString().slice(0, 10),
     city: '',
@@ -56,6 +60,7 @@ export function TripsPage() {
     notes: '',
   });
   const [saving, setSaving] = useState(false);
+  const [customCountry, setCustomCountry] = useState('');
 
   // 🆕 Состояние для модального окна просмотра командировки
   const [selectedTrip, setSelectedTrip] = useState<BusinessTripDto | null>(null);
@@ -84,7 +89,7 @@ export function TripsPage() {
       // 🔐 Выбор эндпоинта по правам
       const tripsUrl = isAdmin
         ? '/business-trips?all=true'
-        : `/business-trips?userId=${user.id}`;
+        : '/business-trips';
 
       const [tripsRes, projRes, usersRes] = await Promise.allSettled([
         api.get<BusinessTripDto[]>(tripsUrl),
@@ -114,15 +119,22 @@ export function TripsPage() {
       return a.type.localeCompare(b.type) * dir;
     });
 
-  const handleCreate = async () => {
-    if (!user || !form.projectId) return;
+  const handleSaveTrip = async () => {
+    if (!user) return;
+    if (!form.projectId && !form.projectNumber && !form.companyName) {
+      alert('Укажите проект, номер проекта или название фирмы');
+      return;
+    }
     setSaving(true);
     try {
-      await api.post('/business-trips', {
-        id: generateUUID(),
-        userId: user.id,
-        projectId: form.projectId,
+      const payload: BusinessTripDto = {
+        id: editingTripId || generateUUID(),
+        userId: editingTripId ? (selectedTrip?.userId || user.id) : user.id,
+        projectId: form.projectId || null,
         projectName: projects.find(p => p.id === form.projectId)?.name || '',
+        projectNumber: form.projectNumber,
+        companyName: form.companyName,
+        country: form.country === 'Другое' ? customCountry.trim() : form.country,
         type: form.type,
         date: form.date,
         city: form.city,
@@ -130,16 +142,20 @@ export function TripsPage() {
         participants: form.participants,
         transport: form.transport,
         notes: form.notes,
-        createdAt: Date.now(),
-      });
+        createdAt: editingTripId ? (selectedTrip?.createdAt || Date.now()) : Date.now(),
+        perDiemRate: editingTripId ? (selectedTrip?.perDiemRate || 750) : 750,
+      };
+      if (editingTripId) await api.put('/business-trips', payload);
+      else await api.post('/business-trips', payload);
       setShowForm(false);
-      setForm({ ...form, projectId: '', city: '', waypoints: [], participants: [], transport: '', notes: '' });
+      setEditingTripId(null);
+      setSelectedTrip(null);
+      setForm({ ...form, projectId: '', projectNumber: '', companyName: '', country: 'РФ', city: '', waypoints: [], participants: [], transport: '', notes: '' }); setCustomCountry('');
       await loadData();
     } catch (err) {
-      alert('Ошибка создания командировки');
-    } finally {
-      setSaving(false);
-    }
+      alert(editingTripId ? 'Ошибка редактирования командировки' : 'Ошибка создания командировки');
+      console.error(err);
+    } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
@@ -154,6 +170,21 @@ export function TripsPage() {
     setEditingPerDiemRate(trip.perDiemRate || 750);
     setShowTripDetail(true);
   };
+
+  const handleEditTrip = (trip: BusinessTripDto) => {
+    setSelectedTrip(trip);
+    setEditingTripId(trip.id);
+    const standardCountry = ['РБ','РФ','Казахстан','Китай'].includes(trip.country);
+    setCustomCountry(standardCountry ? '' : trip.country || '');
+    setForm({
+      projectId: trip.projectId || '', projectNumber: trip.projectNumber || '', companyName: trip.companyName || '',
+      country: standardCountry ? trip.country : 'Другое', type: trip.type, date: trip.date, city: trip.city || '',
+      waypoints: trip.waypoints || [], participants: trip.participants || [], transport: trip.transport || '', notes: trip.notes || '',
+    });
+    setShowTripDetail(false);
+    setShowForm(true);
+  };
+
 
   // 🆕 Сохранить измененный размер суточных
   const handleSavePerDiemRate = async () => {
@@ -331,11 +362,11 @@ export function TripsPage() {
       : 0;
     setForm(f => ({
       ...f,
-      waypoints: [...f.waypoints, { order: newOrder, city: '', address: '' }],
+      waypoints: [...f.waypoints, { order: newOrder, country: f.country, city: '', address: '' }],
     }));
   };
 
-  const updateWaypoint = (index: number, field: 'city' | 'address', value: string) => {
+  const updateWaypoint = (index: number, field: 'country' | 'city' | 'address', value: string) => {
     setForm(f => ({
       ...f,
       waypoints: f.waypoints.map((w, i) => 
@@ -402,7 +433,7 @@ export function TripsPage() {
               <div className="proles-modal-title">
                 <div className="proles-modal-icon">✈️</div>
                 <div>
-                  <div>Новая командировка</div>
+                  <div>{editingTripId ? 'Редактирование командировки' : 'Новая командировка'}</div>
                   <div style={{ fontSize: '0.75rem', fontWeight: 500, opacity: 0.85, marginTop: 2 }}>
                     Оформление поездки сотрудника
                   </div>
@@ -415,11 +446,25 @@ export function TripsPage() {
                 <div className="proles-modal-section-title">Основная информация</div>
                 <div className="proles-modal-grid">
                   <div className="proles-input-group" style={{ gridColumn: 'span 2' }}>
-                    <label>Проект *</label>
+                    <label>Проект</label>
                     <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input bg-white dark:bg-slate-900">
-                      <option value="">Выберите проект</option>
+                      <option value="">Без привязки к проекту</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
+                  </div>
+                  <div className="proles-input-group">
+                    <label>Номер проекта</label><input value={form.projectNumber} onChange={e => setForm({ ...form, projectNumber: e.target.value })} className="input" placeholder="Например, 25-041" />
+                  </div>
+                  <div className="proles-input-group">
+                    <label>Название фирмы</label><input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} className="input" placeholder="Контрагент / клиент" />
+                  </div>
+                  <div className="proles-input-group">
+                    <label>Страна *</label>
+                    <select value={form.country} onChange={e => { setForm({ ...form, country: e.target.value }); if (e.target.value !== 'Другое') setCustomCountry(''); }} className="input bg-white dark:bg-slate-900">
+                      {['РБ','РФ','Казахстан','Китай'].map(c => <option key={c}>{c}</option>)}
+                      <option value="Другое">Другое (введите ниже)</option>
+                    </select>
+                    {form.country === 'Другое' && <input className="input mt-2" value={customCountry} placeholder="Введите страну" onChange={e => setCustomCountry(e.target.value)} />}
                   </div>
                   <div className="proles-input-group">
                     <label>Тип поездки</label>
@@ -437,7 +482,7 @@ export function TripsPage() {
                 <div className="proles-modal-section-title">Детали поездки</div>
                 <div className="proles-modal-grid">
                   <div className="proles-input-group">
-                    <label>Город</label>
+                    <label>Основной населённый пункт</label>
                     <input type="text" placeholder="Например: Москва" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="input" />
                   </div>
                   <div className="proles-input-group">
@@ -539,8 +584,8 @@ export function TripsPage() {
             </div>
             <div className="proles-modal-footer">
               <button onClick={() => setShowForm(false)} className="proles-btn-cancel">Отмена</button>
-              <button onClick={handleCreate} disabled={saving || !form.projectId} className="proles-btn-save">
-                {saving ? '⏳ Сохранение...' : '💾 Создать'}
+              <button onClick={handleSaveTrip} disabled={saving || (!form.projectId && !form.projectNumber && !form.companyName)} className="proles-btn-save">
+                {saving ? '⏳ Сохранение...' : (editingTripId ? '💾 Сохранить' : '💾 Создать')}
               </button>
             </div>
           </div>
@@ -663,7 +708,7 @@ export function TripsPage() {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Проект:</span>
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.projectName}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.projectName || selectedTrip.projectNumber || selectedTrip.companyName || "—"}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Сотрудник:</span>
@@ -677,7 +722,7 @@ export function TripsPage() {
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Город:</span>
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.city || '—'}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{[selectedTrip.country, selectedTrip.city].filter(Boolean).join(", ") || "—"}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Дней в командировке:</span>
@@ -791,6 +836,7 @@ export function TripsPage() {
             </div>
             <div className="proles-modal-footer">
               <button onClick={() => setShowTripDetail(false)} className="proles-btn-cancel">Закрыть</button>
+              <button onClick={() => handleEditTrip(selectedTrip)} className="btn-primary px-5 py-2.5">✏️ Редактировать</button>
             </div>
           </div>
         </div>,

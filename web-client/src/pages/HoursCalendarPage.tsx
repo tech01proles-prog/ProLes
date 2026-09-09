@@ -301,6 +301,17 @@ export function HoursCalendarPage() {
         </div>
       )}
 
+      {/* 📚 Подробности по выбранным сотрудникам за месяц */}
+      {selectedUserIds.size > 0 && (
+        <SelectedUsersHoursPanel
+          entries={filteredEntries}
+          users={users}
+          projects={projects}
+          year={calYear}
+          month={calMonth}
+        />
+      )}
+
       {/* 🎯 Блок выбранных фильтров (сотрудники и проекты) */}
       {(selectedUserIds.size > 0 || selectedProjectIds.size > 0) && (
         <div className="card p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800 animate-fade-in">
@@ -586,3 +597,127 @@ export function HoursCalendarPage() {
   </div>
 );
 }
+
+function formatHoursDetailed(hours: number): string {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (m === 0) return `${h} ч`;
+  return `${h} ч ${m} мин`;
+}
+
+function shortName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'Неизвестный';
+  const surname = parts[0];
+  const initials = parts.slice(1, 3).map(p => `${p[0]}.`).join('');
+  return initials ? `${surname} ${initials}` : surname;
+}
+
+type SelectedUsersHoursPanelProps = {
+  entries: TimeEntryDto[];
+  users: UserDto[];
+  projects: ProjectDto[];
+  year: number;
+  month: number;
+};
+
+function SelectedUsersHoursPanel({ entries, users, projects, year, month }: SelectedUsersHoursPanelProps) {
+  const byUser = useMemo(() => {
+    const map = new Map<string, TimeEntryDto[]>();
+    entries.forEach(entry => {
+      const list = map.get(entry.userId) || [];
+      list.push(entry);
+      map.set(entry.userId, list);
+    });
+    return Array.from(map.entries()).map(([userId, userEntries]) => ({
+      userId,
+      user: users.find(u => u.id === userId),
+      entries: [...userEntries].sort((a, b) => `${a.date}-${a.projectName}`.localeCompare(`${b.date}-${b.projectName}`)),
+      total: userEntries.reduce((sum, e) => sum + e.hours, 0),
+      days: new Set(userEntries.map(e => e.date)).size,
+      projects: new Set(userEntries.map(e => e.projectId)).size,
+    })).sort((a, b) => b.total - a.total);
+  }, [entries, users]);
+
+  const monthLabel = new Date(year, month, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+  const totalHours = entries.reduce((sum, e) => sum + e.hours, 0);
+
+  return (
+    <div className="card overflow-hidden border-indigo-200 dark:border-indigo-900 bg-gradient-to-br from-indigo-50/80 via-white to-blue-50/60 dark:from-indigo-950/30 dark:via-slate-900 dark:to-blue-950/20 animate-fade-in">
+      <div className="px-5 py-4 border-b border-indigo-100 dark:border-indigo-900/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-6 rounded-full bg-indigo-500" />
+            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Подробные часы сотрудников</h3>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 ml-4">{monthLabel} • по выбранным сотрудникам</p>
+        </div>
+        <div className="flex gap-2">
+          <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 border border-indigo-100 dark:border-indigo-900 px-3 py-2 text-right shadow-sm">
+            <div className="text-[10px] uppercase font-bold text-indigo-500">Всего</div>
+            <div className="text-lg font-black text-indigo-700 dark:text-indigo-300">{formatHoursDetailed(totalHours)}</div>
+          </div>
+          <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 border border-emerald-100 dark:border-emerald-900 px-3 py-2 text-right shadow-sm">
+            <div className="text-[10px] uppercase font-bold text-emerald-500">Сотрудников</div>
+            <div className="text-lg font-black text-emerald-700 dark:text-emerald-300">{byUser.length}</div>
+          </div>
+        </div>
+      </div>
+
+      {byUser.length === 0 ? (
+        <div className="px-5 py-8 text-center text-sm text-slate-400">За выбранный месяц часов не найдено.</div>
+      ) : (
+        <div className="p-4 space-y-3">
+          {byUser.map(({ userId, user, entries: userEntries, total, days, projects: projectCount }) => {
+            const maxDay = userEntries.reduce((max, e) => Math.max(max, e.hours), 0);
+            return (
+              <details key={userId} className="group rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 overflow-hidden" open={byUser.length <= 3}>
+                <summary className="list-none cursor-pointer px-4 py-3.5 flex flex-col lg:flex-row lg:items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white flex-shrink-0" style={{ backgroundColor: getUserColor(userId) }}>
+                      {(user?.name || '?').split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-900 dark:text-slate-100 truncate">{shortName(user?.name || 'Неизвестный')}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{days} раб. дн. • {projectCount} {projectCount === 1 ? 'проект' : 'проекта'}</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-right w-full lg:w-auto">
+                    <div className="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2"><div className="text-[10px] text-indigo-500 uppercase font-bold">Часы</div><div className="font-black text-indigo-700 dark:text-indigo-300">{formatHoursDetailed(total)}</div></div>
+                    <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2"><div className="text-[10px] text-emerald-500 uppercase font-bold">Ср. день</div><div className="font-black text-emerald-700 dark:text-emerald-300">{days ? formatHoursDetailed(total / days) : '—'}</div></div>
+                    <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 px-3 py-2 col-span-2 sm:col-span-1"><div className="text-[10px] text-amber-500 uppercase font-bold">Макс. запись</div><div className="font-black text-amber-700 dark:text-amber-300">{formatHoursDetailed(maxDay)}</div></div>
+                  </div>
+                  <span className="text-slate-400 group-open:rotate-180 transition-transform">⌄</span>
+                </summary>
+                <div className="border-t border-slate-100 dark:border-slate-800 overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-sm">
+                    <thead className="bg-slate-50/90 dark:bg-slate-800/70">
+                      <tr>
+                        <th className="text-left px-4 py-2.5 font-semibold text-slate-500">Дата</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-slate-500">Проект</th>
+                        <th className="text-left px-4 py-2.5 font-semibold text-slate-500">Комментарий</th>
+                        <th className="text-right px-4 py-2.5 font-semibold text-slate-500">Часы</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userEntries.map(entry => (
+                        <tr key={entry.id} className="border-t border-slate-100 dark:border-slate-800 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20">
+                          <td className="px-4 py-2.5 whitespace-nowrap font-medium text-slate-700 dark:text-slate-300">{new Date(entry.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</td>
+                          <td className="px-4 py-2.5 max-w-[260px]"><div className="font-semibold text-slate-900 dark:text-slate-100 truncate">{entry.projectName || projects.find(p => p.id === entry.projectId)?.name || 'Без проекта'}</div></td>
+                          <td className="px-4 py-2.5 max-w-[320px] text-slate-500 dark:text-slate-400 truncate">{entry.comment || '—'}</td>
+                          <td className="px-4 py-2.5 text-right font-black text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatHoursDetailed(entry.hours)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+

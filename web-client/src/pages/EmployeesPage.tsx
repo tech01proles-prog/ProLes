@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
-import type { UserDto } from '../types';
+import type { UserDto, PositionDto } from '../types';
 import { generateUUID, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 
@@ -15,6 +15,7 @@ export function EmployeesPage() {
   const canDelete = !permLoading && can('employees', 'delete');
 
   const [users, setUsers] = useState<UserDto[]>([]);
+  const [positions, setPositions] = useState<PositionDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -36,6 +37,11 @@ export function EmployeesPage() {
     position: '',
     role: 'employee',
     newPassword: '',
+    email: '',
+    phone: '',
+    telegramUsername: '',
+    birthDate: '',
+    positionId: '',
   });
 
   useEffect(() => {
@@ -46,8 +52,12 @@ export function EmployeesPage() {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get<UserDto[]>('/users');
-      setUsers(data);
+      const [usersRes, positionsRes] = await Promise.all([
+        api.get<UserDto[]>('/users'),
+        api.get<PositionDto[]>('/positions').catch(() => ({ data: [] as PositionDto[] })),
+      ]);
+      setUsers(usersRes.data);
+      setPositions(positionsRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -65,6 +75,7 @@ export function EmployeesPage() {
       position: '',
       role: 'employee',
       newPassword: '',
+      email: '', phone: '', telegramUsername: '', birthDate: '', positionId: '',
     });
     setShowForm(true);
   };
@@ -79,6 +90,8 @@ export function EmployeesPage() {
       position: user.position || '',
       role: user.role || 'employee',
       newPassword: '',
+      email: user.email || '', phone: user.phone || '', telegramUsername: user.telegramUsername || '',
+      birthDate: user.birthDate || '', positionId: user.positionId || '',
     });
     setShowForm(true);
   };
@@ -347,6 +360,17 @@ export function EmployeesPage() {
                       className="input"
                     />
                   </div>
+                  <div className="proles-input-group">
+                    <label>Иерархия должностей</label>
+                    <select value={form.positionId} onChange={(e) => { const p = positions.find(x => x.id === e.target.value); setForm({ ...form, positionId: e.target.value, position: p?.name || form.position }); }} className="input bg-white dark:bg-slate-900">
+                      <option value="">Без должности из справочника</option>
+                      {positions.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.parentName ? `${p.parentName} → ${p.name}` : p.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="proles-input-group"><label>Почта</label><input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="input" /></div>
+                  <div className="proles-input-group"><label>Телефон</label><input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="input" /></div>
+                  <div className="proles-input-group"><label>Telegram</label><input type="text" placeholder="@username" value={form.telegramUsername} onChange={e => setForm({ ...form, telegramUsername: e.target.value })} className="input" /></div>
+                  <div className="proles-input-group"><label>Дата рождения</label><input type="date" value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })} className="input" /></div>
                 </div>
               </div>
               <div className="proles-modal-section">
@@ -370,6 +394,7 @@ export function EmployeesPage() {
                       className="input bg-white dark:bg-slate-900"
                     >
                       <option value="employee">Сотрудник</option>
+                      <option value="tech">Тех. отдел</option>
                       <option value="manager">Менеджер</option>
                       <option value="director">Директор</option>
                       <option value="admin">Админ</option>
@@ -440,6 +465,9 @@ export function EmployeesPage() {
                 <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${ROLE_COLORS[profileUser.role] || ROLE_COLORS.employee}`}>
                   {profileUser.role}
                 </span>
+                <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                  <div>📧 {profileUser.email || '—'}</div><div>📞 {profileUser.phone || '—'}</div><div>💬 {profileUser.telegramUsername || '—'}</div><div>🎂 {profileUser.birthDate ? new Date(profileUser.birthDate).toLocaleDateString('ru-RU') : '—'}</div>
+                </div>
               </div>
             </div>
 

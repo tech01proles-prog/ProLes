@@ -7,7 +7,7 @@ import { NotificationBell } from './NotificationBell';
 import { usePermissions } from '../hooks/usePermissions';
 
 export function Layout() {
-  const { can } = usePermissions();
+  const { can, loading: permLoading } = usePermissions();
   const navigate = useNavigate();
   const [user, setUser] = useState<UserDto | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -47,14 +47,14 @@ export function Layout() {
 
   // 🎯 Базовый набор — виден ВСЕМ (контент адаптируется под права внутри экранов)
   const MAIN_ITEMS = [
-    { to: '/', icon: '🏠', label: 'Главная' },
-    { to: '/timesheet', icon: '⏱', label: 'Табель' },
-    { to: '/trips', icon: '✈️', label: 'Командировки' },
-    { to: '/expenses', icon: '💸', label: 'Расходы/Доходы' },
-    { to: '/tickets', icon: '🎫', label: 'Билеты' },
-    { to: '/vacations', icon: '🏖', label: 'Отпуск' },
-    { to: '/notifications', icon: '🔔', label: 'Уведомления' },
-  ];
+    { to: '/', icon: '🏠', label: 'Главная', visible: true },
+    { to: '/timesheet', icon: '⏱', label: 'Табель', visible: !permLoading && can('timesheet', 'view') },
+    { to: '/trips', icon: '✈️', label: 'Командировки', visible: true },
+    { to: '/expenses', icon: '💸', label: 'Расходы/Доходы', visible: true },
+    { to: '/tickets', icon: '🎫', label: 'Билеты', visible: !permLoading && can('tickets', 'view') },
+    { to: '/vacations', icon: '🏖', label: 'Отпуск', visible: true },
+    { to: '/notifications', icon: '🔔', label: 'Уведомления', visible: !permLoading && can('notifications', 'view') },
+  ].filter(item => item.visible);
 
   // 🔐 «Управление» — показываем, если есть хоть одно админское право
   const hasManagement =
@@ -209,10 +209,10 @@ export function Layout() {
             <span className="text-xl leading-none">🏠</span>
             <span>Главная</span>
           </NavLink>
-          <NavLink to="/timesheet" className={({ isActive }) => `flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
+          {!permLoading && can('timesheet', 'view') && <NavLink to="/timesheet" className={({ isActive }) => `flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
             <span className="text-xl leading-none">⏱</span>
             <span>Табель</span>
-          </NavLink>
+          </NavLink>}
           <NavLink to="/profile" className={({ isActive }) => `flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors relative ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
             <span className="text-xl leading-none">👤</span>
             <span>Профиль</span>

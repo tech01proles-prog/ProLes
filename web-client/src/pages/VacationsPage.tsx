@@ -77,9 +77,9 @@ export function VacationsPage() {
 
   const now = new Date();
   const stats = {
-    ongoing: vacations.filter(v => new Date(v.start) <= now && new Date(v.end) >= now).length,
-    upcoming: vacations.filter(v => new Date(v.start) > now).length,
-    past: vacations.filter(v => new Date(v.end) < now).length,
+    ongoing: vacations.filter(v => v.status === 'APPROVED' && new Date(v.start) <= now && new Date(v.end) >= now).length,
+    upcoming: vacations.filter(v => v.status === 'APPROVED' && new Date(v.start) > now).length,
+    past: vacations.filter(v => v.status === 'APPROVED' && new Date(v.end) < now).length,
   };
 
   const getUserName = (userId: string) => allUsers.find(u => u.id === userId)?.name || 'Неизвестный';
@@ -233,6 +233,8 @@ export function VacationsPage() {
             const isPast = end < now;
             const days = daysBetween(v.start, v.end);
             const isOwn = v.userId === user?.id;
+            const isApproved = v.status === 'APPROVED';
+            const isPending = v.status === 'PENDING';
             const userName = effectiveScope === 'all' ? getUserName(v.userId) : null;
 
             return (
@@ -244,11 +246,9 @@ export function VacationsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                        isOngoing ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900' :
-                        isPast ? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' :
-                        'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900'
+                        isPending ? 'bg-amber-100 text-amber-700 border-amber-200' : v.status === 'REJECTED' ? 'bg-red-100 text-red-700 border-red-200' : isOngoing ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : isPast ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-blue-100 text-blue-700 border-blue-200'
                       }`}>
-                        {isOngoing ? '🟢 Сейчас' : isPast ? '✓ Завершён' : '📅 Запланирован'}
+                        {isPending ? '⏳ На подтверждении' : v.status === 'REJECTED' ? '❌ Отклонён' : isOngoing ? '🟢 Сейчас' : isPast ? '✓ Завершён' : '📅 Подтверждён'}
                       </span>
                       <span className="text-xs text-slate-500 dark:text-slate-400">{days} дн.</span>
                       {userName && <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">👤 {userName}</span>}
@@ -268,11 +268,15 @@ export function VacationsPage() {
                       </div>
                     )}
                   </div>
-                  {isOwn && (
-                    <button onClick={handleDeleteAll} className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity text-sm flex-shrink-0" title="Удалить все свои отпуска">
-                      🗑
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {canViewAll && isPending && (
+                      <>
+                        <button onClick={async () => { await api.post(`/vacations/${v.id}/decision`, { approved: 'true' }); await loadData(); }} className="text-emerald-600 text-sm font-semibold">Подтвердить</button>
+                        <button onClick={async () => { const reason = prompt('Причина отклонения') || ''; await api.post(`/vacations/${v.id}/decision`, { approved: 'false', reason }); await loadData(); }} className="text-red-600 text-sm font-semibold">Отклонить</button>
+                      </>
+                    )}
+                    {isOwn && isPending && <button onClick={handleDeleteAll} className="text-red-500 hover:text-red-700 text-sm" title="Удалить запросы">🗑</button>}
+                  </div>
                 </div>
               </div>
             );
