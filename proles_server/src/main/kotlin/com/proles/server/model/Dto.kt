@@ -30,11 +30,17 @@ data class UserDto(
     val middleName: String = "",
     val name: String = "",
     val login: String = "",
+    val email: String = "",
     val role: String,
     val position: String = "",
     val defaultRateType: String = "HOURLY",
     val defaultRate: Double = 0.0,
     val defaultCurrency: String = "RUB",
+    val phone: String = "",
+    val telegramUsername: String = "",
+    val birthDate: String? = null,
+    val positionId: String? = null,
+    val onVacation: Boolean = false,
     val newPassword: String? = null
 )
 
@@ -121,7 +127,16 @@ data class ProjectDto(
 )
 
 @Serializable
-data class VacationDto(val id: String, val userId: String, val start: String, val end: String)
+data class VacationDto(
+    val id: String,
+    val userId: String,
+    val start: String,
+    val end: String,
+    val status: String = "PENDING",
+    val approvedBy: String? = null,
+    val approvedAt: Long? = null,
+    val rejectionReason: String = ""
+)
 
 @Serializable
 data class TimeEntry(
@@ -145,7 +160,10 @@ data class BusinessTripDto(
     val id: String,
     val userId: String,
     val userName: String = "",
-    val projectId: String,
+    val projectId: String? = null,
+    val projectNumber: String = "",
+    val companyName: String = "",
+    val country: String = "",
     val projectName: String = "",
     val type: String, // DEPARTURE / TRANSFER / COMPLETION
     val date: String,
@@ -232,6 +250,17 @@ data class SalaryComponentDto(
 @Serializable
 data class WaypointDto(
     val order: Int,
+    val country: String = "",
     val city: String,
     val address: String = ""
+)
+
+@Serializable
+data class PositionDto(
+    val id: String,
+    val name: String,
+    val parentId: String? = null,
+    val parentName: String? = null,
+    val isActive: Boolean = true,
+    val sortOrder: Int = 0
 )

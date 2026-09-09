@@ -56,11 +56,11 @@ fun Application.module() {
 
     transaction {
         SchemaUtils.createMissingTablesAndColumns(
-            UsersTable, ProjectsTable, TimeEntriesTable, ExpensesTable,
+            UsersTable, PositionsTable, ProjectsTable, TimeEntriesTable, ExpensesTable,
             IncomesTable,  // 🆕
             VacationsTable, DayOffsTable, BusinessTripsTable,
             NotificationsTable, ExpenseReceiptsTable, FcmTokensTable,
-            NotificationPreferencesTable,  // 🆕
+            NotificationPreferencesTable, TelegramLinksTable,  // 🆕
             RolesTable, RolePermissionsTable, UserPermissionOverridesTable,
             TicketsTable, TicketRecipientsTable,
             SalaryComponentsTable, SalaryRecordsTable, SessionsTable
@@ -72,6 +72,7 @@ fun Application.module() {
 
         // 🔥 Инициализируем дефолтные роли
         initDefaultRoles()
+        ensureCompanyUser()
 
     }
 
@@ -109,6 +110,7 @@ private fun initDefaultRoles() {
                 "displayName" to "Супер-админ",
                 "description" to "Полный доступ ко всему",
                 "permissions" to mapOf(
+                    "timesheet"             to Actions(true, true, true, true),
                     "projects"              to Actions(true, true, true, true),
                     "employees"             to Actions(true, true, true, true),
                     "payroll"               to Actions(true, true, true, true),
@@ -127,6 +129,7 @@ private fun initDefaultRoles() {
                 "displayName" to "Администратор",
                 "description" to "Управление проектами, сотрудниками и финансами",
                 "permissions" to mapOf(
+                    "timesheet"             to Actions(true, true, true, true),
                     "projects"              to Actions(true, true, true, true),   // полный доступ к проектам
                     "employees"             to Actions(true, true, false, false), // создание/просмотр, без редактирования/удаления
                     "payroll"               to Actions(true, true, true, false),  // может считать и изменять, но не удалять
@@ -145,6 +148,7 @@ private fun initDefaultRoles() {
                 "displayName" to "Директор",
                 "description" to "Просмотр аналитики и отчётов",
                 "permissions" to mapOf(
+                    "timesheet"             to Actions(true, true, true, false),
                     "projects"              to Actions(true, false, false, false),
                     "employees"             to Actions(true, false, false, false),
                     "payroll"               to Actions(true, true, true, false),  // может считать и изменять
@@ -159,10 +163,30 @@ private fun initDefaultRoles() {
                     "permissions"           to Actions(true, false, false, false),
                 )
             ),
+            "tech" to mapOf(
+                "displayName" to "Тех. отдел",
+                "description" to "Доступ к табелям и техническим разделам",
+                "permissions" to mapOf(
+                    "timesheet"             to Actions(true, true, true, true),
+                    "projects"              to Actions(true, false, false, false),
+                    "employees"             to Actions(false, false, false, false),
+                    "payroll"               to Actions(false, false, false, false),
+                    "expenses_all"          to Actions(false, false, false, false),
+                    "business_trips_all"    to Actions(false, false, false, false),
+                    "vacations_all"         to Actions(false, false, false, false),
+                    "dayoffs_all"           to Actions(false, false, false, false),
+                    "notifications"         to Actions(true, false, false, false),
+                    "analytics"             to Actions(false, false, false, false),
+                    "cost_calculation"      to Actions(false, false, false, false),
+                    "tickets"               to Actions(true, true, false, false),
+                    "permissions"           to Actions(false, false, false, false),
+                )
+            ),
             "employee" to mapOf(
                 "displayName" to "Сотрудник",
                 "description" to "Только свои данные",
                 "permissions" to mapOf(
+                    "timesheet"             to Actions(false, false, false, false),
                     "projects"              to Actions(true, false, false, false),
                     "employees"             to Actions(false, false, false, false),
                     "payroll"               to Actions(false, false, false, false),
@@ -261,4 +285,25 @@ private fun initDefaultRoles() {
     // Сбрасываем весь кеш прав после обновления
     com.proles.server.config.PermissionMiddleware.invalidateAllCache()
     println("✅ Дефолтные роли инициализированы/обновлены с точной матрицей прав")
+}
+private fun ensureCompanyUser() {
+    transaction {
+        val exists = UsersTable.selectAll().where { UsersTable.login eq "proles_company" }.singleOrNull()
+        if (exists == null) {
+            UsersTable.insert {
+                it[id] = UUID.randomUUID()
+                it[email] = "proles.company@proles.local"
+                it[login] = "proles_company"
+                it[lastName] = "Proles"
+                it[firstName] = "Company"
+                it[name] = "Proles Company"
+                it[passwordHash] = BCrypt.withDefaults().hashToString(12, UUID.randomUUID().toString().toCharArray())
+                it[role] = "employee"
+                it[position] = "Системный пользователь"
+            }
+            println("✅ Создан системный пользователь расходов: Proles Company")
+        } else if (exists[UsersTable.name] != "Proles Company") {
+            UsersTable.update({ UsersTable.login eq "proles_company" }) { it[name] = "Proles Company"; it[lastName] = "Proles"; it[firstName] = "Company" }
+        }
+    }
 }

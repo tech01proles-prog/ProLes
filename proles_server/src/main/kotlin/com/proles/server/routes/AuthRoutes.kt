@@ -41,11 +41,16 @@ fun Route.authRoutes() {
                         middleName = user[UsersTable.middleName],
                         name = user[UsersTable.name],
                         login = user[UsersTable.login],
+                        email = user[UsersTable.email],
                         role = user[UsersTable.role],
                         position = user[UsersTable.position] ?: "",
                         defaultRateType = user[UsersTable.defaultRateType],
                         defaultRate = user[UsersTable.defaultRate],
-                        defaultCurrency = user[UsersTable.defaultCurrency]
+                        defaultCurrency = user[UsersTable.defaultCurrency],
+                        phone = user[UsersTable.phone],
+                        telegramUsername = user[UsersTable.telegramUsername],
+                        birthDate = user[UsersTable.birthDate]?.toString(),
+                        positionId = user[UsersTable.positionId]?.value?.toString()
                     )
                 ))
             } else {
@@ -70,11 +75,16 @@ fun Route.authRoutes() {
                     middleName = it[UsersTable.middleName],
                     name = it[UsersTable.name],
                     login = it[UsersTable.login],
+                    email = it[UsersTable.email],
                     role = it[UsersTable.role],
                     position = it[UsersTable.position] ?: "",
                     defaultRateType = it[UsersTable.defaultRateType],
                     defaultRate = it[UsersTable.defaultRate],
-                    defaultCurrency = it[UsersTable.defaultCurrency]
+                    defaultCurrency = it[UsersTable.defaultCurrency],
+                    phone = it[UsersTable.phone],
+                    telegramUsername = it[UsersTable.telegramUsername],
+                    birthDate = it[UsersTable.birthDate]?.toString(),
+                    positionId = it[UsersTable.positionId]?.value?.toString()
                 ))
             } ?: call.respond(HttpStatusCode.NotFound)
         }

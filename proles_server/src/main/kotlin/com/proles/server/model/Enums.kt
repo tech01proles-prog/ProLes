@@ -19,5 +19,6 @@ enum class Permission(val key: String, val displayName: String) {
     ANALYTICS("analytics", "Аналитика"),
     COST_CALCULATION("cost_calculation", "Себестоимость"),
     TICKETS("tickets", "Билеты"),
-    PERMISSIONS("permissions", "Права доступа")
+    PERMISSIONS("permissions", "Права доступа"),
+    TIMESHEET("timesheet", "Табель рабочего времени")
 }

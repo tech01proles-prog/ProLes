@@ -17,6 +17,17 @@ object UsersTable : UUIDTable("users") {
     val defaultRateType = varchar("default_rate_type", 20).default("HOURLY")
     val defaultRate = double("default_rate").default(0.0)
     val defaultCurrency = varchar("default_currency", 3).default("RUB")
+    val phone = varchar("phone", 30).default("")
+    val telegramUsername = varchar("telegram_username", 100).default("")
+    val birthDate = date("birth_date").nullable()
+    val positionId = reference("position_id", PositionsTable).nullable()
+}
+
+object PositionsTable : UUIDTable("positions") {
+    val name = varchar("name", 150).uniqueIndex()
+    val parentId = uuid("parent_id").nullable()
+    val isActive = bool("is_active").default(true)
+    val sortOrder = integer("sort_order").default(0)
 }
 
 object ProjectsTable : UUIDTable("projects") {
@@ -105,6 +116,10 @@ object VacationsTable : UUIDTable("vacations") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val start = date("start_date")
     val end = date("end_date")
+    val status = varchar("status", 20).default("PENDING")
+    val approvedBy = reference("approved_by", UsersTable).nullable()
+    val approvedAt = long("approved_at").nullable()
+    val rejectionReason = text("rejection_reason").default("")
 }
 
 object DayOffsTable : UUIDTable("day_offs") {
@@ -116,7 +131,10 @@ object DayOffsTable : UUIDTable("day_offs") {
 // 🆕 Таблица командировок
 object BusinessTripsTable : UUIDTable("business_trips") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
-    val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.CASCADE)
+    val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.SET_NULL).nullable()
+    val projectNumber = varchar("project_number", 100).default("")
+    val companyName = varchar("company_name", 255).default("")
+    val country = varchar("country", 100).default("")
     val type = varchar("type", 20).default("DEPARTURE")
     val date = date("date")
     val city = varchar("city", 255).default("")
@@ -155,6 +173,13 @@ object TicketReceiptsTable : UUIDTable("ticket_receipts") {
 }
 
 // 🆕 Таблица FCM токенов
+object TelegramLinksTable : UUIDTable("telegram_links") {
+    val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).uniqueIndex()
+    val chatId = varchar("chat_id", 100).uniqueIndex()
+    val username = varchar("username", 100).default("")
+    val linkedAt = long("linked_at").default(0L)
+}
+
 object FcmTokensTable : UUIDTable("fcm_tokens") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val token = text("token").uniqueIndex()
@@ -166,10 +191,21 @@ object NotificationPreferencesTable : UUIDTable("notification_preferences") {
     val userId = reference("user_id", UsersTable).uniqueIndex()
     val tripEnabled = bool("trip_enabled").default(true)
     val vacationEnabled = bool("vacation_enabled").default(true)
-    val dayoffEnabled = bool("dayoff_enabled").default(true)  // Только для admin/director
+    val dayoffEnabled = bool("dayoff_enabled").default(true)
     val expenseEnabled = bool("expense_enabled").default(true)
-    val payrollEnabled = bool("payroll_enabled").default(true)  // Только для admin/director
+    val payrollEnabled = bool("payroll_enabled").default(true)
+    val ticketEnabled = bool("ticket_enabled").default(true)
+    val tripVisibleToAll = bool("trip_visible_to_all").default(false)
+    val tripTelegramBroadcast = bool("trip_telegram_broadcast").default(false)
+    val tripChangeEnabled = bool("trip_change_enabled").default(true)
+    val vacationDecisionEnabled = bool("vacation_decision_enabled").default(true)
+    val expenseCreatedEnabled = bool("expense_created_enabled").default(true)
+    val ticketReceiptEnabled = bool("ticket_receipt_enabled").default(true)
     val telegramEnabled = bool("telegram_enabled").default(false)
+    val telegramLinkCode = varchar("telegram_link_code", 20).uniqueIndex().nullable()
+    val telegramLinkedAt = long("telegram_linked_at").nullable()
+    val telegramChatId = varchar("telegram_chat_id", 100).nullable().uniqueIndex()
+    val telegramUsername = varchar("telegram_linked_username", 100).default("")
     val emailEnabled = bool("email_enabled").default(false)
     val email = varchar("email", 255).default("")
 }
