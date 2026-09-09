@@ -42,6 +42,33 @@ import org.jetbrains.exposed.dao.id.EntityID  //  для работы с ID
 
 
 @Serializable
+data class NotificationPreferencesResponseDto(
+    val tripEnabled: Boolean,
+    val vacationEnabled: Boolean,
+    val dayoffEnabled: Boolean,
+    val expenseEnabled: Boolean,
+    val payrollEnabled: Boolean,
+    val ticketEnabled: Boolean,
+    val tripVisibleToAll: Boolean,
+    val tripTelegramBroadcast: Boolean,
+    val tripChangeEnabled: Boolean,
+    val vacationDecisionEnabled: Boolean,
+    val expenseCreatedEnabled: Boolean,
+    val ticketReceiptEnabled: Boolean,
+    val telegramEnabled: Boolean,
+    val telegramLinked: Boolean,
+    val telegramLinkCode: String?,
+    val emailEnabled: Boolean,
+    val email: String
+)
+
+@Serializable
+data class NotificationPreferencesUpdateResponseDto(
+    val telegramLinkCode: String?,
+    val telegramEnabled: Boolean
+)
+
+@Serializable
 data class UserPermissionOverrideDto(
     val permission: String,
     val canView: Boolean? = null,
@@ -1947,24 +1974,24 @@ fun Route.dataRoutes() {
         get {
             val session = call.checkSession() ?: return@get
             val row = transaction { NotificationPreferencesTable.selectAll().where { NotificationPreferencesTable.userId eq session.userId }.limit(1).firstOrNull() }
-            call.respond(HttpStatusCode.OK, mapOf(
-                "tripEnabled" to (row?.get(NotificationPreferencesTable.tripEnabled) ?: true),
-                "vacationEnabled" to (row?.get(NotificationPreferencesTable.vacationEnabled) ?: true),
-                "dayoffEnabled" to (row?.get(NotificationPreferencesTable.dayoffEnabled) ?: true),
-                "expenseEnabled" to (row?.get(NotificationPreferencesTable.expenseEnabled) ?: true),
-                "payrollEnabled" to (row?.get(NotificationPreferencesTable.payrollEnabled) ?: true),
-                "ticketEnabled" to (row?.get(NotificationPreferencesTable.ticketEnabled) ?: true),
-                "tripVisibleToAll" to (row?.get(NotificationPreferencesTable.tripVisibleToAll) ?: false),
-                "tripTelegramBroadcast" to (row?.get(NotificationPreferencesTable.tripTelegramBroadcast) ?: false),
-                "tripChangeEnabled" to (row?.get(NotificationPreferencesTable.tripChangeEnabled) ?: true),
-                "vacationDecisionEnabled" to (row?.get(NotificationPreferencesTable.vacationDecisionEnabled) ?: true),
-                "expenseCreatedEnabled" to (row?.get(NotificationPreferencesTable.expenseCreatedEnabled) ?: true),
-                "ticketReceiptEnabled" to (row?.get(NotificationPreferencesTable.ticketReceiptEnabled) ?: true),
-                "telegramEnabled" to (row?.get(NotificationPreferencesTable.telegramEnabled) ?: false),
-                "telegramLinked" to (row?.get(NotificationPreferencesTable.telegramChatId) != null),
-                "telegramLinkCode" to row?.get(NotificationPreferencesTable.telegramLinkCode),
-                "emailEnabled" to (row?.get(NotificationPreferencesTable.emailEnabled) ?: false),
-                "email" to (row?.get(NotificationPreferencesTable.email) ?: "")
+            call.respond(HttpStatusCode.OK, NotificationPreferencesResponseDto(
+                tripEnabled = row?.get(NotificationPreferencesTable.tripEnabled) ?: true,
+                vacationEnabled = row?.get(NotificationPreferencesTable.vacationEnabled) ?: true,
+                dayoffEnabled = row?.get(NotificationPreferencesTable.dayoffEnabled) ?: true,
+                expenseEnabled = row?.get(NotificationPreferencesTable.expenseEnabled) ?: true,
+                payrollEnabled = row?.get(NotificationPreferencesTable.payrollEnabled) ?: true,
+                ticketEnabled = row?.get(NotificationPreferencesTable.ticketEnabled) ?: true,
+                tripVisibleToAll = row?.get(NotificationPreferencesTable.tripVisibleToAll) ?: false,
+                tripTelegramBroadcast = row?.get(NotificationPreferencesTable.tripTelegramBroadcast) ?: false,
+                tripChangeEnabled = row?.get(NotificationPreferencesTable.tripChangeEnabled) ?: true,
+                vacationDecisionEnabled = row?.get(NotificationPreferencesTable.vacationDecisionEnabled) ?: true,
+                expenseCreatedEnabled = row?.get(NotificationPreferencesTable.expenseCreatedEnabled) ?: true,
+                ticketReceiptEnabled = row?.get(NotificationPreferencesTable.ticketReceiptEnabled) ?: true,
+                telegramEnabled = row?.get(NotificationPreferencesTable.telegramEnabled) ?: false,
+                telegramLinked = row?.get(NotificationPreferencesTable.telegramChatId) != null,
+                telegramLinkCode = row?.get(NotificationPreferencesTable.telegramLinkCode),
+                emailEnabled = row?.get(NotificationPreferencesTable.emailEnabled) ?: false,
+                email = row?.get(NotificationPreferencesTable.email) ?: ""
             ))
         }
         put {
@@ -2018,7 +2045,13 @@ fun Route.dataRoutes() {
                     }
                 }
             }
-            call.respond(HttpStatusCode.OK, mapOf("telegramLinkCode" to generatedCode, "telegramEnabled" to (body["telegramEnabled"]?.toBoolean() ?: false)))
+            call.respond(
+                HttpStatusCode.OK,
+                NotificationPreferencesUpdateResponseDto(
+                    telegramLinkCode = generatedCode,
+                    telegramEnabled = body["telegramEnabled"]?.toBoolean() ?: false
+                )
+            )
         }
     }
 
