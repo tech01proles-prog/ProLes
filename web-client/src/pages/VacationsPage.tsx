@@ -233,7 +233,6 @@ export function VacationsPage() {
             const isPast = end < now;
             const days = daysBetween(v.start, v.end);
             const isOwn = v.userId === user?.id;
-            const isApproved = v.status === 'APPROVED';
             const isPending = v.status === 'PENDING';
             const userName = effectiveScope === 'all' ? getUserName(v.userId) : null;
 
