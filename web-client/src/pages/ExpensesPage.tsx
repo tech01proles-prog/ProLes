@@ -155,6 +155,13 @@ function PendingReceiptPreview({ file }: { file: File }) {
 export function ExpensesPage() {
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState<UserDto | null>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('proles_user');
+    if (stored) {
+      try { setUser(JSON.parse(stored)); } catch { /* ignore malformed cached user */ }
+    }
+  }, []);
   const { can } = usePermissions();
   const canViewAll = can('expenses_all', 'view');
 
