@@ -82,51 +82,6 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
   reader.readAsDataURL(file);
 });
 
-const RECEIPT_MAX_BYTES = 2 * 1024 * 1024;
-
-const compressReceiptImage = async (file: File): Promise<File> => {
-  if (!file.type.startsWith('image/') || file.size <= RECEIPT_MAX_BYTES) return file;
-
-  const sourceUrl = URL.createObjectURL(file);
-  try {
-    const image = new Image();
-    image.decoding = 'async';
-    image.src = sourceUrl;
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error('Не удалось обработать изображение чека'));
-    });
-
-    const canvas = document.createElement('canvas');
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-    const context = canvas.getContext('2d', { alpha: false });
-    if (!context) return file;
-    context.imageSmoothingEnabled = true;
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-    const qualities = [0.95, 0.92, 0.9, 0.88, 0.85, 0.82, 0.78];
-    let bestBlob: Blob | null = null;
-    for (const quality of qualities) {
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
-      if (!blob) continue;
-      if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
-      if (blob.size <= RECEIPT_MAX_BYTES) break;
-    }
-
-    if (bestBlob && bestBlob.size < file.size) {
-      const baseName = file.name.replace(/\.[^.]+$/, '') || 'receipt';
-      return new File([bestBlob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
-    }
-    return file;
-  } finally {
-    URL.revokeObjectURL(sourceUrl);
-  }
-};
-
-const prepareReceiptFiles = async (files: File[]): Promise<File[]> => {
-  return Promise.all(files.map(file => compressReceiptImage(file)));
-};
 
 const ReceiptIcon = ({ className = '' }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -236,8 +191,7 @@ export function ExpensesPage() {
   }, []);
 
   const uploadFilesToExpense = useCallback(async (expenseId: string, files: File[]) => {
-    const preparedFiles = await prepareReceiptFiles(files);
-    for (const file of preparedFiles) {
+    for (const file of files) {
       const base64 = await fileToBase64(file);
       await api.post('/expenses/upload-attachment', {
         expenseId,
@@ -641,14 +595,8 @@ export function ExpensesPage() {
                       onChange={async (e) => {
                         const files = Array.from(e.target.files || []);
                         if (!files.length) return;
-                        try {
-                          const prepared = await prepareReceiptFiles(files);
-                          setPendingReceiptFiles(prev => [...prev, ...prepared]);
-                        } catch {
-                          alert('Не удалось обработать один или несколько файлов');
-                        } finally {
-                          e.target.value = '';
-                        }
+                        setPendingReceiptFiles(prev => [...prev, ...files]);
+                        e.target.value = '';
                       }}
                     />
                   </label>
