@@ -82,6 +82,76 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
   reader.readAsDataURL(file);
 });
 
+const RECEIPT_MAX_BYTES = 2 * 1024 * 1024;
+
+const compressReceiptImage = async (file: File): Promise<File> => {
+  if (!file.type.startsWith('image/') || file.size <= RECEIPT_MAX_BYTES) return file;
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = sourceUrl;
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('Не удалось обработать изображение чека'));
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) return file;
+    context.imageSmoothingEnabled = true;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const qualities = [0.95, 0.92, 0.9, 0.88, 0.85, 0.82, 0.78];
+    let bestBlob: Blob | null = null;
+    for (const quality of qualities) {
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+      if (!blob) continue;
+      if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
+      if (blob.size <= RECEIPT_MAX_BYTES) break;
+    }
+
+    if (bestBlob && bestBlob.size < file.size) {
+      const baseName = file.name.replace(/\.[^.]+$/, '') || 'receipt';
+      return new File([bestBlob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+    }
+    return file;
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+};
+
+const prepareReceiptFiles = async (files: File[]): Promise<File[]> => {
+  return Promise.all(files.map(file => compressReceiptImage(file)));
+};
+
+const ReceiptIcon = ({ className = '' }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M6 2h9l3 3v15l-3-1.5L12 20l-3-1.5L6 20V2Z" />
+    <path d="M9 8h6M9 12h6M9 16h4" />
+  </svg>
+);
+
+
+function PendingReceiptPreview({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file.type.startsWith('image/')) return;
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  if (url) {
+    return <img src={url} alt={file.name} className="w-16 h-16 rounded-md object-cover border border-slate-200 dark:border-slate-700 shrink-0" />;
+  }
+  return <div className="w-16 h-16 rounded-md border border-slate-200 dark:border-slate-700 flex items-center justify-center text-2xl shrink-0">📄</div>;
+}
+
 export function ExpensesPage() {
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState<UserDto | null>(null);
@@ -237,7 +307,8 @@ export function ExpensesPage() {
   }, []);
 
   const uploadFilesToExpense = useCallback(async (expenseId: string, files: File[]) => {
-    for (const file of files) {
+    const preparedFiles = await prepareReceiptFiles(files);
+    for (const file of preparedFiles) {
       const base64 = await fileToBase64(file);
       await api.post('/expenses/upload-attachment', {
         expenseId,
@@ -629,9 +700,9 @@ export function ExpensesPage() {
               </div>
             </div>
             {formType === 'EXPENSE' && (
-              <div className="proles-modal-section">
+              <div className="proles-modal-section w-full">
                 <div className="proles-modal-section-title">Чеки и подтверждающие документы</div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="w-full flex flex-wrap items-center gap-2">
                   <label className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer text-sm font-medium hover:border-indigo-400">
                     📎 Добавить файлы / фото
                     <input
@@ -639,26 +710,34 @@ export function ExpensesPage() {
                       accept="image/*,application/pdf"
                       multiple
                       className="hidden"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const files = Array.from(e.target.files || []);
-                        if (files.length) setPendingReceiptFiles(prev => [...prev, ...files]);
-                        e.target.value = '';
+                        if (!files.length) return;
+                        try {
+                          const prepared = await prepareReceiptFiles(files);
+                          setPendingReceiptFiles(prev => [...prev, ...prepared]);
+                        } catch {
+                          alert('Не удалось обработать один или несколько файлов');
+                        } finally {
+                          e.target.value = '';
+                        }
                       }}
                     />
                   </label>
-                  <button type="button" onClick={() => void startCamera()} className="px-3 py-2 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-medium">
-                    📷 Сделать фото
-                  </button>
                   {pendingReceiptFiles.length > 0 && (
                     <span className="text-sm text-slate-600 dark:text-slate-400">Выбрано файлов: {pendingReceiptFiles.length}</span>
                   )}
                 </div>
                 {pendingReceiptFiles.length > 0 && (
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="mt-3 w-full grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {pendingReceiptFiles.map((file, index) => (
-                      <div key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
-                        <span className="truncate text-sm">{file.name}</span>
-                        <button type="button" className="text-red-500" onClick={() => setPendingReceiptFiles(prev => prev.filter((_, i) => i !== index))}>✕</button>
+                      <div key={`${file.name}-${index}`} className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 min-w-0">
+                        <PendingReceiptPreview file={file} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">{file.name}</div>
+                          <div className="text-xs text-slate-500 mt-1">{(file.size / 1024 / 1024).toFixed(2)} МБ</div>
+                        </div>
+                        <button type="button" className="text-red-500 shrink-0" onClick={() => setPendingReceiptFiles(prev => prev.filter((_, i) => i !== index))}>✕</button>
                       </div>
                     ))}
                   </div>
@@ -882,7 +961,7 @@ export function ExpensesPage() {
                               onClick={() => void loadReceipts(entry.id)}
                               className="text-emerald-500 text-lg hover:scale-110 transition-transform"
                               title="Открыть чеки"
-                            >🧾</button>
+                            ><ReceiptIcon className="w-5 h-5" /></button>
                           ) : (
                             effectiveScope === 'my' && entry.userId === user?.id ? (
                               <button
@@ -890,9 +969,9 @@ export function ExpensesPage() {
                                 onClick={() => void loadReceipts(entry.id)}
                                 className="text-red-500 text-lg hover:scale-110 transition-transform"
                                 title="Добавить чек"
-                              >🧾</button>
+                              ><ReceiptIcon className="w-5 h-5" /></button>
                             ) : (
-                              <span className="text-red-500 text-lg" title="Чека нет">🧾</span>
+                              <span className="text-red-500" title="Чека нет"><ReceiptIcon className="w-5 h-5" /></span>
                             )
                           )
                         ) : (
