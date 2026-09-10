@@ -1942,7 +1942,7 @@ fun Route.dataRoutes() {
         // Завершение текущей командировки пользователя.
         post("/complete") {
             val session = call.checkSession() ?: return@post
-            val now = KtLocalDate.now()
+            val now = KtLocalDate.parse(JavaLocalDate.now().toString())
             data class ActiveTrip(val row: ResultRow, val id: UUID)
             val active = transaction {
                 BusinessTripsTable.selectAll()
