@@ -69,6 +69,15 @@ data class NotificationPreferencesUpdateResponseDto(
 )
 
 @Serializable
+data class ExpenseReceiptDto(
+    val id: String,
+    val expenseId: String,
+    val url: String,
+    val fileName: String,
+    val uploadedAt: Long
+)
+
+@Serializable
 data class UserPermissionOverrideDto(
     val permission: String,
     val canView: Boolean? = null,
@@ -812,6 +821,100 @@ fun Route.dataRoutes() {
             handleExpenseAttachment(call, requireImage = false)
         }
 
+        get("/receipts") {
+            val session = call.checkSession() ?: return@get
+            val expenseIdParam = call.request.queryParameters["expenseId"]
+            val expenseUuid = try {
+                UUID.fromString(expenseIdParam)
+            } catch (_: Exception) {
+                call.respond(HttpStatusCode.BadRequest, "Invalid expenseId")
+                return@get
+            }
+
+            val expense = transaction {
+                ExpensesTable
+                    .selectAll()
+                    .where { ExpensesTable.id eq expenseUuid }
+                    .singleOrNull()
+            }
+            if (expense == null) {
+                call.respond(HttpStatusCode.NotFound, "Expense not found")
+                return@get
+            }
+
+            val expenseUserId = expense[ExpensesTable.userId].value
+            val canViewForeignExpense = session.role in listOf("admin", "director", "superadmin")
+            if (expenseUserId != session.userId && !canViewForeignExpense) {
+                call.respond(HttpStatusCode.Forbidden, "Access denied")
+                return@get
+            }
+
+            val receipts = transaction {
+                ExpenseReceiptsTable
+                    .selectAll()
+                    .where { ExpenseReceiptsTable.expenseId eq expenseUuid }
+                    .orderBy(ExpenseReceiptsTable.uploadedAt to SortOrder.ASC)
+                    .map { row ->
+                        val url = row[ExpenseReceiptsTable.imageUrl]
+                        ExpenseReceiptDto(
+                            id = row[ExpenseReceiptsTable.id].value.toString(),
+                            expenseId = expenseUuid.toString(),
+                            url = url,
+                            fileName = url.substringAfterLast('/'),
+                            uploadedAt = row[ExpenseReceiptsTable.uploadedAt]
+                        )
+                    }
+            }
+            call.respond(HttpStatusCode.OK, receipts)
+        }
+
+        delete("/receipt") {
+            val session = call.checkSession() ?: return@delete
+            val receiptIdParam = call.request.queryParameters["receiptId"]
+            val receiptUuid = try {
+                UUID.fromString(receiptIdParam)
+            } catch (_: Exception) {
+                call.respond(HttpStatusCode.BadRequest, "Invalid receiptId")
+                return@delete
+            }
+
+            val receipt = transaction {
+                (ExpenseReceiptsTable innerJoin ExpensesTable)
+                    .selectAll()
+                    .where { ExpenseReceiptsTable.id eq receiptUuid }
+                    .singleOrNull()
+            }
+            if (receipt == null) {
+                call.respond(HttpStatusCode.NotFound, "Receipt not found")
+                return@delete
+            }
+
+            val expenseUserId = receipt[ExpensesTable.userId].value
+            val canEditForeignExpense = session.role in listOf("admin", "director", "superadmin")
+            if (expenseUserId != session.userId && !canEditForeignExpense) {
+                call.respond(HttpStatusCode.Forbidden, "Access denied")
+                return@delete
+            }
+
+            val path = receipt[ExpenseReceiptsTable.imageUrl]
+            transaction {
+                ExpenseReceiptsTable.deleteWhere { ExpenseReceiptsTable.id eq receiptUuid }
+                val remaining = ExpenseReceiptsTable
+                    .selectAll()
+                    .where { ExpenseReceiptsTable.expenseId eq receipt[ExpensesTable.id].value }
+                    .count()
+                if (remaining == 0L) {
+                    ExpensesTable.update({ ExpensesTable.id eq receipt[ExpensesTable.id].value }) {
+                        it[ExpensesTable.receiptSubmitted] = false
+                        it[ExpensesTable.hasReceiptPhoto] = false
+                    }
+                }
+            }
+
+            val relativePath = path.removePrefix("/")
+            java.io.File(relativePath).takeIf { it.exists() && it.isFile }?.delete()
+            call.respond(HttpStatusCode.NoContent)
+        }
 
         //  Эндпоинт для админа: все расходы всех сотрудников
         get("/all") {
@@ -846,7 +949,11 @@ fun Route.dataRoutes() {
                             comment = row[ExpensesTable.comment],
                             receiptSubmitted = row[ExpensesTable.receiptSubmitted],
                             hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
-                            category = row[ExpensesTable.category]
+                            category = row[ExpensesTable.category],
+                            receiptCount = ExpenseReceiptsTable
+                                .selectAll()
+                                .where { ExpenseReceiptsTable.expenseId eq row[ExpensesTable.id].value }
+                                .count().toInt()
                         )
                     }
             }
@@ -888,7 +995,11 @@ fun Route.dataRoutes() {
                             comment = row[ExpensesTable.comment],
                             receiptSubmitted = row[ExpensesTable.receiptSubmitted],
                             hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
-                            category = row[ExpensesTable.category]
+                            category = row[ExpensesTable.category],
+                            receiptCount = ExpenseReceiptsTable
+                                .selectAll()
+                                .where { ExpenseReceiptsTable.expenseId eq row[ExpensesTable.id].value }
+                                .count().toInt()
                         )
                     }
             }
@@ -1639,6 +1750,7 @@ fun Route.dataRoutes() {
                 country = this[BusinessTripsTable.country],
                 type = this[BusinessTripsTable.type],
                 date = this[BusinessTripsTable.date].toString(),
+                completedDate = this[BusinessTripsTable.completedDate]?.toString(),
                 city = this[BusinessTripsTable.city],
                 waypoints = runCatching { json.decodeFromString<List<WaypointDto>>(this[BusinessTripsTable.waypoints]) }.getOrDefault(emptyList()),
                 transport = this[BusinessTripsTable.transport],
@@ -1711,6 +1823,7 @@ fun Route.dataRoutes() {
                         it[BusinessTripsTable.country] = trip.country.trim()
                         it[type] = trip.type
                         it[date] = KtLocalDate.parse(trip.date)
+                        it[completedDate] = trip.completedDate?.let(KtLocalDate::parse)
                         it[city] = trip.city
                         it[participants] = json.encodeToString(trip.participants)
                         it[transport] = trip.transport
@@ -1814,6 +1927,7 @@ fun Route.dataRoutes() {
                     it[country] = trip.country.trim()
                     it[type] = trip.type
                     it[date] = KtLocalDate.parse(trip.date)
+                    it[completedDate] = trip.completedDate?.let(KtLocalDate::parse)
                     it[city] = trip.city
                     it[participants] = json.encodeToString(trip.participants)
                     it[transport] = trip.transport
@@ -1823,6 +1937,125 @@ fun Route.dataRoutes() {
                 }
             }
             call.respond(HttpStatusCode.OK, trip.copy(userId = existingUser.toString()))
+        }
+
+        // Завершение текущей командировки пользователя.
+        post("/complete") {
+            val session = call.checkSession() ?: return@post
+            val now = KtLocalDate.now()
+            data class ActiveTrip(val row: ResultRow, val id: UUID)
+            val active = transaction {
+                BusinessTripsTable.selectAll()
+                    .where { (BusinessTripsTable.userId eq session.userId) and (BusinessTripsTable.type neq "COMPLETION") }
+                    .orderBy(BusinessTripsTable.date to SortOrder.DESC)
+                    .firstOrNull()
+                    ?.let { ActiveTrip(it, it[BusinessTripsTable.id].value) }
+            } ?: return@post call.respond(HttpStatusCode.NotFound, "Активная командировка не найдена")
+            val startDate = active.row[BusinessTripsTable.date]
+            if (now < startDate) return@post call.respond(HttpStatusCode.BadRequest, "Дата завершения раньше даты начала командировки")
+            transaction {
+                BusinessTripsTable.update({ BusinessTripsTable.id eq active.id }) {
+                    it[type] = "COMPLETION"
+                    it[completedDate] = now
+                }
+            }
+            val senderName = transaction { UsersTable.selectAll().where { UsersTable.id eq session.userId }.single()[UsersTable.name] }
+            val projectName = active.row[BusinessTripsTable.projectId]?.value?.let { projectId ->
+                transaction { ProjectsTable.selectAll().where { ProjectsTable.id eq projectId }.singleOrNull()?.get(ProjectsTable.name) }
+            }.orEmpty()
+            val location = listOf(active.row[BusinessTripsTable.country], active.row[BusinessTripsTable.city]).filter { it.isNotBlank() }.joinToString(", ")
+            val participants = runCatching { json.decodeFromString<List<String>>(active.row[BusinessTripsTable.participants]) }.getOrDefault(emptyList())
+            val message = buildString {
+                appendLine("✅ Командировка завершена")
+                appendLine("👤 Сотрудник: $senderName")
+                if (projectName.isNotBlank()) appendLine("📁 Проект: $projectName")
+                if (active.row[BusinessTripsTable.projectNumber].isNotBlank()) appendLine("🔢 Номер проекта: ${active.row[BusinessTripsTable.projectNumber]}")
+                if (active.row[BusinessTripsTable.companyName].isNotBlank()) appendLine("🏢 Фирма: ${active.row[BusinessTripsTable.companyName]}")
+                if (location.isNotBlank()) appendLine("📍 $location")
+                appendLine("📅 ${startDate} — ${now}")
+                if (active.row[BusinessTripsTable.transport].isNotBlank()) appendLine("🚗 ${active.row[BusinessTripsTable.transport]}")
+                if (participants.isNotEmpty()) appendLine("👥 ${participants.joinToString(", ")}")
+                if (active.row[BusinessTripsTable.notes].isNotBlank()) appendLine("📝 ${active.row[BusinessTripsTable.notes]}")
+            }.trim()
+            val payload = json.encodeToString(mapOf("tripId" to active.id.toString(), "tripType" to "COMPLETION", "dateFrom" to startDate.toString(), "dateTo" to now.toString()))
+            val notifyTargets = transaction {
+                UsersTable.selectAll().where {
+                    (UsersTable.role eq "admin") or (UsersTable.role eq "director") or (UsersTable.role eq "superadmin")
+                }.map { it[UsersTable.id].value }.filter { it != session.userId }
+            }
+            NotificationService.notifyUsers(notifyTargets, session.userId, "TRIP_UPDATE", "✅ Командировка завершена", message, payload, "tripChange")
+            NotificationService.notifyTelegramUser(session.userId, "✅ <b>Командировка завершена</b>\n\n${NotificationService.escapeTelegram(message)}", "tripChange")
+            call.respond(HttpStatusCode.OK, mapOf("tripId" to active.id.toString(), "dateFrom" to startDate.toString(), "dateTo" to now.toString()))
+        }
+
+        // Переезд: завершить старую командировку датой начала новой и создать новую активную.
+        post("/transfer") {
+            val session = call.checkSession() ?: return@post
+            val incoming = try { call.receive<BusinessTripDto>() }
+            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}") }
+            if (incoming.projectId.isNullOrBlank() && incoming.projectNumber.isBlank() && incoming.companyName.isBlank()) {
+                return@post call.respond(HttpStatusCode.BadRequest, "Укажите проект, номер проекта или название фирмы")
+            }
+            val newDate = runCatching { KtLocalDate.parse(incoming.date) }.getOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid date")
+            data class TransferResult(val oldId: UUID, val newId: UUID)
+            val result = transaction {
+                val active = BusinessTripsTable.selectAll()
+                    .where { (BusinessTripsTable.userId eq session.userId) and (BusinessTripsTable.type neq "COMPLETION") }
+                    .orderBy(BusinessTripsTable.date to SortOrder.DESC)
+                    .firstOrNull() ?: return@transaction null
+                val activeId = active[BusinessTripsTable.id].value
+                val activeStart = active[BusinessTripsTable.date]
+                if (newDate < activeStart) return@transaction null
+                val projectUuid = incoming.projectId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                if (!incoming.projectId.isNullOrBlank() && projectUuid == null) return@transaction null
+                BusinessTripsTable.update({ BusinessTripsTable.id eq activeId }) {
+                    it[type] = "COMPLETION"
+                    it[completedDate] = newDate
+                }
+                val newId = UUID.randomUUID()
+                BusinessTripsTable.insert {
+                    it[id] = newId
+                    it[userId] = session.userId
+                    it[projectId] = projectUuid
+                    it[projectNumber] = incoming.projectNumber
+                    it[companyName] = incoming.companyName
+                    it[country] = incoming.country.trim()
+                    it[type] = "DEPARTURE"
+                    it[date] = newDate
+                    it[completedDate] = null
+                    it[city] = incoming.city
+                    it[participants] = json.encodeToString(incoming.participants)
+                    it[transport] = incoming.transport
+                    it[notes] = incoming.notes
+                    it[waypoints] = json.encodeToString(incoming.waypoints)
+                    it[perDiemRate] = incoming.perDiemRate
+                    it[createdAt] = System.currentTimeMillis()
+                }
+                TransferResult(activeId, newId)
+            } ?: return@post call.respond(HttpStatusCode.BadRequest, "Не удалось выполнить переезд: проверьте дату и проект")
+            val senderName = transaction { UsersTable.selectAll().where { UsersTable.id eq session.userId }.single()[UsersTable.name] }
+            val location = listOf(incoming.country, incoming.city).filter { it.isNotBlank() }.joinToString(", ")
+            val message = buildString {
+                appendLine("🔄 Переезд между командировками")
+                appendLine("👤 Сотрудник: $senderName")
+                if (incoming.projectNumber.isNotBlank()) appendLine("🔢 Номер проекта: ${incoming.projectNumber}")
+                if (incoming.companyName.isNotBlank()) appendLine("🏢 Фирма: ${incoming.companyName}")
+                if (location.isNotBlank()) appendLine("📍 $location")
+                appendLine("📅 Новая точка с $newDate")
+                if (incoming.transport.isNotBlank()) appendLine("🚗 ${incoming.transport}")
+                if (incoming.participants.isNotEmpty()) appendLine("👥 ${incoming.participants.joinToString(", ")}")
+                if (incoming.notes.isNotBlank()) appendLine("📝 ${incoming.notes}")
+            }.trim()
+            val payload = json.encodeToString(mapOf("completedTripId" to result.oldId.toString(), "tripId" to result.newId.toString(), "tripType" to "TRANSFER", "date" to newDate.toString()))
+            val notifyTargets = transaction {
+                UsersTable.selectAll().where {
+                    (UsersTable.role eq "admin") or (UsersTable.role eq "director") or (UsersTable.role eq "superadmin")
+                }.map { it[UsersTable.id].value }.filter { it != session.userId }
+            }
+            NotificationService.notifyUsers(notifyTargets, session.userId, "TRIP_UPDATE", "🔄 Переезд", message, payload, "tripChange")
+            NotificationService.notifyTelegramUser(session.userId, "🔄 <b>Переезд</b>\n\n${NotificationService.escapeTelegram(message)}", "tripChange")
+            call.respond(HttpStatusCode.Created, incoming.copy(id = result.newId.toString(), userId = session.userId.toString(), type = "DEPARTURE", completedDate = null))
         }
 
         delete {

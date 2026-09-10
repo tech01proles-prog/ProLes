@@ -104,6 +104,20 @@ object NotificationService {
         }
     }
 
+    suspend fun notifyTelegramUser(userId: UUID, text: String, preferenceKey: String = ""): Boolean {
+        val config = transaction {
+            val pref = NotificationPreferencesTable.selectAll()
+                .where { NotificationPreferencesTable.userId eq userId }
+                .firstOrNull()
+            val enabled = pref?.get(NotificationPreferencesTable.telegramEnabled) ?: false
+            val chatId = pref?.get(NotificationPreferencesTable.telegramChatId)
+            enabled to chatId
+        }
+        if (!config.first || config.second.isNullOrBlank()) return false
+        if (preferenceKey.isNotBlank() && !preferenceEnabled(userId, preferenceKey)) return false
+        return TelegramService.sendMessageToChat(config.second!!, text)
+    }
+
     suspend fun broadcastTelegram(text: String): Boolean {
         val chats = transaction { TelegramLinksTable.selectAll().map { it[TelegramLinksTable.chatId] }.distinct() }
         var ok = false

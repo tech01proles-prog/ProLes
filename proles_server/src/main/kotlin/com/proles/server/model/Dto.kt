@@ -75,7 +75,8 @@ data class ExpenseDto(
     val receiptSubmitted: Boolean = false,
     val hasReceiptPhoto: Boolean = false, // 🆕
     val category: String = "WORK",         // 🆕 Надкатегория: WORK | PERSONAL
-    val subcategory: String? = null        // 🆕 Подкатегория типа расхода
+    val subcategory: String? = null,       // 🆕 Подкатегория типа расхода
+    val receiptCount: Int = 0              // Количество прикрепленных файлов
 )
 
 
@@ -167,6 +168,7 @@ data class BusinessTripDto(
     val projectName: String = "",
     val type: String, // DEPARTURE / TRANSFER / COMPLETION
     val date: String,
+    val completedDate: String? = null,
     val city: String = "",  // ← оставить для обратной совместимости
     val waypoints: List<WaypointDto> = emptyList(),  // 🆕 маршрут
     val transport: String = "",

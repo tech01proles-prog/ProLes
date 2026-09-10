@@ -137,6 +137,7 @@ object BusinessTripsTable : UUIDTable("business_trips") {
     val country = varchar("country", 100).default("")
     val type = varchar("type", 20).default("DEPARTURE")
     val date = date("date")
+    val completedDate = date("completed_date").nullable()
     val city = varchar("city", 255).default("")
     val participants = text("participants").default("[]")
     val transport = varchar("transport", 100).default("")
