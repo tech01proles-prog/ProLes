@@ -84,6 +84,7 @@ export interface ExpenseDto {
   hasReceiptPhoto: boolean;
   category: 'WORK' | 'PERSONAL';  // 🆕 Надкатегория
   subcategory?: string;           // 🆕 Подкатегория типа расхода
+  receiptCount?: number;
 }
 
 export interface WaypointDto {
@@ -103,6 +104,7 @@ export interface BusinessTripDto {
   country: string;
   type: 'DEPARTURE' | 'TRANSFER' | 'COMPLETION';
   date: string;
+  completedDate?: string | null;
   city: string;
   waypoints: WaypointDto[];
   participants: string[];

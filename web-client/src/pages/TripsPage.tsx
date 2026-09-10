@@ -61,6 +61,7 @@ export function TripsPage() {
   });
   const [saving, setSaving] = useState(false);
   const [customCountry, setCustomCountry] = useState('');
+  const [tripAction, setTripAction] = useState<'create' | 'edit' | 'transfer'>('create');
 
   // 🆕 Состояние для модального окна просмотра командировки
   const [selectedTrip, setSelectedTrip] = useState<BusinessTripDto | null>(null);
@@ -119,6 +120,50 @@ export function TripsPage() {
       return a.type.localeCompare(b.type) * dir;
     });
 
+  const activeTrip = trips.find(t => t.userId === user?.id && t.type !== 'COMPLETION') || null;
+
+  const resetTripForm = () => {
+    setForm({ ...form, projectId: '', projectNumber: '', companyName: '', country: 'РФ', type: 'DEPARTURE', date: new Date().toISOString().slice(0, 10), city: '', waypoints: [], participants: [], transport: '', notes: '' });
+    setCustomCountry('');
+  };
+
+  const openNewTrip = (mode: 'create' | 'transfer' = 'create') => {
+    setEditingTripId(null);
+    setSelectedTrip(null);
+    setTripAction(mode);
+    if (mode === 'transfer' && activeTrip) {
+      setForm({
+        projectId: activeTrip.projectId || '',
+        projectNumber: activeTrip.projectNumber || '',
+        companyName: activeTrip.companyName || '',
+        country: ['РБ','РФ','Казахстан','Китай'].includes(activeTrip.country) ? activeTrip.country as any : 'Другое',
+        type: 'DEPARTURE',
+        date: new Date().toISOString().slice(0, 10),
+        city: '',
+        waypoints: [],
+        participants: activeTrip.participants || [],
+        transport: activeTrip.transport || '',
+        notes: activeTrip.notes || '',
+      });
+      setCustomCountry(['РБ','РФ','Казахстан','Китай'].includes(activeTrip.country) ? '' : activeTrip.country || '');
+    } else {
+      resetTripForm();
+    }
+    setShowForm(true);
+  };
+
+  const handleCompleteTrip = async () => {
+    if (!activeTrip) return;
+    if (!confirm('Завершить текущую командировку?')) return;
+    try {
+      await api.post('/business-trips/complete');
+      await loadData();
+    } catch (err) {
+      alert((err as any)?.response?.data || 'Ошибка завершения командировки');
+      console.error(err);
+    }
+  };
+
   const handleSaveTrip = async () => {
     if (!user) return;
     if (!form.projectId && !form.projectNumber && !form.companyName) {
@@ -146,14 +191,16 @@ export function TripsPage() {
         perDiemRate: editingTripId ? (selectedTrip?.perDiemRate || 750) : 750,
       };
       if (editingTripId) await api.put('/business-trips', payload);
+      else if (tripAction === 'transfer') await api.post('/business-trips/transfer', payload);
       else await api.post('/business-trips', payload);
       setShowForm(false);
       setEditingTripId(null);
       setSelectedTrip(null);
+      setTripAction('create');
       setForm({ ...form, projectId: '', projectNumber: '', companyName: '', country: 'РФ', city: '', waypoints: [], participants: [], transport: '', notes: '' }); setCustomCountry('');
       await loadData();
     } catch (err) {
-      alert(editingTripId ? 'Ошибка редактирования командировки' : 'Ошибка создания командировки');
+      alert(editingTripId ? 'Ошибка редактирования командировки' : tripAction === 'transfer' ? 'Ошибка переезда' : 'Ошибка создания командировки');
       console.error(err);
     } finally { setSaving(false); }
   };
@@ -174,6 +221,7 @@ export function TripsPage() {
   const handleEditTrip = (trip: BusinessTripDto) => {
     setSelectedTrip(trip);
     setEditingTripId(trip.id);
+    setTripAction('edit');
     const standardCountry = ['РБ','РФ','Казахстан','Китай'].includes(trip.country);
     setCustomCountry(standardCountry ? '' : trip.country || '');
     setForm({
@@ -413,16 +461,24 @@ export function TripsPage() {
             {isAdmin && <span className="ml-2 badge-indigo">Админ-режим</span>}
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-md ${
-            showForm
-              ? 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-              : 'bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white shadow-violet-200 dark:shadow-violet-950/50 hover:shadow-lg hover:-translate-y-0.5'
-          }`}
-        >
-          {showForm ? '✕ Закрыть' : '✈️ Новая командировка'}
-        </button>
+        <div className="flex flex-wrap justify-end gap-2">
+          {showForm ? (
+            <button
+              onClick={() => { setShowForm(false); setTripAction('create'); }}
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+            >✕ Закрыть</button>
+          ) : activeTrip ? (
+            <>
+              <button onClick={handleCompleteTrip} className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-md">🛑 Завершить командировку</button>
+              <button onClick={() => openNewTrip('transfer')} className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-orange-500 hover:bg-orange-600 shadow-md">🔄 Переезд</button>
+            </>
+          ) : (
+            <button
+              onClick={() => openNewTrip('create')}
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-md"
+            >✈️ Новая командировка</button>
+          )}
+        </div>
       </div>
 
       {/* 🌲 PROLES MODAL: Новая командировка */}
@@ -433,7 +489,7 @@ export function TripsPage() {
               <div className="proles-modal-title">
                 <div className="proles-modal-icon">✈️</div>
                 <div>
-                  <div>{editingTripId ? 'Редактирование командировки' : 'Новая командировка'}</div>
+                  <div>{editingTripId ? 'Редактирование командировки' : tripAction === 'transfer' ? 'Переезд — новая точка' : 'Новая командировка'}</div>
                   <div style={{ fontSize: '0.75rem', fontWeight: 500, opacity: 0.85, marginTop: 2 }}>
                     Оформление поездки сотрудника
                   </div>
@@ -469,7 +525,7 @@ export function TripsPage() {
                   <div className="proles-input-group">
                     <label>Тип поездки</label>
                     <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as any })} className="input bg-white dark:bg-slate-900">
-                      {Object.entries(TRIP_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                      {Object.entries(TRIP_TYPES).filter(([k]) => k !== 'COMPLETION' && k !== 'TRANSFER').map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                     </select>
                   </div>
                   <div className="proles-input-group">
@@ -639,7 +695,7 @@ export function TripsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.color}`}>{cfg.label}</span>
-                      <span className="text-xs text-slate-400">{formatDate(trip.date)}</span>
+                      <span className="text-xs text-slate-400">{trip.completedDate ? `${formatDate(trip.date)} — ${formatDate(trip.completedDate)}` : formatDate(trip.date)}</span>
                       {userName && <span className="text-xs text-slate-500 dark:text-slate-400">👤 {userName}</span>}
                     </div>
                     <div className="font-bold text-slate-900 dark:text-slate-100 truncate">{trip.projectName}</div>
@@ -718,7 +774,7 @@ export function TripsPage() {
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Дата:</span>
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">{formatDate(selectedTrip.date)}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.completedDate ? `${formatDate(selectedTrip.date)} — ${formatDate(selectedTrip.completedDate)}` : formatDate(selectedTrip.date)}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Город:</span>

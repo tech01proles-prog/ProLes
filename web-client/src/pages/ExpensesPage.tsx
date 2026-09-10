@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
@@ -64,6 +64,24 @@ interface CombinedEntry {
   entryCategory: 'WORK' | 'PERSONAL';  // 🆕 Надкатегория
 }
 
+interface ExpenseReceipt {
+  id: string;
+  expenseId: string;
+  url: string;
+  fileName: string;
+  uploadedAt: number;
+}
+
+const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const value = String(reader.result || '');
+    resolve(value.includes(',') ? value.split(',')[1] : value);
+  };
+  reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать файл'));
+  reader.readAsDataURL(file);
+});
+
 export function ExpensesPage() {
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState<UserDto | null>(null);
@@ -123,11 +141,123 @@ export function ExpensesPage() {
     name: '',
   });
   const [saving, setSaving] = useState(false);
+  const [pendingReceiptFiles, setPendingReceiptFiles] = useState<File[]>([]);
+  const [receiptViewerExpenseId, setReceiptViewerExpenseId] = useState<string | null>(null);
+  const [receiptViewerItems, setReceiptViewerItems] = useState<ExpenseReceipt[]>([]);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraTargetExpenseId, setCameraTargetExpenseId] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem('proles_user');
     if (stored) try { setUser(JSON.parse(stored)); } catch {}
   }, []);
+
+  const stopCamera = useCallback(() => {
+    cameraStreamRef.current?.getTracks().forEach(track => track.stop());
+    cameraStreamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraOpen(false);
+    setCameraTargetExpenseId(null);
+  }, []);
+
+  const startCamera = useCallback(async (expenseId?: string) => {
+    setCameraError(null);
+    setCameraTargetExpenseId(expenseId || null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Этот браузер не поддерживает доступ к камере.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      setCameraOpen(true);
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          void videoRef.current.play().catch(() => {});
+        }
+      });
+    } catch (error) {
+      setCameraError(error instanceof DOMException && error.name === 'NotAllowedError'
+        ? 'Доступ к камере запрещён. Разрешите использование камеры в настройках браузера.'
+        : 'Не удалось открыть камеру на этом устройстве.');
+    }
+  }, []);
+
+  const captureCameraPhoto = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(async blob => {
+      if (!blob) return;
+      const file = new File([blob], `receipt_${new Date().toISOString().replace(/[:.]/g, '-')}.jpg`, { type: 'image/jpeg' });
+      if (cameraTargetExpenseId) {
+        try {
+          await uploadFilesToExpense(cameraTargetExpenseId, [file]);
+          await loadReceipts(cameraTargetExpenseId);
+          await loadData();
+        } catch {
+          alert('Не удалось прикрепить фото к расходу');
+        }
+      } else {
+        setPendingReceiptFiles(prev => [...prev, file]);
+      }
+    }, 'image/jpeg', 0.92);
+  }, [cameraTargetExpenseId]);
+
+
+  useEffect(() => () => {
+    cameraStreamRef.current?.getTracks().forEach(track => track.stop());
+  }, []);
+
+  const loadReceipts = useCallback(async (expenseId: string) => {
+    setReceiptLoading(true);
+    try {
+      const res = await api.get<ExpenseReceipt[]>('/expenses/receipts', { params: { expenseId } });
+      setReceiptViewerItems(res.data);
+      setReceiptViewerExpenseId(expenseId);
+    } catch {
+      alert('Не удалось загрузить прикреплённые чеки');
+    } finally {
+      setReceiptLoading(false);
+    }
+  }, []);
+
+  const uploadFilesToExpense = useCallback(async (expenseId: string, files: File[]) => {
+    for (const file of files) {
+      const base64 = await fileToBase64(file);
+      await api.post('/expenses/upload-attachment', {
+        expenseId,
+        fileBase64: base64,
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+      });
+    }
+  }, []);
+
+  const removeReceipt = useCallback(async (receiptId: string) => {
+    if (!confirm('Удалить этот чек?')) return;
+    try {
+      await api.delete('/expenses/receipt', { params: { receiptId } });
+      if (receiptViewerExpenseId) await loadReceipts(receiptViewerExpenseId);
+      await loadData();
+    } catch {
+      alert('Не удалось удалить чек');
+    }
+  }, [receiptViewerExpenseId, loadReceipts]);
 
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -250,7 +380,7 @@ export function ExpensesPage() {
           comment: form.comment,
         });
       } else {
-        await api.post('/expenses', {
+        const expenseResponse = await api.post<ExpenseDto>('/expenses', {
           id: generateUUID(),
           userId: user.id,
           projectId: form.projectId || null,
@@ -262,12 +392,20 @@ export function ExpensesPage() {
           currency: form.currency,
           comment: form.comment,
         });
+        if (pendingReceiptFiles.length) {
+          await uploadFilesToExpense(expenseResponse.data.id, pendingReceiptFiles);
+        }
       }
       setShowForm(false);
+      setPendingReceiptFiles([]);
+      stopCamera();
       setForm({ ...form, projectId: '', amount: '', comment: '', name: '' });
       await loadData();
-    } catch { alert(`Ошибка создания ${formType === 'INCOME' ? 'дохода' : 'расхода'}`); }
-    finally { setSaving(false); }
+    } catch {
+      alert(`Ошибка создания ${formType === 'INCOME' ? 'дохода' : 'расхода'} или загрузки чеков`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: string, type: 'INCOME' | 'EXPENSE') => {
@@ -490,6 +628,43 @@ export function ExpensesPage() {
                 </div>
               </div>
             </div>
+            {formType === 'EXPENSE' && (
+              <div className="proles-modal-section">
+                <div className="proles-modal-section-title">Чеки и подтверждающие документы</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer text-sm font-medium hover:border-indigo-400">
+                    📎 Добавить файлы / фото
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length) setPendingReceiptFiles(prev => [...prev, ...files]);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  <button type="button" onClick={() => void startCamera()} className="px-3 py-2 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-medium">
+                    📷 Сделать фото
+                  </button>
+                  {pendingReceiptFiles.length > 0 && (
+                    <span className="text-sm text-slate-600 dark:text-slate-400">Выбрано файлов: {pendingReceiptFiles.length}</span>
+                  )}
+                </div>
+                {pendingReceiptFiles.length > 0 && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {pendingReceiptFiles.map((file, index) => (
+                      <div key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
+                        <span className="truncate text-sm">{file.name}</span>
+                        <button type="button" className="text-red-500" onClick={() => setPendingReceiptFiles(prev => prev.filter((_, i) => i !== index))}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="proles-modal-footer">
               <button onClick={() => setShowForm(false)} className="proles-btn-cancel">Отмена</button>
               <button onClick={handleCreate} disabled={saving || !form.amount || (formType === 'EXPENSE' && form.type === 'OTHER' && !form.name)} className={`proles-btn-save ${formType === 'EXPENSE' ? 'bg-red-600 hover:bg-red-700' : ''}`}>
@@ -702,9 +877,23 @@ export function ExpensesPage() {
                       <td className="px-4 py-3 text-center">
                         {entry.type === 'EXPENSE' ? (
                           entry.hasReceipt ? (
-                            <span className="text-emerald-500 text-lg" title="Чек приложен">✓</span>
+                            <button
+                              type="button"
+                              onClick={() => void loadReceipts(entry.id)}
+                              className="text-emerald-500 text-lg hover:scale-110 transition-transform"
+                              title="Открыть чеки"
+                            >🧾</button>
                           ) : (
-                            <span className="text-red-500 text-lg" title="Чека нет">✕</span>
+                            effectiveScope === 'my' && entry.userId === user?.id ? (
+                              <button
+                                type="button"
+                                onClick={() => void loadReceipts(entry.id)}
+                                className="text-red-500 text-lg hover:scale-110 transition-transform"
+                                title="Добавить чек"
+                              >🧾</button>
+                            ) : (
+                              <span className="text-red-500 text-lg" title="Чека нет">🧾</span>
+                            )
                           )
                         ) : (
                           <span className="text-slate-300 dark:text-slate-600">—</span>
@@ -726,6 +915,124 @@ export function ExpensesPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {receiptViewerExpenseId && createPortal(
+        <div className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4" onClick={() => setReceiptViewerExpenseId(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-800">
+              <div>
+                <h2 className="text-lg font-bold">Чеки расхода</h2>
+                <p className="text-sm text-slate-500">{receiptViewerItems.length} файл(ов)</p>
+              </div>
+              <button onClick={() => setReceiptViewerExpenseId(null)} className="text-slate-500 text-xl">✕</button>
+            </div>
+            <div className="p-5">
+              {receiptLoading ? (
+                <div className="py-12 text-center">⏳ Загрузка...</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {receiptViewerItems.map(receipt => (
+                    <div key={receipt.id} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                      <div className="bg-slate-100 dark:bg-slate-800 aspect-[4/3] flex items-center justify-center">
+                        {/\.(pdf)$/i.test(receipt.url) ? (
+                          <iframe title={receipt.fileName} src={receipt.url} className="w-full h-full" />
+                        ) : (
+                          <img src={receipt.url} alt={receipt.fileName} className="max-h-full max-w-full object-contain" />
+                        )}
+                      </div>
+                      <div className="p-3 flex items-center justify-between gap-2">
+                        <span className="truncate text-sm">{receipt.fileName}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <label className="text-indigo-600 hover:text-indigo-800 text-sm cursor-pointer" title="Заменить файл">
+                            Заменить
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              className="hidden"
+                              onChange={async e => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  await uploadFilesToExpense(receipt.expenseId, [file]);
+                                  await api.delete('/expenses/receipt', { params: { receiptId: receipt.id } });
+                                  await loadReceipts(receipt.expenseId);
+                                  await loadData();
+                                } catch {
+                                  alert('Не удалось заменить чек');
+                                } finally {
+                                  e.target.value = '';
+                                }
+                              }}
+                            />
+                          </label>
+                          <button onClick={() => void removeReceipt(receipt.id)} className="text-red-500" title="Удалить">🗑</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                <label className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 cursor-pointer text-sm font-medium">
+                  📎 Добавить файлы
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    multiple
+                    className="hidden"
+                    onChange={async e => {
+                      const files = Array.from(e.target.files || []);
+                      if (!files.length) return;
+                      try {
+                        await uploadFilesToExpense(receiptViewerExpenseId, files);
+                        await loadReceipts(receiptViewerExpenseId);
+                        await loadData();
+                      } catch {
+                        alert('Не удалось загрузить один или несколько файлов');
+                      } finally {
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+                <button type="button" onClick={() => void startCamera(receiptViewerExpenseId)} className="px-3 py-2 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-medium">📷 Сделать фото</button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {cameraOpen && createPortal(
+        <div className="fixed inset-0 z-[80] bg-black flex flex-col">
+          <div className="flex items-center justify-between p-4 text-white">
+            <span className="font-semibold">Съёмка чека</span>
+            <button onClick={stopCamera} className="text-2xl">✕</button>
+          </div>
+          <div className="flex-1 min-h-0 flex items-center justify-center p-4">
+            <video ref={videoRef} playsInline muted className="max-w-full max-h-full rounded-xl object-contain" />
+          </div>
+          <div className="p-5 bg-black/80 flex items-center justify-between gap-3 text-white">
+            <span className="text-sm">Снимков: {pendingReceiptFiles.length}</span>
+            <button type="button" onClick={captureCameraPhoto} className="w-16 h-16 rounded-full border-4 border-white bg-white/20" aria-label="Сделать фото" />
+            <button type="button" onClick={stopCamera} className="px-4 py-2 rounded-lg bg-white text-black">Готово</button>
+          </div>
+          <canvas ref={canvasRef} className="hidden" />
+        </div>,
+        document.body
+      )}
+
+      {cameraError && createPortal(
+        <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4" onClick={() => setCameraError(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-5 max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold mb-2">Камера недоступна</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400">{cameraError}</p>
+            <button onClick={() => setCameraError(null)} className="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white">Понятно</button>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
