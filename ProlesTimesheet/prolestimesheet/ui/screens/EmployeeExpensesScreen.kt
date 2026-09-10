@@ -1,6 +1,5 @@
 package com.example.prolestimesheet.ui.screens
 
-import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,10 +22,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.Expense
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import java.io.ByteArrayOutputStream
-import androidx.core.graphics.scale
 import androidx.activity.result.PickVisualMediaRequest
-import android.graphics.BitmapFactory
+import android.content.ContentValues
+import android.net.Uri
+import android.provider.MediaStore
+import android.provider.OpenableColumns
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,76 +57,86 @@ fun EmployeeExpensesScreen(
     var currentPhotoExpenseId by remember { mutableStateOf<String?>(null) }
     var showPhotoSourceDialog by remember { mutableStateOf(false) }
 
-    // 🔥 Общая функция обработки фото (из камеры или галереи)
-    fun processPhoto(bitmap: Bitmap, expenseId: String) {
-        val stream = ByteArrayOutputStream()
-        val scaledBitmap = scaleBitmapIfNeeded(bitmap, maxWidth = 1024)
-        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, stream)
-        val bytes = stream.toByteArray()
-        uploadingExpenseId = expenseId
-        viewModel.uploadReceiptPhoto(expenseId, bytes)
-        Toast.makeText(context, "📤 Фото отправлено (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
+    fun createCameraUri(): Uri? {
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "receipt_${System.currentTimeMillis()}.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Proles")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+        return context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
     }
 
-// 📸 Лаунчер камеры
+    fun uploadPhotoUri(uri: Uri, expenseId: String) {
+        try {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            if (bytes == null || bytes.isEmpty()) {
+                Toast.makeText(context, "❌ Не удалось прочитать фото", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+            val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0) cursor.getString(index) else null
+                } else null
+            } ?: "receipt_${System.currentTimeMillis()}.jpg"
+            uploadingExpenseId = expenseId
+            viewModel.uploadExpenseAttachment(expenseId, bytes, fileName, mimeType, context)
+            Toast.makeText(context, "📤 Фото отправляется (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(context, "❌ Ошибка чтения фото: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    // 📸 Лаунчер камеры
     val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap: Bitmap? ->
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        val uri = cameraUri
         val expenseId = currentPhotoExpenseId
+        cameraUri = null
         currentPhotoExpenseId = null
-        if (bitmap != null && expenseId != null) {
-            processPhoto(bitmap, expenseId)
-        } else if (bitmap == null) {
+        if (success && uri != null && expenseId != null) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                context.contentResolver.update(uri, ContentValues().apply {
+                    put(MediaStore.Images.Media.IS_PENDING, 0)
+                }, null, null)
+            }
+            uploadPhotoUri(uri, expenseId)
+        } else {
+            uri?.let { context.contentResolver.delete(it, null, null) }
             Toast.makeText(context, "Съёмка отменена", Toast.LENGTH_SHORT).show()
         }
     }
 
-// 🖼️ Лаунчер галереи (современный Photo Picker для Android 13+)
+    // 🖼️ Лаунчер галереи (современный Photo Picker для Android 13+)
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         val expenseId = currentPhotoExpenseId
         currentPhotoExpenseId = null
         if (uri != null && expenseId != null) {
-            try {
-                // Загружаем Bitmap из URI
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
-
-                if (bitmap != null) {
-                    processPhoto(bitmap, expenseId)
-                } else {
-                    Toast.makeText(context, "❌ Не удалось загрузить фото", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Toast.makeText(context, "❌ Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
+            uploadPhotoUri(uri, expenseId)
         } else if (uri == null) {
             Toast.makeText(context, "Выбор отменён", Toast.LENGTH_SHORT).show()
         }
     }
 
-// 🖼️ Fallback для старых Android (< 13)
+    // 🖼️ Fallback для старых Android (< 13)
     val legacyGalleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         val expenseId = currentPhotoExpenseId
         currentPhotoExpenseId = null
         if (uri != null && expenseId != null) {
-            try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
-
-                if (bitmap != null) {
-                    processPhoto(bitmap, expenseId)
-                } else {
-                    Toast.makeText(context, "❌ Не удалось загрузить фото", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Toast.makeText(context, "❌ Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
+            uploadPhotoUri(uri, expenseId)
+        } else if (uri == null) {
+            Toast.makeText(context, "Выбор отменён", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -235,7 +245,8 @@ fun EmployeeExpensesScreen(
                     Button(
                         onClick = {
                             showPhotoSourceDialog = false
-                            cameraLauncher.launch(null)
+                            cameraUri = createCameraUri()
+                            if (cameraUri != null) cameraLauncher.launch(cameraUri) else Toast.makeText(context, "❌ Не удалось подготовить камеру", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -446,13 +457,3 @@ private fun ExpenseRow(
     }
 }
 
-// 🔹 Вспомогательная функция масштабирования битмапа
-fun scaleBitmapIfNeeded(bitmap: Bitmap, maxWidth: Int): Bitmap {
-    return if (bitmap.width > maxWidth) {
-        val ratio = maxWidth.toFloat() / bitmap.width.toFloat()
-        val newHeight = (bitmap.height * ratio).toInt()
-        bitmap.scale(maxWidth, newHeight)
-    } else {
-        bitmap
-    }
-}

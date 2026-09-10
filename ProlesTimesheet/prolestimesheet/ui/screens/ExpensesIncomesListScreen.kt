@@ -1,10 +1,11 @@
 package com.example.prolestimesheet.ui.screens
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
+import android.content.ContentValues
+import android.net.Uri
+import android.provider.MediaStore
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -32,7 +33,6 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
-import java.io.ByteArrayOutputStream
 import java.time.YearMonth
 
 private data class BalanceItem(
@@ -390,7 +390,19 @@ private fun ReceiptAttachmentsDialog(
     val context = androidx.compose.ui.platform.LocalContext.current
     var busy by remember { mutableStateOf(false) }
     var selectedCount by remember { mutableStateOf(0) }
-    var currentSource by remember { mutableStateOf<String?>(null) }
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    fun createCameraUri(): Uri? {
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "receipt_${System.currentTimeMillis()}.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Proles")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+        return context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+    }
 
     fun uploadBytes(bytes: ByteArray, fileName: String, mimeType: String) {
         busy = true
@@ -407,17 +419,27 @@ private fun ReceiptAttachmentsDialog(
         )
     }
 
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-        currentSource = null
-        if (bitmap != null) {
-            val stream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
-            uploadBytes(stream.toByteArray(), "receipt_${System.currentTimeMillis()}.jpg", "image/jpeg")
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = cameraUri
+        cameraUri = null
+        if (success && uri != null) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                context.contentResolver.update(uri, ContentValues().apply {
+                    put(MediaStore.Images.Media.IS_PENDING, 0)
+                }, null, null)
+            }
+            viewModel.uploadExpenseUris(expense.id, listOf(uri), context) { uploaded ->
+                busy = false
+                selectedCount += uploaded
+            }
+        } else {
+            uri?.let { context.contentResolver.delete(it, null, null) }
+            busy = false
+            Toast.makeText(context, "Съёмка отменена", Toast.LENGTH_SHORT).show()
         }
     }
 
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)) { uris ->
-        currentSource = null
         if (uris.isNotEmpty()) {
             busy = true
             viewModel.uploadExpenseUris(expense.id, uris, context) { uploaded ->
@@ -428,7 +450,6 @@ private fun ReceiptAttachmentsDialog(
     }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        currentSource = null
         if (uris.isNotEmpty()) {
             busy = true
             viewModel.uploadExpenseUris(expense.id, uris, context) { uploaded ->
@@ -455,7 +476,7 @@ private fun ReceiptAttachmentsDialog(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
-                        onClick = { currentSource = "camera"; cameraLauncher.launch(null) },
+                        onClick = { busy = true; cameraUri = createCameraUri(); if (cameraUri != null) cameraLauncher.launch(cameraUri) else { busy = false; Toast.makeText(context, "❌ Не удалось подготовить камеру", Toast.LENGTH_SHORT).show() } },
                         enabled = !busy,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -464,7 +485,7 @@ private fun ReceiptAttachmentsDialog(
                         Text("Камера")
                     }
                     OutlinedButton(
-                        onClick = { currentSource = "photos"; photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                         enabled = !busy,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -474,7 +495,7 @@ private fun ReceiptAttachmentsDialog(
                     }
                 }
                 OutlinedButton(
-                    onClick = { currentSource = "files"; filePicker.launch("*/*") },
+                    onClick = { filePicker.launch("*/*") },
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth()
                 ) {

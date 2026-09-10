@@ -1,8 +1,6 @@
 package com.example.prolestimesheet.ui.screens
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -91,7 +89,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.scale
 import com.example.prolestimesheet.model.DayOff
 import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.model.TimeEntry
@@ -100,11 +97,13 @@ import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.todayIn
-import java.io.ByteArrayOutputStream
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
 import androidx.compose.ui.graphics.RectangleShape
+import android.content.ContentValues
+import android.net.Uri
+import android.provider.MediaStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -170,24 +169,17 @@ fun TimesheetScreen(
     // - Выходной (сб/вс) + запись в day_offs = РАБОЧИЙ (исключение)
     val isCurrentlyDayOff = if (isWeekend) !isUserDayOff else isUserDayOff
 
-    // 🆕 Функция масштабирования битмапа
-    fun Bitmap.scaleDown(maxWidth: Int = 1024): Bitmap {
-        if (this.width <= maxWidth) return this
-        val ratio = maxWidth.toFloat() / this.width
-        val newHeight = (this.height * ratio).toInt()
-        return this.scale(maxWidth, newHeight)
+    fun createCameraUri(): Uri? {
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "receipt_${System.currentTimeMillis()}.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Proles")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+        return context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
     }
-
-    // 🔥 Общая функция обработки фото
-    fun processPhoto(bitmap: Bitmap, expenseId: String) {
-        val stream = ByteArrayOutputStream()
-        val scaledBitmap = bitmap.scaleDown(maxWidth = 1024)
-        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, stream)
-        val bytes = stream.toByteArray()
-        Toast.makeText(context, "📤 Фото отправлено (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
-        viewModel.uploadReceiptPhoto(expenseId, bytes)
-    }
-
 
     Scaffold(
         modifier = modifier,
@@ -789,7 +781,6 @@ fun TimesheetScreen(
         // 📸 Состояния для загрузки фото/файлов чека (поддержка нескольких файлов)
         var currentPhotoExpenseId by remember { mutableStateOf<String?>(null) }
         val tempExpenseId = remember { "temp_expense_${System.currentTimeMillis()}" }
-        var expensePhotos by remember { mutableStateOf<List<Uri>>(emptyList()) }
         var showPhotoSourceDialog by remember { mutableStateOf(false) }
         var uploadingPhoto by remember { mutableStateOf(false) }
         
@@ -797,48 +788,36 @@ fun TimesheetScreen(
         val pendingFilesCount by viewModel.pendingExpenseFiles.collectAsState(initial = emptyMap())
         val currentPendingFiles = pendingFilesCount[tempExpenseId] ?: emptyList()
 
-        // 📸 Камера возвращает Bitmap напрямую — сохраняем байты в память.
-        // Это убирает зависимость от FileProvider и ошибку "Failed to find configured root".
-        fun bitmapToJpegBytes(bitmap: Bitmap): ByteArray? {
-            return try {
-                val stream = java.io.ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
-                stream.toByteArray()
-            } catch (e: Exception) {
-                Toast.makeText(
-                    context,
-                    "❌ Ошибка подготовки фото: ${e.message}",
-                    Toast.LENGTH_LONG
-                ).show()
-                null
-            }
-        }
+        var cameraUri by remember { mutableStateOf<Uri?>(null) }
 
         // 📷 Лаунчер камеры (для одного фото)
         val cameraLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.TakePicturePreview()
-        ) { bitmap: Bitmap? ->
+            contract = ActivityResultContracts.TakePicture()
+        ) { success ->
+            val uri = cameraUri
             val expenseId = currentPhotoExpenseId
+            cameraUri = null
             currentPhotoExpenseId = null
-            if (bitmap != null && expenseId != null) {
-                // Сохраняем фото во временное состояние вместо немедленной отправки.
-                // Фото будет отправлено после создания расхода.
-                val bytes = bitmapToJpegBytes(bitmap)
-                if (bytes != null) {
-                    viewModel.addPendingExpenseBytes(
-                        tempId = tempExpenseId,
-                        bytes = bytes,
-                        fileName = "receipt_${System.currentTimeMillis()}.jpg",
-                        mimeType = "image/jpeg"
-                    )
+            if (success && uri != null && expenseId != null) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    context.contentResolver.update(uri, ContentValues().apply {
+                        put(MediaStore.Images.Media.IS_PENDING, 0)
+                    }, null, null)
                 }
+                viewModel.addPendingExpenseFile(
+                    tempId = tempExpenseId,
+                    uri = uri,
+                    isPhoto = true,
+                    fileName = "receipt_${System.currentTimeMillis()}.jpg",
+                    mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+                )
                 uploadingPhoto = false
-            } else if (bitmap == null) {
+            } else {
+                uri?.let { context.contentResolver.delete(it, null, null) }
                 Toast.makeText(context, "Съёмка отменена", Toast.LENGTH_SHORT).show()
                 uploadingPhoto = false
             }
         }
-
         // 🖼️ Лаунчер галереи для нескольких фото (Android 13+)
         val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
@@ -1222,7 +1201,8 @@ fun TimesheetScreen(
                             onClick = {
                                 showPhotoSourceDialog = false
                                 uploadingPhoto = true
-                                cameraLauncher.launch(null)
+                                cameraUri = createCameraUri()
+                                if (cameraUri != null) cameraLauncher.launch(cameraUri) else { uploadingPhoto = false; Toast.makeText(context, "❌ Не удалось подготовить камеру", Toast.LENGTH_SHORT).show() }
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
