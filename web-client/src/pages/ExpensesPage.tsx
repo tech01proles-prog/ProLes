@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
@@ -215,84 +215,6 @@ export function ExpensesPage() {
   const [receiptViewerExpenseId, setReceiptViewerExpenseId] = useState<string | null>(null);
   const [receiptViewerItems, setReceiptViewerItems] = useState<ExpenseReceipt[]>([]);
   const [receiptLoading, setReceiptLoading] = useState(false);
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [cameraTargetExpenseId, setCameraTargetExpenseId] = useState<string | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const cameraStreamRef = useRef<MediaStream | null>(null);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('proles_user');
-    if (stored) try { setUser(JSON.parse(stored)); } catch {}
-  }, []);
-
-  const stopCamera = useCallback(() => {
-    cameraStreamRef.current?.getTracks().forEach(track => track.stop());
-    cameraStreamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setCameraOpen(false);
-    setCameraTargetExpenseId(null);
-  }, []);
-
-  const startCamera = useCallback(async (expenseId?: string) => {
-    setCameraError(null);
-    setCameraTargetExpenseId(expenseId || null);
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError('Этот браузер не поддерживает доступ к камере.');
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      });
-      cameraStreamRef.current = stream;
-      setCameraOpen(true);
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          void videoRef.current.play().catch(() => {});
-        }
-      });
-    } catch (error) {
-      setCameraError(error instanceof DOMException && error.name === 'NotAllowedError'
-        ? 'Доступ к камере запрещён. Разрешите использование камеры в настройках браузера.'
-        : 'Не удалось открыть камеру на этом устройстве.');
-    }
-  }, []);
-
-  const captureCameraPhoto = useCallback(() => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.videoWidth === 0 || video.videoHeight === 0) return;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob(async blob => {
-      if (!blob) return;
-      const file = new File([blob], `receipt_${new Date().toISOString().replace(/[:.]/g, '-')}.jpg`, { type: 'image/jpeg' });
-      if (cameraTargetExpenseId) {
-        try {
-          await uploadFilesToExpense(cameraTargetExpenseId, [file]);
-          await loadReceipts(cameraTargetExpenseId);
-          await loadData();
-        } catch {
-          alert('Не удалось прикрепить фото к расходу');
-        }
-      } else {
-        setPendingReceiptFiles(prev => [...prev, file]);
-      }
-    }, 'image/jpeg', 0.92);
-  }, [cameraTargetExpenseId]);
-
-
-  useEffect(() => () => {
-    cameraStreamRef.current?.getTracks().forEach(track => track.stop());
-  }, []);
-
   const loadReceipts = useCallback(async (expenseId: string) => {
     setReceiptLoading(true);
     try {
@@ -469,7 +391,6 @@ export function ExpensesPage() {
       }
       setShowForm(false);
       setPendingReceiptFiles([]);
-      stopCamera();
       setForm({ ...form, projectId: '', amount: '', comment: '', name: '' });
       await loadData();
     } catch {
@@ -1083,35 +1004,6 @@ export function ExpensesPage() {
         document.body
       )}
 
-      {cameraOpen && createPortal(
-        <div className="fixed inset-0 z-[80] bg-black flex flex-col">
-          <div className="flex items-center justify-between p-4 text-white">
-            <span className="font-semibold">Съёмка чека</span>
-            <button onClick={stopCamera} className="text-2xl">✕</button>
-          </div>
-          <div className="flex-1 min-h-0 flex items-center justify-center p-4">
-            <video ref={videoRef} playsInline muted className="max-w-full max-h-full rounded-xl object-contain" />
-          </div>
-          <div className="p-5 bg-black/80 flex items-center justify-between gap-3 text-white">
-            <span className="text-sm">Снимков: {pendingReceiptFiles.length}</span>
-            <button type="button" onClick={captureCameraPhoto} className="w-16 h-16 rounded-full border-4 border-white bg-white/20" aria-label="Сделать фото" />
-            <button type="button" onClick={stopCamera} className="px-4 py-2 rounded-lg bg-white text-black">Готово</button>
-          </div>
-          <canvas ref={canvasRef} className="hidden" />
-        </div>,
-        document.body
-      )}
-
-      {cameraError && createPortal(
-        <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4" onClick={() => setCameraError(null)}>
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-5 max-w-md" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold mb-2">Камера недоступна</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400">{cameraError}</p>
-            <button onClick={() => setCameraError(null)} className="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white">Понятно</button>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 }
