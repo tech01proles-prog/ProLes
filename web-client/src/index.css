@@ -699,6 +699,14 @@ input[type="checkbox"]:checked {
   margin-bottom: 1rem;
 }
 
+.proles-receipts-section-title {
+  padding-left: 0.75rem;
+}
+
+.proles-receipts-content {
+  padding-left: 0.75rem;
+}
+
 .proles-modal-section-title {
   display: flex;
   align-items: center;

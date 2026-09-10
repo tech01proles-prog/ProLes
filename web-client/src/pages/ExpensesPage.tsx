@@ -701,8 +701,8 @@ export function ExpensesPage() {
             </div>
             {formType === 'EXPENSE' && (
               <div className="proles-modal-section w-full">
-                <div className="proles-modal-section-title">Чеки и подтверждающие документы</div>
-                <div className="w-full flex flex-wrap items-center gap-2">
+                <div className="proles-modal-section-title proles-receipts-section-title">Чеки и подтверждающие документы</div>
+                <div className="proles-receipts-content w-full flex flex-wrap items-center gap-2">
                   <label className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer text-sm font-medium hover:border-indigo-400">
                     📎 Добавить файлы / фото
                     <input
@@ -1076,7 +1076,6 @@ export function ExpensesPage() {
                     }}
                   />
                 </label>
-                <button type="button" onClick={() => void startCamera(receiptViewerExpenseId)} className="px-3 py-2 rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-sm font-medium">📷 Сделать фото</button>
               </div>
             </div>
           </div>
