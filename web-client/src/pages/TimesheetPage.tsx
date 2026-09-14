@@ -430,7 +430,7 @@ type PersonalTask = {
   sortOrder?: number;
 };
 
-const PERSONAL_CATEGORIES = ['Командировки', 'Китай', 'HR', 'Проекты', 'Документы', 'Отчёты', 'Другое'];
+const DEFAULT_PERSONAL_CATEGORIES = ['Командировки', 'Китай', 'HR', 'Проекты', 'Документы', 'Отчёты', 'Другое'];
 const PERSONAL_STATUSES = ['Completed', 'In progress', 'Not started', 'Blocked'];
 
 function toIsoDate(date: Date) {
@@ -493,6 +493,8 @@ function PersonalTimesheetPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_PERSONAL_CATEGORIES);
+  const [newCategory, setNewCategory] = useState('');
 
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
 
@@ -504,12 +506,11 @@ function PersonalTimesheetPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get<{
-        periodStart: string;
-        periodEnd: string;
-        monthlyTaskId: string | null;
-        tasks: PersonalTask[];
-      }>('/personal-timesheet', { params: { year, month } });
+      const [{ data }, categoriesResponse] = await Promise.all([
+        api.get<{ periodStart: string; periodEnd: string; monthlyTaskId: string | null; tasks: PersonalTask[] }>('/personal-timesheet', { params: { year, month } }),
+        api.get<Array<{ id: string; name: string }>>('/personal-timesheet/categories'),
+      ]);
+      setCategories(Array.from(new Set([...DEFAULT_PERSONAL_CATEGORIES, ...(categoriesResponse.data || []).map(c => c.name)])));
 
       setPeriodStart(data.periodStart);
       setPeriodEnd(data.periodEnd);
@@ -558,6 +559,22 @@ function PersonalTimesheetPage() {
     setTasks(prev => prev.filter(task => task.id !== id));
     if (monthlyTaskId === id) setMonthlyTaskId('');
     setDirty(true);
+  };
+
+  const addCategory = async () => {
+    const name = newCategory.trim();
+    if (!name) return;
+    try {
+      const { data } = await api.post<{ id: string; name: string }>('/personal-timesheet/categories', { name });
+      setCategories(prev => Array.from(new Set([...prev, data.name])));
+      setNewCategory('');
+      setMessage(`✅ Категория «${data.name}» добавлена`);
+    } catch (error) {
+      console.error(error);
+      setMessage('❌ Не удалось добавить категорию');
+    } finally {
+      window.setTimeout(() => setMessage(null), 2200);
+    }
   };
 
   const save = async () => {
@@ -650,8 +667,19 @@ function PersonalTimesheetPage() {
                     <div className="min-w-[170px] text-center font-bold capitalize">{monthLabel}</div>
                     <button type="button" onClick={() => shiftMonth(1)} className="px-3 py-1 border border-slate-300 bg-white">›</button>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     {dirty && <span className="text-xs text-[#b44d76]">Есть несохранённые изменения</span>}
+                    <div className="flex items-center gap-1 border border-slate-300 bg-white px-1 py-1">
+                      <input
+                        value={newCategory}
+                        onChange={e => setNewCategory(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addCategory(); } }}
+                        className="w-[150px] px-2 py-1 text-xs outline-none"
+                        placeholder="Новая категория"
+                        aria-label="Новая категория"
+                      />
+                      <button type="button" onClick={() => void addCategory()} className="bg-[#d96f9b] px-2 py-1 text-xs font-semibold text-white" title="Добавить категорию">＋</button>
+                    </div>
                     <button type="button" onClick={addRow} className="px-4 py-2 bg-[#d96f9b] text-white font-semibold border border-[#c05f89]">＋ Добавить строку</button>
                     <button type="button" onClick={save} disabled={saving} className="px-4 py-2 bg-[#173f4c] text-white font-semibold disabled:opacity-60">
                       {saving ? 'Сохраняем…' : 'Сохранить'}
@@ -675,7 +703,7 @@ function PersonalTimesheetPage() {
                       {tasks.map((task, index) => (
                         <tr key={task.id} className={index % 2 ? 'bg-[#f7f7f7]' : 'bg-white'}>
                           <td className="border border-slate-300 p-0">
-                            <input value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none focus:bg-[#fff2f7]" placeholder="Новая задача" />
+                            <textarea value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="w-full min-h-[70px] px-2 py-2 border-0 bg-transparent text-center outline-none resize-y leading-tight focus:bg-[#fff2f7]" placeholder="Новая задача" rows={2} />
                           </td>
                           <td className="border border-slate-300 p-0">
                             <textarea value={task.description} onChange={e => updateTask(task.id, { description: e.target.value })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none resize-y focus:bg-[#fff2f7]" placeholder="Описание" />
@@ -684,9 +712,9 @@ function PersonalTimesheetPage() {
                             <input type="number" min="0" step="0.5" value={task.hours || ''} onChange={e => updateTask(task.id, { hours: Number(e.target.value) || 0 })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none focus:bg-[#fff2f7]" placeholder="0" />
                           </td>
                           <td className="border border-slate-300 p-0">
-                            <select value={task.category} onChange={e => updateTask(task.id, { category: e.target.value })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none focus:bg-[#fff2f7]">
+                            <select value={task.category} onChange={e => updateTask(task.id, { category: e.target.value })} className="w-full min-h-[70px] border-0 bg-transparent px-2 py-2 text-center outline-none focus:bg-[#fff2f7]">
                               <option value="">Категория</option>
-                              {PERSONAL_CATEGORIES.map(option => <option key={option} value={option}>{option}</option>)}
+                              {categories.map(option => <option key={option} value={option}>{option}</option>)}
                             </select>
                           </td>
                           <td className="border border-slate-300 p-0">
