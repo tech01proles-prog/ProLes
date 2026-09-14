@@ -37,7 +37,7 @@ function getProjectColor(projectId: string): string {
   return PROJECT_COLORS[Math.abs(hash) % PROJECT_COLORS.length];
 }
 
-export function TimesheetPage() {
+function StandardTimesheetPage() {
   const [user, setUser] = useState<UserDto | null>(null);
   const [entries, setEntries] = useState<TimeEntryDto[]>([]);
   const [projects, setProjects] = useState<ProjectDto[]>([]);
@@ -415,4 +415,323 @@ export function TimesheetPage() {
       )}
     </div>
   );
+}
+
+const PERSONAL_TIMESHEET_LOGIN = 'a.ermashkevich';
+
+type PersonalTask = {
+  id: string;
+  name: string;
+  description: string;
+  hours: number;
+  category: string;
+  status: string;
+  isMonthTask?: boolean;
+  sortOrder?: number;
+};
+
+const PERSONAL_CATEGORIES = ['Командировки', 'Китай', 'HR', 'Проекты', 'Документы', 'Отчёты', 'Другое'];
+const PERSONAL_STATUSES = ['Completed', 'In progress', 'Not started', 'Blocked'];
+
+function toIsoDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function getMonthBounds(year: number, month: number) {
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0);
+  return { start: toIsoDate(start), end: toIsoDate(end) };
+}
+
+function PinkStatusChart({ tasks }: { tasks: PersonalTask[] }) {
+  const counted = PERSONAL_STATUSES.map(status => ({
+    status,
+    count: tasks.filter(t => t.name.trim() && t.status === status).length,
+  }));
+  const max = Math.max(1, ...counted.map(item => item.count));
+  const step = Math.max(1, Math.ceil(max / 4));
+  const ticks = [step * 4, step * 3, step * 2, step, 0];
+
+  return (
+    <div className="rounded-none border border-[#b9b9b9] bg-white px-3 py-2 min-h-[220px]">
+      <div className="text-[18px] font-medium tracking-tight text-slate-600 uppercase">СТАТУС</div>
+      <div className="mt-2 grid grid-cols-[28px_1fr] gap-2">
+        <div className="h-[155px] flex flex-col justify-between text-[10px] text-slate-500 text-right">
+          {ticks.map(tick => <span key={tick}>{tick}</span>)}
+        </div>
+        <div className="relative h-[155px] border-b border-slate-300">
+          {[0, 25, 50, 75, 100].map(percent => (
+            <div key={percent} className="absolute left-0 right-0 border-t border-slate-200" style={{ top: `${percent}%` }} />
+          ))}
+          <div className="absolute inset-0 flex items-end gap-3 px-2">
+            {counted.map(item => (
+              <div key={item.status} className="flex-1 h-full flex flex-col items-center justify-end">
+                <div
+                  className="w-9 bg-[#e07aa9]"
+                  style={{ height: `${Math.max(item.count ? 3 : 1, (item.count / (step * 4)) * 145)}px` }}
+                  title={`${item.status}: ${item.count}`}
+                />
+                <div className="mt-1 text-[9px] text-slate-500 text-center leading-tight">{item.status}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PersonalTimesheetPage() {
+  const current = new Date();
+  const [year, setYear] = useState(current.getFullYear());
+  const [month, setMonth] = useState(current.getMonth() + 1);
+  const [periodStart, setPeriodStart] = useState(getMonthBounds(current.getFullYear(), current.getMonth() + 1).start);
+  const [periodEnd, setPeriodEnd] = useState(getMonthBounds(current.getFullYear(), current.getMonth() + 1).end);
+  const [tasks, setTasks] = useState<PersonalTask[]>([]);
+  const [monthlyTaskId, setMonthlyTaskId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+
+  const normalizedTasks = tasks.map(task => ({ ...task, hours: Number.isFinite(task.hours) ? task.hours : 0 }));
+  const totalHours = normalizedTasks.reduce((sum, task) => sum + task.hours, 0);
+  const realTasks = normalizedTasks.filter(task => task.name.trim());
+  const totalTasks = realTasks.length;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get<{
+        periodStart: string;
+        periodEnd: string;
+        monthlyTaskId: string | null;
+        tasks: PersonalTask[];
+      }>('/personal-timesheet', { params: { year, month } });
+
+      setPeriodStart(data.periodStart);
+      setPeriodEnd(data.periodEnd);
+      setMonthlyTaskId(data.monthlyTaskId || '');
+      setTasks((data.tasks || []).map((task, index) => ({
+        id: task.id || generateUUID(),
+        name: task.name || '',
+        description: task.description || '',
+        hours: Number(task.hours) || 0,
+        category: task.category || '',
+        status: task.status || 'Not started',
+        isMonthTask: Boolean(task.isMonthTask),
+        sortOrder: index,
+      })));
+      setDirty(false);
+    } catch (error) {
+      console.error(error);
+      setMessage('Не удалось загрузить табель');
+    } finally {
+      setLoading(false);
+    }
+  }, [year, month]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const addRow = () => {
+    const newTask: PersonalTask = {
+      id: generateUUID(),
+      name: '',
+      description: '',
+      hours: 0,
+      category: '',
+      status: 'Not started',
+      sortOrder: tasks.length,
+    };
+    setTasks(prev => [...prev, newTask]);
+    setDirty(true);
+  };
+
+  const updateTask = (id: string, patch: Partial<PersonalTask>) => {
+    setTasks(prev => prev.map(task => task.id === id ? { ...task, ...patch } : task));
+    setDirty(true);
+  };
+
+  const deleteRow = (id: string) => {
+    setTasks(prev => prev.filter(task => task.id !== id));
+    if (monthlyTaskId === id) setMonthlyTaskId('');
+    setDirty(true);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      await api.put('/personal-timesheet', {
+        year,
+        month,
+        periodStart,
+        periodEnd,
+        monthlyTaskId: monthlyTaskId || null,
+        tasks: tasks.map((task, index) => ({
+          id: task.id,
+          name: task.name,
+          description: task.description,
+          hours: Number(task.hours) || 0,
+          category: task.category,
+          status: task.status || 'Not started',
+          sortOrder: index,
+        })),
+      });
+      setMessage('✅ Табель сохранён');
+      setDirty(false);
+      await load();
+    } catch (error) {
+      console.error(error);
+      setMessage('❌ Ошибка сохранения табеля');
+    } finally {
+      setSaving(false);
+      window.setTimeout(() => setMessage(null), 2500);
+    }
+  };
+
+  const shiftMonth = (delta: number) => {
+    let nextMonth = month + delta;
+    let nextYear = year;
+    if (nextMonth < 1) { nextMonth = 12; nextYear -= 1; }
+    if (nextMonth > 12) { nextMonth = 1; nextYear += 1; }
+    setYear(nextYear);
+    setMonth(nextMonth);
+  };
+
+  const monthTaskOptions = tasks.filter(task => task.name.trim());
+
+  if (loading) {
+    return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
+  }
+
+  return (
+    <div className="min-h-full bg-[#fffafc] text-slate-800">
+      <div className="max-w-[1220px] mx-auto px-3 md:px-5 py-4">
+        <div className="bg-white border border-slate-300 shadow-sm">
+          <div className="bg-[#d49ab5] h-[70px] md:h-[86px] flex items-center justify-center">
+            <div className="text-[38px] md:text-[46px] font-black tracking-wide text-black uppercase">{new Date(year, month - 1, 1).toLocaleDateString('ru-RU', { month: 'long' }).toUpperCase()}</div>
+          </div>
+
+          <div className="p-4 md:p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
+              <div className="min-w-0">
+                <div className="grid grid-cols-[180px_1fr_150px] gap-y-3 items-end text-[15px]">
+                  <div className="font-medium">Отраженный период</div>
+                  <div className="flex items-center gap-2 border-b border-slate-400 pb-1">
+                    <input type="date" value={periodStart} onChange={e => { setPeriodStart(e.target.value); setDirty(true); }} className="w-full border-0 bg-transparent text-center font-bold outline-none" />
+                    <span>—</span>
+                    <input type="date" value={periodEnd} onChange={e => { setPeriodEnd(e.target.value); setDirty(true); }} className="w-full border-0 bg-transparent text-center font-bold outline-none" />
+                  </div>
+                  <div className="bg-[#d49ab5] px-4 py-2 text-center text-xl font-bold">
+                    <div>ВСЕГО</div>
+                    <div className="text-[38px] leading-none text-[#173f4c]">{totalTasks}</div>
+                  </div>
+
+                  <div className="font-medium">Задача месяца:</div>
+                  <div className="border-b border-slate-400 pb-1">
+                    <select value={monthlyTaskId} onChange={e => { setMonthlyTaskId(e.target.value); setDirty(true); }} className="w-full border-0 bg-transparent text-center font-semibold outline-none">
+                      <option value="">Выберите задачу</option>
+                      {monthTaskOptions.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
+                    </select>
+                  </div>
+                  <div />
+
+                  <div className="font-medium">Потрачено часов:</div>
+                  <div className="border-b border-slate-400 pb-1 text-center text-lg font-semibold">{totalHours}</div>
+                  <div />
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => shiftMonth(-1)} className="px-3 py-1 border border-slate-300 bg-white">‹</button>
+                    <div className="min-w-[170px] text-center font-bold capitalize">{monthLabel}</div>
+                    <button type="button" onClick={() => shiftMonth(1)} className="px-3 py-1 border border-slate-300 bg-white">›</button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {dirty && <span className="text-xs text-[#b44d76]">Есть несохранённые изменения</span>}
+                    <button type="button" onClick={addRow} className="px-4 py-2 bg-[#d96f9b] text-white font-semibold border border-[#c05f89]">＋ Добавить строку</button>
+                    <button type="button" onClick={save} disabled={saving} className="px-4 py-2 bg-[#173f4c] text-white font-semibold disabled:opacity-60">
+                      {saving ? 'Сохраняем…' : 'Сохранить'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3 overflow-auto border border-slate-400 bg-white">
+                  <table className="w-full border-collapse text-sm">
+                    <thead>
+                      <tr className="bg-[#e27bab] text-black">
+                        <th className="border border-slate-500 px-2 py-2 text-center w-[20%]">Задача</th>
+                        <th className="border border-slate-500 px-2 py-2 text-center w-[29%]">Описание</th>
+                        <th className="border border-slate-500 px-2 py-2 text-center w-[12%]">Количество часов</th>
+                        <th className="border border-slate-500 px-2 py-2 text-center w-[16%]">Входит в</th>
+                        <th className="border border-slate-500 px-2 py-2 text-center w-[15%]">Статус</th>
+                        <th className="border border-slate-500 px-2 py-2 w-[8%]"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tasks.map((task, index) => (
+                        <tr key={task.id} className={index % 2 ? 'bg-[#f7f7f7]' : 'bg-white'}>
+                          <td className="border border-slate-300 p-0">
+                            <input value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none focus:bg-[#fff2f7]" placeholder="Новая задача" />
+                          </td>
+                          <td className="border border-slate-300 p-0">
+                            <textarea value={task.description} onChange={e => updateTask(task.id, { description: e.target.value })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none resize-y focus:bg-[#fff2f7]" placeholder="Описание" />
+                          </td>
+                          <td className="border border-slate-300 p-0">
+                            <input type="number" min="0" step="0.5" value={task.hours || ''} onChange={e => updateTask(task.id, { hours: Number(e.target.value) || 0 })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none focus:bg-[#fff2f7]" placeholder="0" />
+                          </td>
+                          <td className="border border-slate-300 p-0">
+                            <select value={task.category} onChange={e => updateTask(task.id, { category: e.target.value })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none focus:bg-[#fff2f7]">
+                              <option value="">Категория</option>
+                              {PERSONAL_CATEGORIES.map(option => <option key={option} value={option}>{option}</option>)}
+                            </select>
+                          </td>
+                          <td className="border border-slate-300 p-0">
+                            <select value={task.status} onChange={e => updateTask(task.id, { status: e.target.value })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none focus:bg-[#fff2f7]">
+                              {PERSONAL_STATUSES.map(option => <option key={option} value={option}>{option}</option>)}
+                            </select>
+                          </td>
+                          <td className="border border-slate-300 text-center">
+                            <button type="button" onClick={() => deleteRow(task.id)} className="text-slate-400 hover:text-red-600 px-2" title="Удалить строку">✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {tasks.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="border border-slate-300 py-8 text-center text-slate-400">Добавьте первую строку задачи</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                <PinkStatusChart tasks={normalizedTasks} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {message && (
+        <div className="fixed right-5 bottom-5 bg-[#173f4c] text-white px-4 py-3 shadow-xl">
+          {message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function TimesheetPage() {
+  const [user, setUser] = useState<UserDto | null>(null);
+  useEffect(() => {
+    const stored = localStorage.getItem('proles_user');
+    if (stored) {
+      try { setUser(JSON.parse(stored)); } catch { /* ignore */ }
+    }
+  }, []);
+  return user?.login === PERSONAL_TIMESHEET_LOGIN ? <PersonalTimesheetPage /> : <StandardTimesheetPage />;
 }

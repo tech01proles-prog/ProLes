@@ -48,7 +48,7 @@ export function Layout() {
   // 🎯 Базовый набор — виден ВСЕМ (контент адаптируется под права внутри экранов)
   const MAIN_ITEMS = [
     { to: '/', icon: '🏠', label: 'Главная', visible: true },
-    { to: '/timesheet', icon: '⏱', label: 'Табель', visible: !permLoading && can('timesheet', 'view') },
+    { to: '/timesheet', icon: '⏱', label: 'Табель', visible: (!permLoading && can('timesheet', 'view')) || user?.login === 'a.ermashkevich' },
     { to: '/trips', icon: '✈️', label: 'Командировки', visible: true },
     { to: '/expenses', icon: '💸', label: 'Расходы/Доходы', visible: true },
     { to: '/tickets', icon: '🎫', label: 'Билеты', visible: !permLoading && can('tickets', 'view') },
@@ -209,7 +209,7 @@ export function Layout() {
             <span className="text-xl leading-none">🏠</span>
             <span>Главная</span>
           </NavLink>
-          {!permLoading && can('timesheet', 'view') && <NavLink to="/timesheet" className={({ isActive }) => `flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
+          {((!permLoading && can('timesheet', 'view')) || user?.login === 'a.ermashkevich') && <NavLink to="/timesheet" className={({ isActive }) => `flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>
             <span className="text-xl leading-none">⏱</span>
             <span>Табель</span>
           </NavLink>}

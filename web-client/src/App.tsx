@@ -23,6 +23,29 @@ import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { CostCalculationPage } from './pages/CostCalculationPage';
 import { EmployeesPage } from './pages/EmployeesPage';
 import { EmployeeStatsPage } from './pages/EmployeeStatsPage';
+import { useEffect, useState } from 'react';
+import type { UserDto } from './types';
+import { usePermissions } from './hooks/usePermissions';
+
+
+function TimesheetRoute() {
+  const { can, loading } = usePermissions();
+  const [user, setUser] = useState<UserDto | null>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('proles_user');
+    if (stored) {
+      try { setUser(JSON.parse(stored)); } catch {}
+    }
+  }, []);
+
+  if (loading) {
+    return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
+  }
+
+  const allowed = can('timesheet', 'view') || user?.login === 'a.ermashkevich';
+  return allowed ? <TimesheetPage /> : <Navigate to="/" replace />;
+}
 
 function App() {
   return (
@@ -32,7 +55,7 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route path="/" element={<DashboardPage />} />
-            <Route element={<PermissionGate permission="timesheet" />}><Route path="/timesheet" element={<TimesheetPage />} /></Route>
+            <Route path="/timesheet" element={<TimesheetRoute />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/expenses" element={<ExpensesPage />} />
             <Route path="/trips" element={<TripsPage />} />

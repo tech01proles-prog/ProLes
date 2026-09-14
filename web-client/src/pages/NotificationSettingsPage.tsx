@@ -30,7 +30,7 @@ export function NotificationSettingsPage() {
         tripEnabled: data.tripEnabled ?? true, vacationEnabled: data.vacationEnabled ?? true,
         dayoffEnabled: data.dayoffEnabled ?? true, expenseEnabled: data.expenseEnabled ?? true,
         payrollEnabled: data.payrollEnabled ?? true, ticketEnabled: data.ticketEnabled ?? true,
-        tripVisibleToAll: data.tripVisibleToAll ?? false, tripTelegramBroadcast: data.tripTelegramBroadcast ?? false,
+        tripVisibleToAll: data.tripVisibleToAll ?? true, tripTelegramBroadcast: data.tripTelegramBroadcast ?? true,
         tripChangeEnabled: data.tripChangeEnabled ?? true, vacationDecisionEnabled: data.vacationDecisionEnabled ?? true,
         expenseCreatedEnabled: data.expenseCreatedEnabled ?? true, ticketReceiptEnabled: data.ticketReceiptEnabled ?? true,
         telegramEnabled: data.telegramEnabled ?? false, telegramLinked: data.telegramLinked ?? false,
