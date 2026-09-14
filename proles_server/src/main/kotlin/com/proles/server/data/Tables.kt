@@ -65,6 +65,25 @@ object ProjectsTable : UUIDTable("projects") {
     val completionDate = date("completion_date").nullable()
 }
 
+object PersonalTimesheetTasksTable : UUIDTable("personal_timesheet_tasks") {
+    val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
+    val year = integer("year").index()
+    val month = integer("month").index()
+    val periodStart = date("period_start")
+    val periodEnd = date("period_end")
+    val name = varchar("name", 255).default("")
+    val description = text("description").default("")
+    val hours = double("hours").default(0.0)
+    val category = varchar("category", 100).default("")
+    val status = varchar("status", 50).default("Not started")
+    val isMonthTask = bool("is_month_task").default(false)
+    val sortOrder = integer("sort_order").default(0)
+
+    init {
+        index("personal_timesheet_period_idx", false, userId, year, month)
+    }
+}
+
 object TimeEntriesTable : UUIDTable("time_entries") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.CASCADE)
@@ -196,12 +215,13 @@ object NotificationPreferencesTable : UUIDTable("notification_preferences") {
     val expenseEnabled = bool("expense_enabled").default(true)
     val payrollEnabled = bool("payroll_enabled").default(true)
     val ticketEnabled = bool("ticket_enabled").default(true)
-    val tripVisibleToAll = bool("trip_visible_to_all").default(false)
-    val tripTelegramBroadcast = bool("trip_telegram_broadcast").default(false)
+    val tripVisibleToAll = bool("trip_visible_to_all").default(true)
+    val tripTelegramBroadcast = bool("trip_telegram_broadcast").default(true)
     val tripChangeEnabled = bool("trip_change_enabled").default(true)
     val vacationDecisionEnabled = bool("vacation_decision_enabled").default(true)
     val expenseCreatedEnabled = bool("expense_created_enabled").default(true)
     val ticketReceiptEnabled = bool("ticket_receipt_enabled").default(true)
+    val privacyDefaultsConfigured = bool("privacy_defaults_configured").default(false)
     val telegramEnabled = bool("telegram_enabled").default(false)
     val telegramLinkCode = varchar("telegram_link_code", 20).uniqueIndex().nullable()
     val telegramLinkedAt = long("telegram_linked_at").nullable()

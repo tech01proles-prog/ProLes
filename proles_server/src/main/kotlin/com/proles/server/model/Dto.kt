@@ -140,6 +140,55 @@ data class VacationDto(
 )
 
 @Serializable
+data class PersonalTimesheetTaskDto(
+    val id: String,
+    val userId: String,
+    val year: Int,
+    val month: Int,
+    val periodStart: String,
+    val periodEnd: String,
+    val name: String = "",
+    val description: String = "",
+    val hours: Double = 0.0,
+    val category: String = "",
+    val status: String = "Not started",
+    val isMonthTask: Boolean = false,
+    val sortOrder: Int = 0
+)
+
+@Serializable
+data class PersonalTimesheetResponseDto(
+    val userId: String,
+    val year: Int,
+    val month: Int,
+    val periodStart: String,
+    val periodEnd: String,
+    val monthlyTaskId: String? = null,
+    val tasks: List<PersonalTimesheetTaskDto> = emptyList()
+)
+
+@Serializable
+data class PersonalTimesheetSaveTaskDto(
+    val id: String,
+    val name: String = "",
+    val description: String = "",
+    val hours: Double = 0.0,
+    val category: String = "",
+    val status: String = "Not started",
+    val sortOrder: Int = 0
+)
+
+@Serializable
+data class PersonalTimesheetSaveRequest(
+    val year: Int,
+    val month: Int,
+    val periodStart: String,
+    val periodEnd: String,
+    val monthlyTaskId: String? = null,
+    val tasks: List<PersonalTimesheetSaveTaskDto> = emptyList()
+)
+
+@Serializable
 data class TimeEntry(
     val id: String,
     val userId: String,

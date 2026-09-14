@@ -2203,6 +2203,144 @@ fun Route.dataRoutes() {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // 🎀 ПЕРСОНАЛЬНЫЙ РОЗОВЫЙ ТАБЕЛЬ для a.ermashkevich
+    // ─────────────────────────────────────────────────────────────
+    route("/api/v1/personal-timesheet") {
+        fun targetUserId(session: SessionManager.Session): UUID? {
+            return transaction {
+                UsersTable.selectAll()
+                    .where { (UsersTable.id eq session.userId) and (UsersTable.login eq "a.ermashkevich") }
+                    .limit(1)
+                    .firstOrNull()
+                    ?.get(UsersTable.id)?.value
+            }
+        }
+
+        get {
+            val session = call.checkSession() ?: return@get
+            val targetUserId = targetUserId(session)
+                ?: return@get call.respond(HttpStatusCode.Forbidden, "Personal timesheet is unavailable for this user")
+
+            val year = call.request.queryParameters["year"]?.toIntOrNull()
+            val month = call.request.queryParameters["month"]?.toIntOrNull()
+            if (year == null || month == null || month !in 1..12) {
+                return@get call.respond(HttpStatusCode.BadRequest, "year and month are required")
+            }
+
+            val defaultStart = JavaLocalDate.of(year, month, 1)
+            val defaultEnd = defaultStart.withDayOfMonth(defaultStart.lengthOfMonth())
+
+            val response = transaction {
+                val rows = PersonalTimesheetTasksTable.selectAll()
+                    .where {
+                        (PersonalTimesheetTasksTable.userId eq targetUserId) and
+                                (PersonalTimesheetTasksTable.year eq year) and
+                                (PersonalTimesheetTasksTable.month eq month)
+                    }
+                    .orderBy(PersonalTimesheetTasksTable.sortOrder to SortOrder.ASC)
+                    .orderBy(PersonalTimesheetTasksTable.id to SortOrder.ASC)
+                    .toList()
+
+                val periodStart = rows.firstOrNull()?.get(PersonalTimesheetTasksTable.periodStart)?.toString() ?: defaultStart.toString()
+                val periodEnd = rows.firstOrNull()?.get(PersonalTimesheetTasksTable.periodEnd)?.toString() ?: defaultEnd.toString()
+                val monthlyTaskId = rows.firstOrNull { it[PersonalTimesheetTasksTable.isMonthTask] }?.get(PersonalTimesheetTasksTable.id)?.value?.toString()
+
+                PersonalTimesheetResponseDto(
+                    userId = targetUserId.toString(),
+                    year = year,
+                    month = month,
+                    periodStart = periodStart,
+                    periodEnd = periodEnd,
+                    monthlyTaskId = monthlyTaskId,
+                    tasks = rows.map { row ->
+                        PersonalTimesheetTaskDto(
+                            id = row[PersonalTimesheetTasksTable.id].value.toString(),
+                            userId = targetUserId.toString(),
+                            year = year,
+                            month = month,
+                            periodStart = row[PersonalTimesheetTasksTable.periodStart].toString(),
+                            periodEnd = row[PersonalTimesheetTasksTable.periodEnd].toString(),
+                            name = row[PersonalTimesheetTasksTable.name],
+                            description = row[PersonalTimesheetTasksTable.description],
+                            hours = row[PersonalTimesheetTasksTable.hours],
+                            category = row[PersonalTimesheetTasksTable.category],
+                            status = row[PersonalTimesheetTasksTable.status],
+                            isMonthTask = row[PersonalTimesheetTasksTable.isMonthTask],
+                            sortOrder = row[PersonalTimesheetTasksTable.sortOrder]
+                        )
+                    }
+                )
+            }
+            call.respond(HttpStatusCode.OK, response)
+        }
+
+        put {
+            val session = call.checkSession() ?: return@put
+            val targetUserId = targetUserId(session)
+                ?: return@put call.respond(HttpStatusCode.Forbidden, "Personal timesheet is unavailable for this user")
+
+            val request = try {
+                call.receive<PersonalTimesheetSaveRequest>()
+            } catch (e: Exception) {
+                return@put call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}")
+            }
+
+            if (request.month !in 1..12) {
+                return@put call.respond(HttpStatusCode.BadRequest, "Invalid month")
+            }
+
+            val periodStart = try { KtLocalDate.parse(request.periodStart) }
+            catch (_: Exception) { return@put call.respond(HttpStatusCode.BadRequest, "Invalid periodStart") }
+            val periodEnd = try { KtLocalDate.parse(request.periodEnd) }
+            catch (_: Exception) { return@put call.respond(HttpStatusCode.BadRequest, "Invalid periodEnd") }
+
+            if (periodStart > periodEnd) {
+                return@put call.respond(HttpStatusCode.BadRequest, "periodStart must be before periodEnd")
+            }
+
+            transaction {
+                PersonalTimesheetTasksTable.deleteWhere {
+                    (PersonalTimesheetTasksTable.userId eq targetUserId) and
+                            (PersonalTimesheetTasksTable.year eq request.year) and
+                            (PersonalTimesheetTasksTable.month eq request.month)
+                }
+
+                val normalizedMonthlyTaskId = request.monthlyTaskId?.takeIf { id ->
+                    request.tasks.any { it.id == id }
+                }
+
+                request.tasks.forEachIndexed { index, task ->
+                    val taskId = runCatching { UUID.fromString(task.id) }.getOrNull() ?: UUID.randomUUID()
+                    PersonalTimesheetTasksTable.insert {
+                        it[PersonalTimesheetTasksTable.id] = taskId
+                        it[PersonalTimesheetTasksTable.userId] = targetUserId
+                        it[PersonalTimesheetTasksTable.year] = request.year
+                        it[PersonalTimesheetTasksTable.month] = request.month
+                        it[PersonalTimesheetTasksTable.periodStart] = periodStart
+                        it[PersonalTimesheetTasksTable.periodEnd] = periodEnd
+                        it[PersonalTimesheetTasksTable.name] = task.name.trim()
+                        it[PersonalTimesheetTasksTable.description] = task.description.trim()
+                        it[PersonalTimesheetTasksTable.hours] = task.hours.coerceAtLeast(0.0)
+                        it[PersonalTimesheetTasksTable.category] = task.category.trim()
+                        it[PersonalTimesheetTasksTable.status] = task.status.trim().ifBlank { "Not started" }
+                        it[PersonalTimesheetTasksTable.isMonthTask] = normalizedMonthlyTaskId == task.id
+                        it[PersonalTimesheetTasksTable.sortOrder] = index
+                    }
+                }
+            }
+
+            call.respond(
+                HttpStatusCode.OK,
+                mapOf(
+                    "success" to true,
+                    "year" to request.year,
+                    "month" to request.month
+                )
+            )
+        }
+    }
+
     route("/api/v1/notification-preferences") {
         get {
             val session = call.checkSession() ?: return@get
@@ -2214,8 +2352,8 @@ fun Route.dataRoutes() {
                 expenseEnabled = row?.get(NotificationPreferencesTable.expenseEnabled) ?: true,
                 payrollEnabled = row?.get(NotificationPreferencesTable.payrollEnabled) ?: true,
                 ticketEnabled = row?.get(NotificationPreferencesTable.ticketEnabled) ?: true,
-                tripVisibleToAll = row?.get(NotificationPreferencesTable.tripVisibleToAll) ?: false,
-                tripTelegramBroadcast = row?.get(NotificationPreferencesTable.tripTelegramBroadcast) ?: false,
+                tripVisibleToAll = if (row?.get(NotificationPreferencesTable.privacyDefaultsConfigured) == true) row[NotificationPreferencesTable.tripVisibleToAll] else true,
+                tripTelegramBroadcast = if (row?.get(NotificationPreferencesTable.privacyDefaultsConfigured) == true) row[NotificationPreferencesTable.tripTelegramBroadcast] else true,
                 tripChangeEnabled = row?.get(NotificationPreferencesTable.tripChangeEnabled) ?: true,
                 vacationDecisionEnabled = row?.get(NotificationPreferencesTable.vacationDecisionEnabled) ?: true,
                 expenseCreatedEnabled = row?.get(NotificationPreferencesTable.expenseCreatedEnabled) ?: true,
@@ -2246,12 +2384,13 @@ fun Route.dataRoutes() {
                         it[expenseEnabled] = body["expenseEnabled"]?.toBoolean() ?: true
                         it[payrollEnabled] = body["payrollEnabled"]?.toBoolean() ?: true
                         it[ticketEnabled] = body["ticketEnabled"]?.toBoolean() ?: true
-                        it[tripVisibleToAll] = body["tripVisibleToAll"]?.toBoolean() ?: false
-                        it[tripTelegramBroadcast] = body["tripTelegramBroadcast"]?.toBoolean() ?: false
+                        it[tripVisibleToAll] = body["tripVisibleToAll"]?.toBoolean() ?: true
+                        it[tripTelegramBroadcast] = body["tripTelegramBroadcast"]?.toBoolean() ?: true
                         it[tripChangeEnabled] = body["tripChangeEnabled"]?.toBoolean() ?: true
                         it[vacationDecisionEnabled] = body["vacationDecisionEnabled"]?.toBoolean() ?: true
                         it[expenseCreatedEnabled] = body["expenseCreatedEnabled"]?.toBoolean() ?: true
                         it[ticketReceiptEnabled] = body["ticketReceiptEnabled"]?.toBoolean() ?: true
+                        it[privacyDefaultsConfigured] = true
                         it[NotificationPreferencesTable.telegramEnabled] = telegramEnabled
                         it[telegramLinkCode] = generatedCode
                         it[emailEnabled] = body["emailEnabled"]?.toBoolean() ?: false
@@ -2271,6 +2410,7 @@ fun Route.dataRoutes() {
                         it[vacationDecisionEnabled] = body["vacationDecisionEnabled"]?.toBoolean() ?: existing[vacationDecisionEnabled]
                         it[expenseCreatedEnabled] = body["expenseCreatedEnabled"]?.toBoolean() ?: existing[expenseCreatedEnabled]
                         it[ticketReceiptEnabled] = body["ticketReceiptEnabled"]?.toBoolean() ?: existing[ticketReceiptEnabled]
+                        it[privacyDefaultsConfigured] = true
                         it[NotificationPreferencesTable.telegramEnabled] = telegramEnabled
                         if (generatedCode != null) it[telegramLinkCode] = generatedCode
                         it[emailEnabled] = body["emailEnabled"]?.toBoolean() ?: existing[emailEnabled]
