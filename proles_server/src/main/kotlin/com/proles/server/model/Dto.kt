@@ -179,6 +179,19 @@ data class PersonalTimesheetSaveTaskDto(
 )
 
 @Serializable
+data class PersonalTimesheetSaveResponseDto(
+    val success: Boolean,
+    val year: Int,
+    val month: Int
+)
+
+@Serializable
+data class PersonalTimesheetCategoryDto(
+    val id: String,
+    val name: String
+)
+
+@Serializable
 data class PersonalTimesheetSaveRequest(
     val year: Int,
     val month: Int,

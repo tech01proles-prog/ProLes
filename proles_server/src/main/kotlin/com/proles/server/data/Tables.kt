@@ -65,6 +65,15 @@ object ProjectsTable : UUIDTable("projects") {
     val completionDate = date("completion_date").nullable()
 }
 
+object PersonalTimesheetCategoriesTable : UUIDTable("personal_timesheet_categories") {
+    val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
+    val name = varchar("name", 100)
+
+    init {
+        uniqueIndex("personal_timesheet_category_user_name_uidx", userId, name)
+    }
+}
+
 object PersonalTimesheetTasksTable : UUIDTable("personal_timesheet_tasks") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val year = integer("year").index()

@@ -56,7 +56,7 @@ fun Application.module() {
 
     transaction {
         SchemaUtils.createMissingTablesAndColumns(
-            UsersTable, PositionsTable, ProjectsTable, PersonalTimesheetTasksTable, TimeEntriesTable, ExpensesTable,
+            UsersTable, PositionsTable, ProjectsTable, PersonalTimesheetTasksTable, PersonalTimesheetCategoriesTable, TimeEntriesTable, ExpensesTable,
             IncomesTable,  // 🆕
             VacationsTable, DayOffsTable, BusinessTripsTable,
             NotificationsTable, ExpenseReceiptsTable, FcmTokensTable,

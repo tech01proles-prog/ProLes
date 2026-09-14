@@ -2332,12 +2332,68 @@ fun Route.dataRoutes() {
 
             call.respond(
                 HttpStatusCode.OK,
-                mapOf(
-                    "success" to true,
-                    "year" to request.year,
-                    "month" to request.month
+                PersonalTimesheetSaveResponseDto(
+                    success = true,
+                    year = request.year,
+                    month = request.month
                 )
             )
+        }
+
+        get("/categories") {
+            val session = call.checkSession() ?: return@get
+            val targetUserId = targetUserId(session)
+                ?: return@get call.respond(HttpStatusCode.Forbidden, "Personal timesheet is unavailable for this user")
+            val categories = transaction {
+                PersonalTimesheetCategoriesTable
+                    .selectAll()
+                    .where { PersonalTimesheetCategoriesTable.userId eq targetUserId }
+                    .orderBy(PersonalTimesheetCategoriesTable.name to SortOrder.ASC)
+                    .map { PersonalTimesheetCategoryDto(it[PersonalTimesheetCategoriesTable.id].value.toString(), it[PersonalTimesheetCategoriesTable.name]) }
+            }
+            call.respond(HttpStatusCode.OK, categories)
+        }
+
+        post("/categories") {
+            val session = call.checkSession() ?: return@post
+            val targetUserId = targetUserId(session)
+                ?: return@post call.respond(HttpStatusCode.Forbidden, "Personal timesheet is unavailable for this user")
+            val body = try { call.receive<Map<String, String>>() } catch (_: Exception) {
+                return@post call.respond(HttpStatusCode.BadRequest, "Invalid JSON")
+            }
+            val name = body["name"]?.trim().orEmpty()
+            if (name.isBlank() || name.length > 100) return@post call.respond(HttpStatusCode.BadRequest, "Invalid category name")
+            val category = transaction {
+                val existing = PersonalTimesheetCategoriesTable.selectAll().where {
+                    (PersonalTimesheetCategoriesTable.userId eq targetUserId) and
+                            (PersonalTimesheetCategoriesTable.name eq name)
+                }.firstOrNull()
+                existing ?: run {
+                    val id = UUID.randomUUID()
+                    PersonalTimesheetCategoriesTable.insert {
+                        it[PersonalTimesheetCategoriesTable.id] = id
+                        it[PersonalTimesheetCategoriesTable.userId] = targetUserId
+                        it[PersonalTimesheetCategoriesTable.name] = name
+                    }
+                    PersonalTimesheetCategoriesTable.selectAll().where { PersonalTimesheetCategoriesTable.id eq id }.single()
+                }
+            }
+            call.respond(HttpStatusCode.OK, PersonalTimesheetCategoryDto(category[PersonalTimesheetCategoriesTable.id].value.toString(), category[PersonalTimesheetCategoriesTable.name]))
+        }
+
+        delete("/categories/{id}") {
+            val session = call.checkSession() ?: return@delete
+            val targetUserId = targetUserId(session)
+                ?: return@delete call.respond(HttpStatusCode.Forbidden, "Personal timesheet is unavailable for this user")
+            val id = runCatching { UUID.fromString(call.parameters["id"]) }.getOrNull()
+                ?: return@delete call.respond(HttpStatusCode.BadRequest, "Invalid category id")
+            transaction {
+                PersonalTimesheetCategoriesTable.deleteWhere {
+                    (PersonalTimesheetCategoriesTable.id eq id) and
+                            (PersonalTimesheetCategoriesTable.userId eq targetUserId)
+                }
+            }
+            call.respond(HttpStatusCode.OK)
         }
     }
 
