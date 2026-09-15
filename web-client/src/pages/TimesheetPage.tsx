@@ -431,7 +431,13 @@ type PersonalTask = {
 };
 
 const DEFAULT_PERSONAL_CATEGORIES = ['Командировки', 'Китай', 'HR', 'Проекты', 'Документы', 'Отчёты', 'Другое'];
-const PERSONAL_STATUSES = ['Completed', 'In progress', 'Not started', 'Blocked'];
+const PERSONAL_STATUS_OPTIONS = [
+  { value: 'Completed', label: 'Выполнено' },
+  { value: 'In progress', label: 'В работе' },
+  { value: 'Not started', label: 'Не начато' },
+  { value: 'Blocked', label: 'Заблокировано' },
+];
+const PERSONAL_STATUS_LABELS: Record<string, string> = Object.fromEntries(PERSONAL_STATUS_OPTIONS.map(option => [option.value, option.label]));
 
 function toIsoDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -444,36 +450,50 @@ function getMonthBounds(year: number, month: number) {
 }
 
 function PinkStatusChart({ tasks }: { tasks: PersonalTask[] }) {
-  const counted = PERSONAL_STATUSES.map(status => ({
-    status,
-    count: tasks.filter(t => t.name.trim() && t.status === status).length,
+  const counted = PERSONAL_STATUS_OPTIONS.map(({ value, label }) => ({
+    status: value,
+    label,
+    count: tasks.filter(t => t.name.trim() && t.status === value).length,
   }));
   const max = Math.max(1, ...counted.map(item => item.count));
   const step = Math.max(1, Math.ceil(max / 4));
   const ticks = [step * 4, step * 3, step * 2, step, 0];
 
   return (
-    <div className="rounded-none border border-[#b9b9b9] bg-white px-3 py-2 min-h-[220px]">
-      <div className="text-[18px] font-medium tracking-tight text-slate-600 uppercase">СТАТУС</div>
-      <div className="mt-2 grid grid-cols-[28px_1fr] gap-2">
-        <div className="h-[155px] flex flex-col justify-between text-[10px] text-slate-500 text-right">
+    <div className="h-full rounded-3xl border border-[#f0cedd] bg-gradient-to-br from-white via-[#fffafd] to-[#fff1f7] p-4 md:p-5 shadow-[0_10px_30px_rgba(198,92,138,0.10)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[12px] font-extrabold uppercase tracking-[0.24em] text-[#a54873]">Статус задач</div>
+          <div className="mt-1 text-sm font-medium text-slate-500">Распределение задач по текущему месяцу</div>
+        </div>
+        <div className="rounded-2xl bg-[#f7d8e6] px-3 py-2 text-right">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-[#a54873]">Всего</div>
+          <div className="text-xl font-black text-[#6d2949]">{tasks.filter(t => t.name.trim()).length}</div>
+        </div>
+      </div>
+      <div className="mt-5 grid grid-cols-[26px_1fr] gap-3">
+        <div className="h-[190px] flex flex-col justify-between text-[10px] font-semibold text-slate-400 text-right">
           {ticks.map(tick => <span key={tick}>{tick}</span>)}
         </div>
-        <div className="relative h-[155px] border-b border-slate-300">
+        <div className="relative h-[190px] rounded-2xl bg-white/80 px-3 pt-2 pb-7 border border-[#f3dbe5]">
           {[0, 25, 50, 75, 100].map(percent => (
-            <div key={percent} className="absolute left-0 right-0 border-t border-slate-200" style={{ top: `${percent}%` }} />
+            <div key={percent} className="absolute left-3 right-3 border-t border-dashed border-[#efd9e4]" style={{ top: `${percent}%` }} />
           ))}
-          <div className="absolute inset-0 flex items-end gap-3 px-2">
-            {counted.map(item => (
-              <div key={item.status} className="flex-1 h-full flex flex-col items-center justify-end">
-                <div
-                  className="w-9 bg-[#e07aa9]"
-                  style={{ height: `${Math.max(item.count ? 3 : 1, (item.count / (step * 4)) * 145)}px` }}
-                  title={`${item.status}: ${item.count}`}
-                />
-                <div className="mt-1 text-[9px] text-slate-500 text-center leading-tight">{item.status}</div>
-              </div>
-            ))}
+          <div className="absolute inset-x-3 top-2 bottom-7 flex items-end gap-3">
+            {counted.map(item => {
+              const height = Math.max(item.count ? 8 : 3, (item.count / (step * 4)) * 165);
+              return (
+                <div key={item.status} className="flex-1 h-full flex flex-col items-center justify-end min-w-0">
+                  <div className="mb-1 rounded-full bg-[#d96f9b] px-2 py-0.5 text-[10px] font-black text-white shadow-sm">{item.count}</div>
+                  <div
+                    className="w-full max-w-[54px] rounded-t-2xl bg-gradient-to-t from-[#cf5f8f] to-[#ea8fb2] shadow-[0_8px_18px_rgba(207,95,143,0.20)] transition-all"
+                    style={{ height: `${height}px` }}
+                    title={`${item.label}: ${item.count}`}
+                  />
+                  <div className="mt-2 text-[10px] font-semibold text-slate-500 text-center leading-tight">{item.label}</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -625,127 +645,154 @@ function PersonalTimesheetPage() {
   }
 
   return (
-    <div className="min-h-full bg-[#fffafc] text-slate-800">
-      <div className="max-w-[1220px] mx-auto px-3 md:px-5 py-4">
-        <div className="bg-white border border-slate-300 shadow-sm">
-          <div className="bg-[#d49ab5] h-[70px] md:h-[86px] flex items-center justify-center">
-            <div className="text-[38px] md:text-[46px] font-black tracking-wide text-black uppercase">{new Date(year, month - 1, 1).toLocaleDateString('ru-RU', { month: 'long' }).toUpperCase()}</div>
+    <div className="min-h-full bg-[radial-gradient(circle_at_top_left,#fff1f7_0%,#fff8fb_34%,#f8f7fb_100%)] text-slate-800 font-sans">
+      <div className="mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6">
+        <div className="overflow-hidden rounded-[30px] border border-[#f0d7e2] bg-white shadow-[0_18px_60px_rgba(110,55,78,0.10)]">
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#cc91ac] via-[#dd9fbb] to-[#efb5c9] px-5 py-6 md:px-8 md:py-8">
+            <div className="absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/15 blur-2xl" />
+            <div className="absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
+            <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-[#6f2948]">Персональный табель</div>
+                <h1 className="mt-1 text-4xl font-black tracking-tight text-[#1a1020] md:text-5xl">{new Date(year, month - 1, 1).toLocaleDateString('ru-RU', { month: 'long' }).toUpperCase()}</h1>
+                <p className="mt-2 text-sm font-medium text-[#5f3045]">Задачи, часы и статус выполнения за выбранный период</p>
+              </div>
+              <div className="flex items-center gap-2 self-start rounded-2xl bg-white/65 p-1.5 shadow-sm backdrop-blur md:self-auto">
+                <button type="button" onClick={() => shiftMonth(-1)} className="grid h-10 w-10 place-items-center rounded-xl text-xl font-bold text-[#6d2949] transition hover:bg-white hover:shadow-sm" aria-label="Предыдущий месяц">‹</button>
+                <div className="min-w-[150px] px-2 text-center text-sm font-extrabold capitalize text-[#53233a]">{monthLabel}</div>
+                <button type="button" onClick={() => shiftMonth(1)} className="grid h-10 w-10 place-items-center rounded-xl text-xl font-bold text-[#6d2949] transition hover:bg-white hover:shadow-sm" aria-label="Следующий месяц">›</button>
+              </div>
+            </div>
           </div>
 
-          <div className="p-4 md:p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
-              <div className="min-w-0">
-                <div className="grid grid-cols-[180px_1fr_150px] gap-y-3 items-end text-[15px]">
-                  <div className="font-medium">Отраженный период</div>
-                  <div className="flex items-center gap-2 border-b border-slate-400 pb-1">
-                    <input type="date" value={periodStart} onChange={e => { setPeriodStart(e.target.value); setDirty(true); }} className="w-full border-0 bg-transparent text-center font-bold outline-none" />
-                    <span>—</span>
-                    <input type="date" value={periodEnd} onChange={e => { setPeriodEnd(e.target.value); setDirty(true); }} className="w-full border-0 bg-transparent text-center font-bold outline-none" />
-                  </div>
-                  <div className="bg-[#d49ab5] px-4 py-2 text-center text-xl font-bold">
-                    <div>ВСЕГО</div>
-                    <div className="text-[38px] leading-none text-[#173f4c]">{totalTasks}</div>
-                  </div>
-
-                  <div className="font-medium">Задача месяца:</div>
-                  <div className="border-b border-slate-400 pb-1">
-                    <select value={monthlyTaskId} onChange={e => { setMonthlyTaskId(e.target.value); setDirty(true); }} className="w-full border-0 bg-transparent text-center font-semibold outline-none">
-                      <option value="">Выберите задачу</option>
-                      {monthTaskOptions.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
-                    </select>
-                  </div>
-                  <div />
-
-                  <div className="font-medium">Потрачено часов:</div>
-                  <div className="border-b border-slate-400 pb-1 text-center text-lg font-semibold">{totalHours}</div>
-                  <div />
-                </div>
-
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => shiftMonth(-1)} className="px-3 py-1 border border-slate-300 bg-white">‹</button>
-                    <div className="min-w-[170px] text-center font-bold capitalize">{monthLabel}</div>
-                    <button type="button" onClick={() => shiftMonth(1)} className="px-3 py-1 border border-slate-300 bg-white">›</button>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    {dirty && <span className="text-xs text-[#b44d76]">Есть несохранённые изменения</span>}
-                    <div className="flex items-center gap-1 border border-slate-300 bg-white px-1 py-1">
-                      <input
-                        value={newCategory}
-                        onChange={e => setNewCategory(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addCategory(); } }}
-                        className="w-[150px] px-2 py-1 text-xs outline-none"
-                        placeholder="Новая категория"
-                        aria-label="Новая категория"
-                      />
-                      <button type="button" onClick={() => void addCategory()} className="bg-[#d96f9b] px-2 py-1 text-xs font-semibold text-white" title="Добавить категорию">＋</button>
+          <div className="space-y-6 p-4 md:p-7">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_8px_25px_rgba(15,23,42,0.05)] md:p-6">
+                <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_180px]">
+                  <div className="space-y-4">
+                    <div>
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Отраженный период</div>
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input type="date" value={periodStart} onChange={e => { setPeriodStart(e.target.value); setDirty(true); }} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 shadow-inner outline-none transition focus:border-[#dc78a2] focus:bg-white focus:ring-4 focus:ring-[#f8dce7]" />
+                        <span className="hidden font-bold text-slate-300 sm:block">—</span>
+                        <input type="date" value={periodEnd} onChange={e => { setPeriodEnd(e.target.value); setDirty(true); }} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 shadow-inner outline-none transition focus:border-[#dc78a2] focus:bg-white focus:ring-4 focus:ring-[#f8dce7]" />
+                      </div>
                     </div>
-                    <button type="button" onClick={addRow} className="px-4 py-2 bg-[#d96f9b] text-white font-semibold border border-[#c05f89]">＋ Добавить строку</button>
-                    <button type="button" onClick={save} disabled={saving} className="px-4 py-2 bg-[#173f4c] text-white font-semibold disabled:opacity-60">
-                      {saving ? 'Сохраняем…' : 'Сохранить'}
-                    </button>
-                  </div>
-                </div>
 
-                <div className="mt-3 overflow-auto border border-slate-400 bg-white">
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="bg-[#e27bab] text-black">
-                        <th className="border border-slate-500 px-2 py-2 text-center w-[20%]">Задача</th>
-                        <th className="border border-slate-500 px-2 py-2 text-center w-[29%]">Описание</th>
-                        <th className="border border-slate-500 px-2 py-2 text-center w-[12%]">Количество часов</th>
-                        <th className="border border-slate-500 px-2 py-2 text-center w-[16%]">Входит в</th>
-                        <th className="border border-slate-500 px-2 py-2 text-center w-[15%]">Статус</th>
-                        <th className="border border-slate-500 px-2 py-2 w-[8%]"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tasks.map((task, index) => (
-                        <tr key={task.id} className={index % 2 ? 'bg-[#f7f7f7]' : 'bg-white'}>
-                          <td className="border border-slate-300 p-0">
-                            <textarea value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="w-full min-h-[70px] px-2 py-2 border-0 bg-transparent text-center outline-none resize-y leading-tight focus:bg-[#fff2f7]" placeholder="Новая задача" rows={2} />
-                          </td>
-                          <td className="border border-slate-300 p-0">
-                            <textarea value={task.description} onChange={e => updateTask(task.id, { description: e.target.value })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none resize-y focus:bg-[#fff2f7]" placeholder="Описание" />
-                          </td>
-                          <td className="border border-slate-300 p-0">
-                            <input type="number" min="0" step="0.5" value={task.hours || ''} onChange={e => updateTask(task.id, { hours: Number(e.target.value) || 0 })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none focus:bg-[#fff2f7]" placeholder="0" />
-                          </td>
-                          <td className="border border-slate-300 p-0">
-                            <select value={task.category} onChange={e => updateTask(task.id, { category: e.target.value })} className="w-full min-h-[70px] border-0 bg-transparent px-2 py-2 text-center outline-none focus:bg-[#fff2f7]">
-                              <option value="">Категория</option>
-                              {categories.map(option => <option key={option} value={option}>{option}</option>)}
-                            </select>
-                          </td>
-                          <td className="border border-slate-300 p-0">
-                            <select value={task.status} onChange={e => updateTask(task.id, { status: e.target.value })} className="w-full min-h-[44px] px-2 py-2 border-0 bg-transparent text-center outline-none focus:bg-[#fff2f7]">
-                              {PERSONAL_STATUSES.map(option => <option key={option} value={option}>{option}</option>)}
-                            </select>
-                          </td>
-                          <td className="border border-slate-300 text-center">
-                            <button type="button" onClick={() => deleteRow(task.id)} className="text-slate-400 hover:text-red-600 px-2" title="Удалить строку">✕</button>
-                          </td>
-                        </tr>
-                      ))}
-                      {tasks.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="border border-slate-300 py-8 text-center text-slate-400">Добавьте первую строку задачи</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-2xl bg-[#fff3f8] p-4">
+                        <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#b45379]">Задача месяца</div>
+                        <select value={monthlyTaskId} onChange={e => { setMonthlyTaskId(e.target.value); setDirty(true); }} className="mt-2 w-full rounded-xl border border-[#f0c9d9] bg-white px-3 py-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition focus:border-[#d86f99] focus:ring-4 focus:ring-[#f7dbe6]">
+                          <option value="">Выберите задачу</option>
+                          {monthTaskOptions.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Потрачено часов</div>
+                        <div className="mt-2 text-3xl font-black tracking-tight text-slate-800">{totalHours.toLocaleString('ru-RU')}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex min-h-[170px] flex-col justify-between rounded-3xl bg-gradient-to-b from-[#dca0ba] to-[#cb87a8] p-5 text-center shadow-[0_12px_30px_rgba(195,102,145,0.22)]">
+                    <div className="text-sm font-black uppercase tracking-[0.24em] text-[#5e2942]">Всего</div>
+                    <div className="text-6xl font-black leading-none tracking-tight text-[#183e4a]">{totalTasks}</div>
+                    <div className="text-xs font-bold uppercase tracking-widest text-[#6e304a]">задач</div>
+                  </div>
                 </div>
               </div>
 
-              <div className="min-w-0">
-                <PinkStatusChart tasks={normalizedTasks} />
+              <PinkStatusChart tasks={normalizedTasks} />
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-3xl border border-[#f0d7e2] bg-[#fffafd] p-4 md:flex-row md:items-center md:justify-between md:p-5">
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f7d8e6] text-xl">📋</div>
+                <div>
+                  <div className="font-black text-slate-800">Задачи месяца</div>
+                  <div className="text-xs text-slate-500">Добавляйте строки, выбирайте категорию и меняйте статус.</div>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-end">
+                {dirty && <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-700">Есть несохранённые изменения</span>}
+                <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                  <input
+                    value={newCategory}
+                    onChange={e => setNewCategory(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addCategory(); } }}
+                    className="w-[180px] rounded-xl border-0 px-3 py-2 text-sm outline-none placeholder:text-slate-400"
+                    placeholder="Своя категория"
+                    aria-label="Новая категория"
+                  />
+                  <button type="button" onClick={() => void addCategory()} className="grid h-9 w-9 place-items-center rounded-xl bg-[#d96f9b] text-lg font-bold text-white shadow-sm transition hover:bg-[#c85d89]" title="Добавить категорию">＋</button>
+                </div>
+                <button type="button" onClick={addRow} className="rounded-2xl bg-[#d96f9b] px-5 py-3 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(217,111,155,0.22)] transition hover:-translate-y-0.5 hover:bg-[#c95f8a]">＋ Добавить строку</button>
+                <button type="button" onClick={save} disabled={saving} className="rounded-2xl bg-[#173f4c] px-5 py-3 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(23,63,76,0.18)] transition hover:-translate-y-0.5 hover:bg-[#123540] disabled:cursor-not-allowed disabled:opacity-60">
+                  {saving ? 'Сохраняем…' : 'Сохранить табель'}
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-3xl border border-[#e7d3dd] bg-white shadow-[0_10px_30px_rgba(30,20,25,0.05)]">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-[#d96f9b] via-[#e17cac] to-[#d96f9b] text-white">
+                      <th className="border-r border-white/20 px-4 py-4 text-left text-[11px] font-black uppercase tracking-[0.16em] w-[24%]">Задача</th>
+                      <th className="border-r border-white/20 px-4 py-4 text-left text-[11px] font-black uppercase tracking-[0.16em] w-[30%]">Описание</th>
+                      <th className="border-r border-white/20 px-4 py-4 text-center text-[11px] font-black uppercase tracking-[0.16em] w-[12%]">Часы</th>
+                      <th className="border-r border-white/20 px-4 py-4 text-left text-[11px] font-black uppercase tracking-[0.16em] w-[16%]">Категория</th>
+                      <th className="border-r border-white/20 px-4 py-4 text-left text-[11px] font-black uppercase tracking-[0.16em] w-[15%]">Статус</th>
+                      <th className="px-3 py-4 w-[3%]"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tasks.map((task, index) => (
+                      <tr key={task.id} className={`${index % 2 ? 'bg-[#fffafd]' : 'bg-white'} transition hover:bg-[#fff4f8]`}>
+                        <td className="border-b border-slate-200 p-1.5 align-top">
+                          <textarea value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="min-h-[92px] w-full resize-y rounded-2xl border border-transparent bg-transparent px-3 py-3 text-sm font-bold leading-relaxed outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="Название задачи" rows={3} />
+                        </td>
+                        <td className="border-b border-slate-200 p-1.5 align-top">
+                          <textarea value={task.description} onChange={e => updateTask(task.id, { description: e.target.value })} className="min-h-[92px] w-full resize-y rounded-2xl border border-transparent bg-transparent px-3 py-3 text-sm leading-relaxed outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="Что необходимо сделать / результат" />
+                        </td>
+                        <td className="border-b border-slate-200 p-1.5 align-top">
+                          <input type="number" min="0" step="0.5" value={task.hours || ''} onChange={e => updateTask(task.id, { hours: Number(e.target.value) || 0 })} className="h-[58px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-center text-lg font-black outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="0" />
+                        </td>
+                        <td className="border-b border-slate-200 p-1.5 align-top">
+                          <select value={task.category} onChange={e => updateTask(task.id, { category: e.target.value })} className="h-[58px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]">
+                            <option value="">Категория</option>
+                            {categories.map(option => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        </td>
+                        <td className="border-b border-slate-200 p-1.5 align-top">
+                          <select value={task.status} onChange={e => updateTask(task.id, { status: e.target.value })} className="h-[58px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]">
+                            {PERSONAL_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                          </select>
+                          <div className="mt-1 px-2 text-[11px] font-semibold text-[#a54873]">{PERSONAL_STATUS_LABELS[task.status] || task.status}</div>
+                        </td>
+                        <td className="border-b border-slate-200 p-1.5 text-center align-top">
+                          <button type="button" onClick={() => deleteRow(task.id)} className="grid h-9 w-9 place-items-center rounded-xl text-slate-300 transition hover:bg-red-50 hover:text-red-500" title="Удалить строку">✕</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {tasks.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-14 text-center">
+                          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#fff0f6] text-2xl">＋</div>
+                          <div className="mt-3 font-black text-slate-700">Пока нет задач</div>
+                          <div className="mt-1 text-sm text-slate-400">Добавьте первую строку, чтобы начать вести табель.</div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         </div>
       </div>
       {message && (
-        <div className="fixed right-5 bottom-5 bg-[#173f4c] text-white px-4 py-3 shadow-xl">
+        <div className="fixed bottom-5 right-5 z-50 rounded-2xl bg-[#173f4c] px-5 py-3.5 text-sm font-bold text-white shadow-2xl">
           {message}
         </div>
       )}
