@@ -2330,14 +2330,14 @@ fun Route.dataRoutes() {
                 }
             }
 
-            call.respond(
-                HttpStatusCode.OK,
+            val responseJson = json.encodeToString(
                 PersonalTimesheetSaveResponseDto(
                     success = true,
                     year = request.year,
                     month = request.month
                 )
             )
+            call.respondText(responseJson, ContentType.Application.Json)
         }
 
         get("/categories") {
