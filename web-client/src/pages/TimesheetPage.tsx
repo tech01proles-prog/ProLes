@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
 import type { TimeEntryDto, ProjectDto, UserDto, DayOffDto } from '../types';
@@ -501,6 +501,77 @@ function PinkStatusChart({ tasks }: { tasks: PersonalTask[] }) {
   );
 }
 
+type PersonalCategoryOption = { id: string | null; name: string };
+
+type StyledSelectOption = { value: string; label: string };
+
+function StyledDropdown({
+  value,
+  options,
+  onChange,
+  placeholder,
+  className = '',
+  renderOptionSuffix,
+  activeClassName = '',
+}: {
+  value: string;
+  options: StyledSelectOption[];
+  onChange: (value: string) => void;
+  placeholder: string;
+  className?: string;
+  renderOptionSuffix?: (option: StyledSelectOption) => ReactNode;
+  activeClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const selected = options.find(option => option.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        className={`flex h-[56px] w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-left text-sm font-bold text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.05)] transition-all hover:border-[#dc78a2] hover:shadow-[0_10px_24px_rgba(198,92,138,0.10)] focus:outline-none focus:ring-4 focus:ring-[#f7dbe6] ${activeClassName}`}
+      >
+        <span className={selected ? 'truncate' : 'truncate text-slate-400'}>{selected?.label || placeholder}</span>
+        <span className={`ml-3 text-xs text-[#a54873] transition-transform ${open ? 'rotate-180' : ''}`}>⌄</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-40 max-h-72 overflow-y-auto rounded-2xl border border-[#efcfdd] bg-white p-1.5 shadow-[0_18px_45px_rgba(87,33,58,0.18)]">
+          <button
+            type="button"
+            onClick={() => { onChange(''); setOpen(false); }}
+            className={`flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${!value ? 'bg-[#fff0f6] text-[#8d3159]' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            {placeholder}
+          </button>
+          {options.map(option => (
+            <div key={option.value} className={`flex items-center gap-2 rounded-xl px-1 transition ${value === option.value ? 'bg-[#fff0f6]' : ''}`}>
+              <button
+                type="button"
+                onClick={() => { onChange(option.value); setOpen(false); }}
+                className={`min-w-0 flex-1 rounded-xl px-2.5 py-2.5 text-left text-sm font-bold transition ${value === option.value ? 'text-[#8d3159]' : 'text-slate-700 hover:bg-slate-50'}`}
+              >
+                <span className="block truncate">{option.label}</span>
+              </button>
+              {renderOptionSuffix?.(option)}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PersonalTimesheetPage() {
   const current = new Date();
   const [year, setYear] = useState(current.getFullYear());
@@ -513,8 +584,9 @@ function PersonalTimesheetPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [categories, setCategories] = useState<string[]>(DEFAULT_PERSONAL_CATEGORIES);
+  const [categories, setCategories] = useState<PersonalCategoryOption[]>(() => DEFAULT_PERSONAL_CATEGORIES.map(name => ({ id: null, name })));
   const [newCategory, setNewCategory] = useState('');
+  const saveVersionRef = useRef(0);
 
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
 
@@ -522,6 +594,22 @@ function PersonalTimesheetPage() {
   const totalHours = normalizedTasks.reduce((sum, task) => sum + task.hours, 0);
   const realTasks = normalizedTasks.filter(task => task.name.trim());
   const totalTasks = realTasks.length;
+  const monthTask = tasks.find(task => task.id === monthlyTaskId);
+  const isMonthTaskCompleted = monthTask?.status === 'Completed';
+
+  const statusBorderClass: Record<string, string> = {
+    'Not started': 'border-[#ef4444] bg-[#fff7f7]',
+    'In progress': 'border-[#f59e0b] bg-[#fffbf3]',
+    'Completed': 'border-[#22c55e] bg-[#f4fff7]',
+    'Blocked': 'border-black bg-[#f7f7f7]',
+  };
+
+  const statusBadgeClass: Record<string, string> = {
+    'Not started': 'bg-red-50 text-red-700 border-red-200',
+    'In progress': 'bg-orange-50 text-orange-700 border-orange-200',
+    'Completed': 'bg-green-50 text-green-700 border-green-200',
+    'Blocked': 'bg-slate-100 text-slate-900 border-slate-300',
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -530,8 +618,13 @@ function PersonalTimesheetPage() {
         api.get<{ periodStart: string; periodEnd: string; monthlyTaskId: string | null; tasks: PersonalTask[] }>('/personal-timesheet', { params: { year, month } }),
         api.get<Array<{ id: string; name: string }>>('/personal-timesheet/categories'),
       ]);
-      setCategories(Array.from(new Set([...DEFAULT_PERSONAL_CATEGORIES, ...(categoriesResponse.data || []).map(c => c.name)])));
-
+      const customCategories = categoriesResponse.data || [];
+      setCategories([
+        ...DEFAULT_PERSONAL_CATEGORIES.map(name => ({ id: null, name })),
+        ...customCategories
+          .filter(category => !DEFAULT_PERSONAL_CATEGORIES.includes(category.name))
+          .map(category => ({ id: category.id, name: category.name })),
+      ]);
       setPeriodStart(data.periodStart);
       setPeriodEnd(data.periodEnd);
       setMonthlyTaskId(data.monthlyTaskId || '');
@@ -556,7 +649,13 @@ function PersonalTimesheetPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const addRow = () => {
+  const updateAndDirty = <T,>(updater: () => T) => {
+    updater();
+    saveVersionRef.current += 1;
+    setDirty(true);
+  };
+
+  const addRow = () => updateAndDirty(() => {
     const newTask: PersonalTask = {
       id: generateUUID(),
       name: '',
@@ -567,39 +666,55 @@ function PersonalTimesheetPage() {
       sortOrder: tasks.length,
     };
     setTasks(prev => [...prev, newTask]);
-    setDirty(true);
-  };
+  });
 
-  const updateTask = (id: string, patch: Partial<PersonalTask>) => {
+  const updateTask = (id: string, patch: Partial<PersonalTask>) => updateAndDirty(() => {
     setTasks(prev => prev.map(task => task.id === id ? { ...task, ...patch } : task));
-    setDirty(true);
-  };
+  });
 
-  const deleteRow = (id: string) => {
+  const deleteRow = (id: string) => updateAndDirty(() => {
     setTasks(prev => prev.filter(task => task.id !== id));
     if (monthlyTaskId === id) setMonthlyTaskId('');
-    setDirty(true);
-  };
+  });
 
   const addCategory = async () => {
     const name = newCategory.trim();
-    if (!name) return;
+    if (!name || DEFAULT_PERSONAL_CATEGORIES.includes(name) || categories.some(category => category.name.toLowerCase() === name.toLowerCase())) return;
     try {
       const { data } = await api.post<{ id: string; name: string }>('/personal-timesheet/categories', { name });
-      setCategories(prev => Array.from(new Set([...prev, data.name])));
+      setCategories(prev => [...prev, { id: data.id, name: data.name }]);
       setNewCategory('');
-      setMessage(`✅ Категория «${data.name}» добавлена`);
+      setMessage(`Категория «${data.name}» добавлена`);
     } catch (error) {
       console.error(error);
-      setMessage('❌ Не удалось добавить категорию');
+      setMessage('Не удалось добавить категорию');
     } finally {
       window.setTimeout(() => setMessage(null), 2200);
     }
   };
 
-  const save = async () => {
+  const deleteCategory = async (category: PersonalCategoryOption) => {
+    if (!category.id) return;
+    if (!window.confirm(`Удалить категорию «${category.name}»?`)) return;
+    try {
+      await api.delete(`/personal-timesheet/categories/${category.id}`);
+      setCategories(prev => prev.filter(item => item.id !== category.id));
+      updateAndDirty(() => {
+        setTasks(prev => prev.map(task => task.category === category.name ? { ...task, category: '' } : task));
+      });
+      setMessage(`Категория «${category.name}» удалена`);
+    } catch (error) {
+      console.error(error);
+      setMessage('Не удалось удалить категорию');
+    } finally {
+      window.setTimeout(() => setMessage(null), 2200);
+    }
+  };
+
+  const persist = useCallback(async () => {
+    if (!dirty || saving || loading) return;
+    const versionAtSave = saveVersionRef.current;
     setSaving(true);
-    setMessage(null);
     try {
       await api.put('/personal-timesheet', {
         year,
@@ -617,17 +732,24 @@ function PersonalTimesheetPage() {
           sortOrder: index,
         })),
       });
-      setMessage('✅ Табель сохранён');
-      setDirty(false);
-      await load();
+      if (versionAtSave === saveVersionRef.current) {
+        setDirty(false);
+        setMessage('Сохранено автоматически');
+      }
     } catch (error) {
       console.error(error);
-      setMessage('❌ Ошибка сохранения табеля');
+      setMessage('Ошибка автосохранения');
     } finally {
       setSaving(false);
-      window.setTimeout(() => setMessage(null), 2500);
+      window.setTimeout(() => setMessage(null), 1800);
     }
-  };
+  }, [dirty, saving, loading, year, month, periodStart, periodEnd, monthlyTaskId, tasks]);
+
+  useEffect(() => {
+    if (!dirty || loading) return;
+    const timer = window.setTimeout(() => { void persist(); }, 850);
+    return () => window.clearTimeout(timer);
+  }, [dirty, loading, persist]);
 
   const shiftMonth = (delta: number) => {
     let nextMonth = month + delta;
@@ -638,66 +760,72 @@ function PersonalTimesheetPage() {
     setMonth(nextMonth);
   };
 
-  const monthTaskOptions = tasks.filter(task => task.name.trim());
+  const monthTaskOptions = tasks.filter(task => task.name.trim()).map(task => ({ value: task.id, label: task.name }));
+  const categoryOptions = categories.map(category => ({ value: category.name, label: category.name }));
 
   if (loading) {
-    return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
+    return <div className="flex justify-center py-16"><div className="h-10 w-10 animate-spin rounded-full border-4 border-[#edbfd1] border-t-[#b64b78]" /></div>;
   }
 
   return (
     <div className="min-h-full bg-[radial-gradient(circle_at_top_left,#fff1f7_0%,#fff8fb_34%,#f8f7fb_100%)] text-slate-800 font-sans">
-      <div className="mx-auto w-full max-w-[1440px] px-3 py-4 md:px-6 md:py-6">
-        <div className="overflow-hidden rounded-[30px] border border-[#f0d7e2] bg-white shadow-[0_18px_60px_rgba(110,55,78,0.10)]">
-          <div className="relative overflow-hidden bg-gradient-to-r from-[#cc91ac] via-[#dd9fbb] to-[#efb5c9] px-5 py-6 md:px-8 md:py-8">
-            <div className="absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/15 blur-2xl" />
-            <div className="absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
-            <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="mx-auto w-full max-w-[1440px] px-3 py-1 md:px-5 md:py-2">
+        <div className="overflow-visible rounded-[28px] border border-[#efd4e0] bg-white shadow-[0_12px_42px_rgba(110,55,78,0.09)]">
+          <div className="relative overflow-hidden rounded-t-[28px] bg-gradient-to-r from-[#c98fab] via-[#dc9db9] to-[#edb3c7] px-5 py-4 md:px-7 md:py-5">
+            <div className="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-white/15 blur-2xl" />
+            <div className="relative flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-[#6f2948]">Персональный табель</div>
-                <h1 className="mt-1 text-4xl font-black tracking-tight text-[#1a1020] md:text-5xl">{new Date(year, month - 1, 1).toLocaleDateString('ru-RU', { month: 'long' }).toUpperCase()}</h1>
-                <p className="mt-2 text-sm font-medium text-[#5f3045]">Задачи, часы и статус выполнения за выбранный период</p>
+                <div className="text-[9px] font-black uppercase tracking-[0.32em] text-[#6f2948]">Персональный табель</div>
+                <h1 className="mt-0.5 text-3xl font-black tracking-tight text-[#1a1020] md:text-[42px]">{new Date(year, month - 1, 1).toLocaleDateString('ru-RU', { month: 'long' }).toUpperCase()}</h1>
               </div>
-              <div className="flex items-center gap-2 self-start rounded-2xl bg-white/65 p-1.5 shadow-sm backdrop-blur md:self-auto">
-                <button type="button" onClick={() => shiftMonth(-1)} className="grid h-10 w-10 place-items-center rounded-xl text-xl font-bold text-[#6d2949] transition hover:bg-white hover:shadow-sm" aria-label="Предыдущий месяц">‹</button>
-                <div className="min-w-[150px] px-2 text-center text-sm font-extrabold capitalize text-[#53233a]">{monthLabel}</div>
-                <button type="button" onClick={() => shiftMonth(1)} className="grid h-10 w-10 place-items-center rounded-xl text-xl font-bold text-[#6d2949] transition hover:bg-white hover:shadow-sm" aria-label="Следующий месяц">›</button>
+              <div className="flex items-center gap-2 self-start rounded-2xl bg-white/70 p-1 shadow-sm backdrop-blur md:self-auto">
+                <button type="button" onClick={() => shiftMonth(-1)} className="grid h-9 w-9 place-items-center rounded-xl text-lg font-bold text-[#6d2949] transition hover:bg-white" aria-label="Предыдущий месяц">‹</button>
+                <div className="min-w-[150px] px-1 text-center text-sm font-extrabold capitalize text-[#53233a]">{monthLabel}</div>
+                <button type="button" onClick={() => shiftMonth(1)} className="grid h-9 w-9 place-items-center rounded-xl text-lg font-bold text-[#6d2949] transition hover:bg-white" aria-label="Следующий месяц">›</button>
               </div>
             </div>
           </div>
 
-          <div className="space-y-6 p-4 md:p-7">
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_8px_25px_rgba(15,23,42,0.05)] md:p-6">
-                <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_180px]">
-                  <div className="space-y-4">
+          <div className="space-y-4 p-3 md:p-5">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_6px_20px_rgba(15,23,42,0.05)] md:p-5">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+                  <div className="space-y-3">
                     <div>
-                      <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Отраженный период</div>
-                      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <input type="date" value={periodStart} onChange={e => { setPeriodStart(e.target.value); setDirty(true); }} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 shadow-inner outline-none transition focus:border-[#dc78a2] focus:bg-white focus:ring-4 focus:ring-[#f8dce7]" />
+                      <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Отраженный период</div>
+                      <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input type="date" value={periodStart} onChange={e => updateAndDirty(() => setPeriodStart(e.target.value))} className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700 shadow-inner outline-none transition focus:border-[#dc78a2] focus:bg-white focus:ring-4 focus:ring-[#f8dce7]" />
                         <span className="hidden font-bold text-slate-300 sm:block">—</span>
-                        <input type="date" value={periodEnd} onChange={e => { setPeriodEnd(e.target.value); setDirty(true); }} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 shadow-inner outline-none transition focus:border-[#dc78a2] focus:bg-white focus:ring-4 focus:ring-[#f8dce7]" />
+                        <input type="date" value={periodEnd} onChange={e => updateAndDirty(() => setPeriodEnd(e.target.value))} className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700 shadow-inner outline-none transition focus:border-[#dc78a2] focus:bg-white focus:ring-4 focus:ring-[#f8dce7]" />
                       </div>
                     </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-2xl bg-[#fff3f8] p-4">
-                        <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#b45379]">Задача месяца</div>
-                        <select value={monthlyTaskId} onChange={e => { setMonthlyTaskId(e.target.value); setDirty(true); }} className="mt-2 w-full rounded-xl border border-[#f0c9d9] bg-white px-3 py-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition focus:border-[#d86f99] focus:ring-4 focus:ring-[#f7dbe6]">
-                          <option value="">Выберите задачу</option>
-                          {monthTaskOptions.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
-                        </select>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className={`rounded-2xl p-3 transition-all ${isMonthTaskCompleted ? 'border border-green-300 bg-green-50 shadow-[0_8px_22px_rgba(34,197,94,0.14)]' : 'border border-[#f0d7e2] bg-[#fffafd]'}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Задача месяца</div>
+                          {isMonthTaskCompleted && <span className="rounded-full bg-green-600 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-white">Выполнено</span>}
+                        </div>
+                        <div className="mt-2">
+                          <StyledDropdown
+                            value={monthlyTaskId}
+                            options={monthTaskOptions}
+                            onChange={value => updateAndDirty(() => setMonthlyTaskId(value))}
+                            placeholder="Выберите задачу"
+                            activeClassName={isMonthTaskCompleted ? 'border-green-300 bg-white' : ''}
+                          />
+                        </div>
                       </div>
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Потрачено часов</div>
-                        <div className="mt-2 text-3xl font-black tracking-tight text-slate-800">{totalHours.toLocaleString('ru-RU')}</div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-400">Потрачено часов</div>
+                        <div className="mt-1 text-3xl font-black tracking-tight text-slate-800">{totalHours.toLocaleString('ru-RU')}</div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex min-h-[170px] flex-col justify-between rounded-3xl bg-gradient-to-b from-[#dca0ba] to-[#cb87a8] p-5 text-center shadow-[0_12px_30px_rgba(195,102,145,0.22)]">
-                    <div className="text-sm font-black uppercase tracking-[0.24em] text-[#5e2942]">Всего</div>
-                    <div className="text-6xl font-black leading-none tracking-tight text-[#183e4a]">{totalTasks}</div>
-                    <div className="text-xs font-bold uppercase tracking-widest text-[#6e304a]">задач</div>
+                  <div className="flex min-h-[150px] flex-col justify-between rounded-3xl bg-gradient-to-b from-[#dca0ba] to-[#cb87a8] p-4 text-center shadow-[0_10px_26px_rgba(195,102,145,0.20)]">
+                    <div className="text-[11px] font-black uppercase tracking-[0.22em] text-[#5e2942]">Всего</div>
+                    <div className="text-5xl font-black leading-none tracking-tight text-[#183e4a]">{totalTasks}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-[#6e304a]">задач</div>
                   </div>
                 </div>
               </div>
@@ -705,81 +833,99 @@ function PersonalTimesheetPage() {
               <PinkStatusChart tasks={normalizedTasks} />
             </div>
 
-            <div className="flex flex-col gap-3 rounded-3xl border border-[#f0d7e2] bg-[#fffafd] p-4 md:flex-row md:items-center md:justify-between md:p-5">
+            <div className="flex flex-col gap-3 rounded-3xl border border-[#f0d7e2] bg-[#fffafd] p-3 md:flex-row md:items-center md:justify-between md:p-4">
               <div className="flex items-center gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f7d8e6] text-xl">📋</div>
+                <div className="grid h-10 w-10 place-items-center rounded-2xl bg-[#f7d8e6] text-base">≡</div>
                 <div>
                   <div className="font-black text-slate-800">Задачи месяца</div>
-                  <div className="text-xs text-slate-500">Добавляйте строки, выбирайте категорию и меняйте статус.</div>
+                  <div className="text-[11px] text-slate-500">Изменения сохраняются автоматически.</div>
                 </div>
               </div>
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-end">
-                {dirty && <span className="rounded-full bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-700">Есть несохранённые изменения</span>}
+                <div className={`rounded-full px-3 py-1.5 text-xs font-bold ${saving ? 'bg-[#fce9f1] text-[#a54873]' : dirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                  {saving ? 'Сохраняем…' : dirty ? 'Изменения ожидают сохранения' : 'Сохранено'}
+                </div>
                 <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
                   <input
                     value={newCategory}
                     onChange={e => setNewCategory(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addCategory(); } }}
                     className="w-[180px] rounded-xl border-0 px-3 py-2 text-sm outline-none placeholder:text-slate-400"
-                    placeholder="Своя категория"
+                    placeholder="Новая категория"
                     aria-label="Новая категория"
                   />
                   <button type="button" onClick={() => void addCategory()} className="grid h-9 w-9 place-items-center rounded-xl bg-[#d96f9b] text-lg font-bold text-white shadow-sm transition hover:bg-[#c85d89]" title="Добавить категорию">＋</button>
                 </div>
-                <button type="button" onClick={addRow} className="rounded-2xl bg-[#d96f9b] px-5 py-3 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(217,111,155,0.22)] transition hover:-translate-y-0.5 hover:bg-[#c95f8a]">＋ Добавить строку</button>
-                <button type="button" onClick={save} disabled={saving} className="rounded-2xl bg-[#173f4c] px-5 py-3 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(23,63,76,0.18)] transition hover:-translate-y-0.5 hover:bg-[#123540] disabled:cursor-not-allowed disabled:opacity-60">
-                  {saving ? 'Сохраняем…' : 'Сохранить табель'}
-                </button>
+                <button type="button" onClick={addRow} className="rounded-2xl bg-[#d96f9b] px-4 py-2.5 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(217,111,155,0.22)] transition hover:-translate-y-0.5 hover:bg-[#c95f8a]">＋ Добавить строку</button>
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-3xl border border-[#e7d3dd] bg-white shadow-[0_10px_30px_rgba(30,20,25,0.05)]">
+            <div className="overflow-visible rounded-3xl border border-[#e7d3dd] bg-white shadow-[0_8px_26px_rgba(30,20,25,0.05)]">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] border-collapse text-sm">
+                <table className="w-full min-w-[1060px] border-collapse text-sm">
                   <thead>
                     <tr className="bg-gradient-to-r from-[#d96f9b] via-[#e17cac] to-[#d96f9b] text-white">
-                      <th className="border-r border-white/20 px-4 py-4 text-left text-[11px] font-black uppercase tracking-[0.16em] w-[24%]">Задача</th>
-                      <th className="border-r border-white/20 px-4 py-4 text-left text-[11px] font-black uppercase tracking-[0.16em] w-[30%]">Описание</th>
-                      <th className="border-r border-white/20 px-4 py-4 text-center text-[11px] font-black uppercase tracking-[0.16em] w-[12%]">Часы</th>
-                      <th className="border-r border-white/20 px-4 py-4 text-left text-[11px] font-black uppercase tracking-[0.16em] w-[16%]">Категория</th>
-                      <th className="border-r border-white/20 px-4 py-4 text-left text-[11px] font-black uppercase tracking-[0.16em] w-[15%]">Статус</th>
-                      <th className="px-3 py-4 w-[3%]"></th>
+                      <th className="border-r border-white/20 px-4 py-3 text-left text-[10px] font-black uppercase tracking-[0.16em] w-[24%]">Задача</th>
+                      <th className="border-r border-white/20 px-4 py-3 text-left text-[10px] font-black uppercase tracking-[0.16em] w-[28%]">Описание</th>
+                      <th className="border-r border-white/20 px-4 py-3 text-center text-[10px] font-black uppercase tracking-[0.16em] w-[11%]">Часы</th>
+                      <th className="border-r border-white/20 px-4 py-3 text-left text-[10px] font-black uppercase tracking-[0.16em] w-[17%]">Категория</th>
+                      <th className="border-r border-white/20 px-4 py-3 text-left text-[10px] font-black uppercase tracking-[0.16em] w-[16%]">Статус</th>
+                      <th className="px-3 py-3 w-[4%]"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {tasks.map((task, index) => (
-                      <tr key={task.id} className={`${index % 2 ? 'bg-[#fffafd]' : 'bg-white'} transition hover:bg-[#fff4f8]`}>
-                        <td className="border-b border-slate-200 p-1.5 align-top">
-                          <textarea value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="min-h-[92px] w-full resize-y rounded-2xl border border-transparent bg-transparent px-3 py-3 text-sm font-bold leading-relaxed outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="Название задачи" rows={3} />
-                        </td>
-                        <td className="border-b border-slate-200 p-1.5 align-top">
-                          <textarea value={task.description} onChange={e => updateTask(task.id, { description: e.target.value })} className="min-h-[92px] w-full resize-y rounded-2xl border border-transparent bg-transparent px-3 py-3 text-sm leading-relaxed outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="Что необходимо сделать / результат" />
-                        </td>
-                        <td className="border-b border-slate-200 p-1.5 align-top">
-                          <input type="number" min="0" step="0.5" value={task.hours || ''} onChange={e => updateTask(task.id, { hours: Number(e.target.value) || 0 })} className="h-[58px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-center text-lg font-black outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="0" />
-                        </td>
-                        <td className="border-b border-slate-200 p-1.5 align-top">
-                          <select value={task.category} onChange={e => updateTask(task.id, { category: e.target.value })} className="h-[58px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]">
-                            <option value="">Категория</option>
-                            {categories.map(option => <option key={option} value={option}>{option}</option>)}
-                          </select>
-                        </td>
-                        <td className="border-b border-slate-200 p-1.5 align-top">
-                          <select value={task.status} onChange={e => updateTask(task.id, { status: e.target.value })} className="h-[58px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]">
-                            {PERSONAL_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                          </select>
-                          <div className="mt-1 px-2 text-[11px] font-semibold text-[#a54873]">{PERSONAL_STATUS_LABELS[task.status] || task.status}</div>
-                        </td>
-                        <td className="border-b border-slate-200 p-1.5 text-center align-top">
-                          <button type="button" onClick={() => deleteRow(task.id)} className="grid h-9 w-9 place-items-center rounded-xl text-slate-300 transition hover:bg-red-50 hover:text-red-500" title="Удалить строку">✕</button>
-                        </td>
-                      </tr>
-                    ))}
+                    {tasks.map((task, index) => {
+                      const rowStatusClass = statusBorderClass[task.status] || 'border-slate-200 bg-white';
+                      const statusClass = statusBadgeClass[task.status] || 'bg-slate-50 text-slate-700 border-slate-200';
+                      return (
+                        <tr key={task.id} className={`${index % 2 ? 'bg-[#fffafd]' : 'bg-white'} transition hover:bg-[#fff4f8]`}>
+                          <td className="border-b border-slate-200 p-1.5 align-top">
+                            <div className={`rounded-2xl border-2 ${rowStatusClass} p-1.5 transition-shadow focus-within:shadow-[0_8px_20px_rgba(15,23,42,0.08)]`}>
+                              <textarea value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="min-h-[86px] w-full resize-y rounded-xl border-0 bg-white/70 px-3 py-2.5 text-sm font-bold leading-relaxed outline-none placeholder:text-slate-400 focus:bg-white" placeholder="Название задачи" rows={3} />
+                            </div>
+                          </td>
+                          <td className="border-b border-slate-200 p-1.5 align-top">
+                            <textarea value={task.description} onChange={e => updateTask(task.id, { description: e.target.value })} className="min-h-[86px] w-full resize-y rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-[#edbfd1] focus:ring-4 focus:ring-[#fae6ef]" placeholder="Что необходимо сделать / результат" />
+                          </td>
+                          <td className="border-b border-slate-200 p-1.5 align-top">
+                            <input type="number" min="0" step="0.5" value={task.hours || ''} onChange={e => updateTask(task.id, { hours: Number(e.target.value) || 0 })} className="h-[52px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-center text-lg font-black outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="0" />
+                          </td>
+                          <td className="border-b border-slate-200 p-1.5 align-top">
+                            <StyledDropdown
+                              value={task.category}
+                              options={categoryOptions}
+                              onChange={value => updateTask(task.id, { category: value })}
+                              placeholder="Категория"
+                              renderOptionSuffix={option => {
+                                const category = categories.find(item => item.name === option.value);
+                                return category?.id ? (
+                                  <button
+                                    type="button"
+                                    onClick={event => { event.stopPropagation(); void deleteCategory(category); }}
+                                    className="mr-1 rounded-lg px-2 py-1.5 text-[11px] font-bold text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                                    title={`Удалить категорию «${category.name}»`}
+                                  >
+                                    Удалить
+                                  </button>
+                                ) : null;
+                              }}
+                            />
+                          </td>
+                          <td className="border-b border-slate-200 p-1.5 align-top">
+                            <StyledDropdown value={task.status} options={PERSONAL_STATUS_OPTIONS} onChange={value => updateTask(task.id, { status: value })} placeholder="Статус" />
+                            <div className={`mt-1.5 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-extrabold ${statusClass}`}>{PERSONAL_STATUS_LABELS[task.status] || task.status}</div>
+                          </td>
+                          <td className="border-b border-slate-200 p-1.5 text-center align-top">
+                            <button type="button" onClick={() => deleteRow(task.id)} className="min-w-[34px] rounded-xl border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-black uppercase tracking-wide text-red-600 transition hover:bg-red-600 hover:text-white" title="Удалить задачу">Удалить</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {tasks.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-6 py-14 text-center">
-                          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#fff0f6] text-2xl">＋</div>
-                          <div className="mt-3 font-black text-slate-700">Пока нет задач</div>
+                        <td colSpan={6} className="px-6 py-10 text-center">
+                          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#fff0f6] text-xl text-[#a54873]">＋</div>
+                          <div className="mt-2 font-black text-slate-700">Пока нет задач</div>
                           <div className="mt-1 text-sm text-slate-400">Добавьте первую строку, чтобы начать вести табель.</div>
                         </td>
                       </tr>
@@ -792,7 +938,7 @@ function PersonalTimesheetPage() {
         </div>
       </div>
       {message && (
-        <div className="fixed bottom-5 right-5 z-50 rounded-2xl bg-[#173f4c] px-5 py-3.5 text-sm font-bold text-white shadow-2xl">
+        <div className="fixed bottom-5 right-5 z-50 rounded-2xl bg-[#173f4c] px-5 py-3 text-sm font-bold text-white shadow-2xl">
           {message}
         </div>
       )}
