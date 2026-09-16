@@ -454,6 +454,9 @@ function PinkStatusChart({ tasks }: { tasks: PersonalTask[] }) {
     label,
     count: tasks.filter(t => t.name.trim() && t.status === value).length,
   }));
+  const totalTasks = counted.reduce((sum, item) => sum + item.count, 0);
+  const completedTasks = counted.find(item => item.status === 'Completed')?.count ?? 0;
+  const completedPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const max = Math.max(1, ...counted.map(item => item.count));
   const step = Math.max(1, Math.ceil(max / 4));
   const ticks = [step * 4, step * 3, step * 2, step, 0];
@@ -465,9 +468,15 @@ function PinkStatusChart({ tasks }: { tasks: PersonalTask[] }) {
           <div className="text-[12px] font-extrabold uppercase tracking-[0.24em] text-[#a54873]">Статус задач</div>
           <div className="mt-1 text-sm font-medium text-slate-500">Распределение задач по текущему месяцу</div>
         </div>
-        <div className="rounded-2xl bg-[#f7d8e6] px-3 py-2 text-right">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-[#a54873]">Всего</div>
-          <div className="text-xl font-black text-[#6d2949]">{tasks.filter(t => t.name.trim()).length}</div>
+        <div className="flex items-center gap-2">
+          <div className="rounded-2xl bg-[#e4f7ea] px-3 py-2 text-right ring-1 ring-emerald-200">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Выполнено</div>
+            <div className="text-2xl font-black leading-none text-emerald-700">{completedPercent}%</div>
+          </div>
+          <div className="rounded-2xl bg-[#f7d8e6] px-3 py-2 text-right">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#a54873]">Всего</div>
+            <div className="text-xl font-black text-[#6d2949]">{totalTasks}</div>
+          </div>
         </div>
       </div>
       <div className="mt-5 grid grid-cols-[26px_1fr] gap-3">
@@ -598,7 +607,7 @@ function StyledDropdown({
         ref={buttonRef}
         type="button"
         onClick={() => setOpen(current => !current)}
-        className={`flex h-full min-h-[86px] w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-left text-sm font-bold text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.05)] transition-all hover:border-[#dc78a2] hover:shadow-[0_10px_24px_rgba(198,92,138,0.10)] focus:outline-none focus:ring-4 focus:ring-[#f7dbe6] ${activeClassName}`}
+        className={`flex h-full min-h-[62px] w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-left text-sm font-bold text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.05)] transition-all hover:border-[#dc78a2] hover:shadow-[0_10px_24px_rgba(198,92,138,0.10)] focus:outline-none focus:ring-4 focus:ring-[#f7dbe6] ${activeClassName}`}
       >
         <span className={selected ? 'truncate' : 'truncate text-slate-400'}>{selected?.label || placeholder}</span>
         <span className={`ml-3 text-xs text-[#a54873] transition-transform ${open ? 'rotate-180' : ''}`}>⌄</span>
@@ -904,20 +913,27 @@ function PersonalTimesheetPage() {
                     {tasks.map((task, index) => {
                       const rowStatusClass = statusBorderClass[task.status] || 'border-slate-200 bg-white';
                       const statusClass = statusBadgeClass[task.status] || 'bg-slate-50 text-slate-700 border-slate-200';
+                      const rowFillClass: Record<string, string> = {
+                        'Not started': 'bg-red-50/90',
+                        'In progress': 'bg-orange-50/90',
+                        'Completed': 'bg-emerald-50/90',
+                        'Blocked': 'bg-slate-100/95',
+                      };
+                      const rowClass = rowFillClass[task.status] || (index % 2 ? 'bg-[#fffafd]' : 'bg-white');
                       return (
-                        <tr key={task.id} className={`${index % 2 ? 'bg-[#fffafd]' : 'bg-white'} h-[112px] transition hover:bg-[#fff4f8]`}>
-                          <td className="border-b border-slate-200 p-1.5 align-top">
-                            <div className={`rounded-2xl border-2 ${rowStatusClass} p-1.5 transition-shadow focus-within:shadow-[0_8px_20px_rgba(15,23,42,0.08)]`}>
-                              <textarea value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="h-[86px] w-full resize-none rounded-xl border-0 bg-white/70 px-3 py-2.5 text-sm font-bold leading-relaxed outline-none placeholder:text-slate-400 focus:bg-white" placeholder="Название задачи" rows={3} />
+                        <tr key={task.id} className={`${rowClass} h-[82px] transition-colors hover:brightness-[0.985]`}>
+                          <td className={`border-b border-slate-200 p-1 align-top ${rowClass}`}>
+                            <div className={`rounded-xl border-2 ${rowStatusClass} h-full p-1 transition-shadow focus-within:shadow-[0_6px_16px_rgba(15,23,42,0.06)]`}>
+                              <textarea value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="h-[58px] w-full resize-none rounded-xl border-0 bg-white/50 px-3 py-2.5 text-sm font-bold leading-relaxed outline-none placeholder:text-slate-400 focus:bg-white" placeholder="Название задачи" rows={3} />
                             </div>
                           </td>
-                          <td className="border-b border-slate-200 p-1.5 align-top">
-                            <textarea value={task.description} onChange={e => updateTask(task.id, { description: e.target.value })} className="h-[86px] w-full resize-none rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-[#edbfd1] focus:ring-4 focus:ring-[#fae6ef]" placeholder="Что необходимо сделать / результат" />
+                          <td className={`border-b border-slate-200 p-1 align-top ${rowClass}`}>
+                            <textarea value={task.description} onChange={e => updateTask(task.id, { description: e.target.value })} className="h-[58px] w-full resize-none rounded-2xl border border-slate-200 bg-white/60 px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-[#edbfd1] focus:ring-4 focus:ring-[#fae6ef]" placeholder="Что необходимо сделать / результат" />
                           </td>
-                          <td className="border-b border-slate-200 p-1.5 align-top">
-                            <input type="number" min="0" step="0.5" value={task.hours || ''} onChange={e => updateTask(task.id, { hours: Number(e.target.value) || 0 })} className="h-[86px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-center text-lg font-black outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="0" />
+                          <td className={`border-b border-slate-200 p-1 align-top ${rowClass}`}>
+                            <input type="number" min="0" step="0.5" value={task.hours || ''} onChange={e => updateTask(task.id, { hours: Number(e.target.value) || 0 })} className="h-[58px] w-full rounded-2xl border border-slate-200 bg-white/60 px-3 text-center text-lg font-black outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="0" />
                           </td>
-                          <td className="border-b border-slate-200 p-1.5 align-top">
+                          <td className={`border-b border-slate-200 p-1 align-top ${rowClass}`}>
                             <StyledDropdown
                               value={task.category}
                               options={categoryOptions}
@@ -938,11 +954,11 @@ function PersonalTimesheetPage() {
                               }}
                             />
                           </td>
-                          <td className="border-b border-slate-200 p-1.5 align-top">
+                          <td className={`border-b border-slate-200 p-1 align-top ${rowClass}`}>
                             <StyledDropdown value={task.status} options={PERSONAL_STATUS_OPTIONS} onChange={value => updateTask(task.id, { status: value })} placeholder="Статус" />
                             <div className={`mt-1.5 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-extrabold ${statusClass}`}>{PERSONAL_STATUS_LABELS[task.status] || task.status}</div>
                           </td>
-                          <td className="border-b border-slate-200 p-1.5 text-center align-top">
+                          <td className={`border-b border-slate-200 p-1 text-center align-top ${rowClass}`}>
                             <button type="button" onClick={() => deleteRow(task.id)} className="min-w-[34px] rounded-xl border border-red-200 bg-red-50 px-2.5 py-2 text-[10px] font-black uppercase tracking-wide text-red-600 transition hover:bg-red-600 hover:text-white" title="Удалить задачу">Удалить</button>
                           </td>
                         </tr>
