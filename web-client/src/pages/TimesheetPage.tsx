@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
 import type { TimeEntryDto, ProjectDto, UserDto, DayOffDto } from '../types';
@@ -430,7 +430,6 @@ type PersonalTask = {
   sortOrder?: number;
 };
 
-const DEFAULT_PERSONAL_CATEGORIES = ['Командировки', 'Китай', 'HR', 'Проекты', 'Документы', 'Отчёты', 'Другое'];
 const PERSONAL_STATUS_OPTIONS = [
   { value: 'Completed', label: 'Выполнено' },
   { value: 'In progress', label: 'В работе' },
@@ -523,55 +522,91 @@ function StyledDropdown({
   activeClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const selected = options.find(option => option.value === value);
+
+  const reposition = useCallback(() => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const estimatedHeight = Math.min(304, 56 + options.length * 48);
+    const gap = 8;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < estimatedHeight + gap && rect.top > estimatedHeight + gap;
+    const top = openUp ? Math.max(8, rect.top - estimatedHeight - gap) : Math.min(window.innerHeight - estimatedHeight - 8, rect.bottom + gap);
+    setMenuStyle({
+      position: 'fixed',
+      top,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 99999,
+    });
+  }, [options.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    reposition();
+    const onViewportChange = () => reposition();
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('scroll', onViewportChange, true);
+    return () => {
+      window.removeEventListener('resize', onViewportChange);
+      window.removeEventListener('scroll', onViewportChange, true);
+    };
+  }, [open, reposition]);
 
   useEffect(() => {
     if (!open) return;
     const handlePointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     };
     document.addEventListener('mousedown', handlePointerDown);
     return () => document.removeEventListener('mousedown', handlePointerDown);
   }, [open]);
 
+  const menu = open ? createPortal(
+    <div ref={menuRef} style={menuStyle} className="max-h-[304px] overflow-y-auto rounded-2xl border border-[#efcfdd] bg-white p-1.5 shadow-[0_22px_55px_rgba(87,33,58,0.24)] ring-1 ring-black/5">
+      <button
+        type="button"
+        onClick={() => { onChange(''); setOpen(false); }}
+        className={`flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${!value ? 'bg-[#fff0f6] text-[#8d3159]' : 'text-slate-500 hover:bg-slate-50'}`}
+      >
+        {placeholder}
+      </button>
+      {options.map(option => (
+        <div key={option.value} className={`flex items-center gap-2 rounded-xl px-1 transition ${value === option.value ? 'bg-[#fff0f6]' : ''}`}>
+          <button
+            type="button"
+            onClick={() => { onChange(option.value); setOpen(false); }}
+            className={`min-w-0 flex-1 rounded-xl px-2.5 py-2.5 text-left text-sm font-bold transition ${value === option.value ? 'text-[#8d3159]' : 'text-slate-700 hover:bg-slate-50'}`}
+          >
+            <span className="block truncate">{option.label}</span>
+          </button>
+          {renderOptionSuffix?.(option)}
+        </div>
+      ))}
+    </div>,
+    document.body,
+  ) : null;
+
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen(current => !current)}
-        className={`flex h-[56px] w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-left text-sm font-bold text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.05)] transition-all hover:border-[#dc78a2] hover:shadow-[0_10px_24px_rgba(198,92,138,0.10)] focus:outline-none focus:ring-4 focus:ring-[#f7dbe6] ${activeClassName}`}
+        className={`flex h-full min-h-[86px] w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-left text-sm font-bold text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.05)] transition-all hover:border-[#dc78a2] hover:shadow-[0_10px_24px_rgba(198,92,138,0.10)] focus:outline-none focus:ring-4 focus:ring-[#f7dbe6] ${activeClassName}`}
       >
         <span className={selected ? 'truncate' : 'truncate text-slate-400'}>{selected?.label || placeholder}</span>
         <span className={`ml-3 text-xs text-[#a54873] transition-transform ${open ? 'rotate-180' : ''}`}>⌄</span>
       </button>
-      {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-40 max-h-72 overflow-y-auto rounded-2xl border border-[#efcfdd] bg-white p-1.5 shadow-[0_18px_45px_rgba(87,33,58,0.18)]">
-          <button
-            type="button"
-            onClick={() => { onChange(''); setOpen(false); }}
-            className={`flex w-full items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${!value ? 'bg-[#fff0f6] text-[#8d3159]' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            {placeholder}
-          </button>
-          {options.map(option => (
-            <div key={option.value} className={`flex items-center gap-2 rounded-xl px-1 transition ${value === option.value ? 'bg-[#fff0f6]' : ''}`}>
-              <button
-                type="button"
-                onClick={() => { onChange(option.value); setOpen(false); }}
-                className={`min-w-0 flex-1 rounded-xl px-2.5 py-2.5 text-left text-sm font-bold transition ${value === option.value ? 'text-[#8d3159]' : 'text-slate-700 hover:bg-slate-50'}`}
-              >
-                <span className="block truncate">{option.label}</span>
-              </button>
-              {renderOptionSuffix?.(option)}
-            </div>
-          ))}
-        </div>
-      )}
+      {menu}
     </div>
   );
 }
-
 function PersonalTimesheetPage() {
   const current = new Date();
   const [year, setYear] = useState(current.getFullYear());
@@ -584,7 +619,7 @@ function PersonalTimesheetPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [categories, setCategories] = useState<PersonalCategoryOption[]>(() => DEFAULT_PERSONAL_CATEGORIES.map(name => ({ id: null, name })));
+  const [categories, setCategories] = useState<PersonalCategoryOption[]>([]);
   const [newCategory, setNewCategory] = useState('');
   const saveVersionRef = useRef(0);
 
@@ -618,13 +653,8 @@ function PersonalTimesheetPage() {
         api.get<{ periodStart: string; periodEnd: string; monthlyTaskId: string | null; tasks: PersonalTask[] }>('/personal-timesheet', { params: { year, month } }),
         api.get<Array<{ id: string; name: string }>>('/personal-timesheet/categories'),
       ]);
-      const customCategories = categoriesResponse.data || [];
-      setCategories([
-        ...DEFAULT_PERSONAL_CATEGORIES.map(name => ({ id: null, name })),
-        ...customCategories
-          .filter(category => !DEFAULT_PERSONAL_CATEGORIES.includes(category.name))
-          .map(category => ({ id: category.id, name: category.name })),
-      ]);
+      const categoryRows = categoriesResponse.data || [];
+      setCategories(categoryRows.map(category => ({ id: category.id, name: category.name })));
       setPeriodStart(data.periodStart);
       setPeriodEnd(data.periodEnd);
       setMonthlyTaskId(data.monthlyTaskId || '');
@@ -679,7 +709,7 @@ function PersonalTimesheetPage() {
 
   const addCategory = async () => {
     const name = newCategory.trim();
-    if (!name || DEFAULT_PERSONAL_CATEGORIES.includes(name) || categories.some(category => category.name.toLowerCase() === name.toLowerCase())) return;
+    if (!name || categories.some(category => category.name.toLowerCase() === name.toLowerCase())) return;
     try {
       const { data } = await api.post<{ id: string; name: string }>('/personal-timesheet/categories', { name });
       setCategories(prev => [...prev, { id: data.id, name: data.name }]);
@@ -695,13 +725,10 @@ function PersonalTimesheetPage() {
 
   const deleteCategory = async (category: PersonalCategoryOption) => {
     if (!category.id) return;
-    if (!window.confirm(`Удалить категорию «${category.name}»?`)) return;
+    if (!window.confirm(`Удалить категорию «${category.name}»? Существующие записи с этой категорией останутся без изменений.`)) return;
     try {
       await api.delete(`/personal-timesheet/categories/${category.id}`);
       setCategories(prev => prev.filter(item => item.id !== category.id));
-      updateAndDirty(() => {
-        setTasks(prev => prev.map(task => task.category === category.name ? { ...task, category: '' } : task));
-      });
       setMessage(`Категория «${category.name}» удалена`);
     } catch (error) {
       console.error(error);
@@ -854,9 +881,9 @@ function PersonalTimesheetPage() {
                     placeholder="Новая категория"
                     aria-label="Новая категория"
                   />
-                  <button type="button" onClick={() => void addCategory()} className="grid h-9 w-9 place-items-center rounded-xl bg-[#d96f9b] text-lg font-bold text-white shadow-sm transition hover:bg-[#c85d89]" title="Добавить категорию">＋</button>
+                  <button type="button" onClick={() => void addCategory()} className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-600 text-lg font-bold text-white shadow-sm transition hover:bg-emerald-700" title="Добавить категорию">＋</button>
                 </div>
-                <button type="button" onClick={addRow} className="rounded-2xl bg-[#d96f9b] px-4 py-2.5 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(217,111,155,0.22)] transition hover:-translate-y-0.5 hover:bg-[#c95f8a]">＋ Добавить строку</button>
+                <button type="button" onClick={addRow} className="rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-[0_8px_20px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 hover:bg-emerald-700">＋ Добавить строку</button>
               </div>
             </div>
 
@@ -878,17 +905,17 @@ function PersonalTimesheetPage() {
                       const rowStatusClass = statusBorderClass[task.status] || 'border-slate-200 bg-white';
                       const statusClass = statusBadgeClass[task.status] || 'bg-slate-50 text-slate-700 border-slate-200';
                       return (
-                        <tr key={task.id} className={`${index % 2 ? 'bg-[#fffafd]' : 'bg-white'} transition hover:bg-[#fff4f8]`}>
+                        <tr key={task.id} className={`${index % 2 ? 'bg-[#fffafd]' : 'bg-white'} h-[112px] transition hover:bg-[#fff4f8]`}>
                           <td className="border-b border-slate-200 p-1.5 align-top">
                             <div className={`rounded-2xl border-2 ${rowStatusClass} p-1.5 transition-shadow focus-within:shadow-[0_8px_20px_rgba(15,23,42,0.08)]`}>
-                              <textarea value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="min-h-[86px] w-full resize-y rounded-xl border-0 bg-white/70 px-3 py-2.5 text-sm font-bold leading-relaxed outline-none placeholder:text-slate-400 focus:bg-white" placeholder="Название задачи" rows={3} />
+                              <textarea value={task.name} onChange={e => updateTask(task.id, { name: e.target.value })} className="h-[86px] w-full resize-none rounded-xl border-0 bg-white/70 px-3 py-2.5 text-sm font-bold leading-relaxed outline-none placeholder:text-slate-400 focus:bg-white" placeholder="Название задачи" rows={3} />
                             </div>
                           </td>
                           <td className="border-b border-slate-200 p-1.5 align-top">
-                            <textarea value={task.description} onChange={e => updateTask(task.id, { description: e.target.value })} className="min-h-[86px] w-full resize-y rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-[#edbfd1] focus:ring-4 focus:ring-[#fae6ef]" placeholder="Что необходимо сделать / результат" />
+                            <textarea value={task.description} onChange={e => updateTask(task.id, { description: e.target.value })} className="h-[86px] w-full resize-none rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-[#edbfd1] focus:ring-4 focus:ring-[#fae6ef]" placeholder="Что необходимо сделать / результат" />
                           </td>
                           <td className="border-b border-slate-200 p-1.5 align-top">
-                            <input type="number" min="0" step="0.5" value={task.hours || ''} onChange={e => updateTask(task.id, { hours: Number(e.target.value) || 0 })} className="h-[52px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-center text-lg font-black outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="0" />
+                            <input type="number" min="0" step="0.5" value={task.hours || ''} onChange={e => updateTask(task.id, { hours: Number(e.target.value) || 0 })} className="h-[86px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-center text-lg font-black outline-none transition focus:border-[#edbfd1] focus:bg-white focus:ring-4 focus:ring-[#fae6ef]" placeholder="0" />
                           </td>
                           <td className="border-b border-slate-200 p-1.5 align-top">
                             <StyledDropdown
