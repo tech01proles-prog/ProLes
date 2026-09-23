@@ -7,8 +7,6 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import com.proles.server.data.EmployeeBalanceTransactionsTable
-import com.proles.server.data.SubprojectsTable
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.datetime.LocalDate as KtLocalDate
@@ -199,7 +197,6 @@ private fun mapRowToEntryDto(row: ResultRow): TimeEntry {
         id = row[TimeEntriesTable.id].value.toString(),
         userId = row[TimeEntriesTable.userId].value.toString(),
         projectId = row[TimeEntriesTable.projectId].value.toString(),
-        subprojectId = row[TimeEntriesTable.subprojectId]?.value?.toString(),
         projectName = row[TimeEntriesTable.projectName],
         date = row[TimeEntriesTable.date].toString(),
         hours = row[TimeEntriesTable.hours],
@@ -392,35 +389,10 @@ fun Route.dataRoutes() {
                     Pair(updated, true) // true = было обновление
                 } else {
                     // ➕ СОЗДАНИЕ
-                    val requestedSubprojectId = request.subprojectId
-                        ?.takeIf { it.isNotBlank() }
-                        ?.let(UUID::fromString)
-
-                    if (requestedSubprojectId != null) {
-                        val validSubproject = transaction {
-                            SubprojectsTable.select {
-                                (SubprojectsTable.id eq requestedSubprojectId) and
-                                    (
-                                        SubprojectsTable.projectId eq
-                                            UUID.fromString(request.projectId)
-                                    ) and
-                                    (SubprojectsTable.isActive eq true)
-                            }.any()
-                        }
-
-                        if (!validSubproject) {
-                            return@post call.respond(
-                                HttpStatusCode.BadRequest,
-                                mapOf("error" to "Подпроект не принадлежит проекту")
-                            )
-                        }
-                    }
-
                     TimeEntriesTable.insert {
                         it[TimeEntriesTable.id] = UUID.fromString(entry.id)
                         it[TimeEntriesTable.userId] = userId
                         it[TimeEntriesTable.projectId] = projectId
-                        it[subprojectId] = requestedSubprojectId
                         it[TimeEntriesTable.projectName] = entry.projectName
                         it[TimeEntriesTable.date] = entryDate
                         it[TimeEntriesTable.hours] = entry.hours
@@ -480,7 +452,6 @@ fun Route.dataRoutes() {
                             phone = row[UsersTable.phone],
                             telegramUsername = row[UsersTable.telegramUsername],
                             birthDate = row[UsersTable.birthDate]?.toString(),
-                            isRemote = row[UsersTable.isRemote],
                             positionId = row[UsersTable.positionId]?.value?.toString()
                         )
                     }
@@ -950,10 +921,6 @@ fun Route.dataRoutes() {
             if (!call.checkPermission(Permission.EXPENSES_ALL, "view")) return@get
             val dateFrom = call.request.queryParameters["dateFrom"]
             val dateTo = call.request.queryParameters["dateTo"]
-            val hideDirectorExpenses =
-                call.request.queryParameters["hideDirectorExpenses"]
-                    ?.toBooleanStrictOrNull()
-                    ?: false
             val list = transaction {
                 val query = (ExpensesTable innerJoin ProjectsTable)
                     .selectAll()
@@ -968,26 +935,11 @@ fun Route.dataRoutes() {
                         }
                     }
                     .orderBy(ExpensesTable.date to SortOrder.DESC)
-                if (currentRole !in setOf(
-                        UserRole.SUPER_ADMIN.code,
-                        UserRole.ADMIN.code,
-                        UserRole.DIRECTOR.code
-                    )
-                ) {
-                    condition = condition and
-                        (ExpensesTable.expenseScope eq ExpenseScope.GENERAL.name)
-                } else if (hideDirectorExpenses) {
-                    condition = condition and
-                        (ExpensesTable.expenseScope eq ExpenseScope.GENERAL.name)
-                }
                 query.map { row ->
                         ExpenseDto(
                             id = row[ExpensesTable.id].value.toString(),
                             userId = row[ExpensesTable.userId].value.toString(),
                             projectId = row[ExpensesTable.projectId].value.toString(),
-                            subprojectId = row[ExpensesTable.subprojectId]?.value?.toString(),
-                            expenseScope = row[ExpensesTable.expenseScope],
-                            creatorRole = row[ExpensesTable.creatorRole],
                             projectName = row[ProjectsTable.name],
                             date = row[ExpensesTable.date].toString(),
                             type = row[ExpensesTable.type],
@@ -1034,9 +986,6 @@ fun Route.dataRoutes() {
                             id = row[ExpensesTable.id].value.toString(),
                             userId = row[ExpensesTable.userId].value.toString(),
                             projectId = row[ExpensesTable.projectId].value.toString(),
-                            subprojectId = row[ExpensesTable.subprojectId]?.value?.toString(),
-                            expenseScope = row[ExpensesTable.expenseScope],
-                            creatorRole = row[ExpensesTable.creatorRole],
                             projectName = row[ProjectsTable.name],
                             date = row[ExpensesTable.date].toString(),
                             type = row[ExpensesTable.type],
@@ -1064,42 +1013,10 @@ fun Route.dataRoutes() {
 
             val created = transaction {
                 val id = UUID.randomUUID()
-                val normalizedCategory =
-                    ReceiptCategory.normalize(request.category).code
-
-                if (
-                    normalizedCategory == ReceiptCategory.WITHOUT_RECEIPT.code &&
-                    request.receiptCount > 0
-                ) {
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("error" to "Для расхода без чека файл запрещён")
-                    )
-                }
-
-                val requestScope = request.expenseScope.uppercase()
-                val expenseScope = if (
-                    requestScope == ExpenseScope.DIRECTOR.name &&
-                    currentRole == UserRole.DIRECTOR.code
-                ) {
-                    ExpenseScope.DIRECTOR.name
-                } else {
-                    ExpenseScope.GENERAL.name
-                }
-
-                val requestedSubprojectId = request.subprojectId
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let(UUID::fromString)
-
-
                 ExpensesTable.insert {
                     it[ExpensesTable.id] = id
                     it[userId] = UUID.fromString(exp.userId)
                     it[projectId] = UUID.fromString(exp.projectId)
-                    it[subprojectId] = requestedSubprojectId
-                    it[category] = normalizedCategory
-                    it[ExpensesTable.expenseScope] = expenseScope
-                    it[creatorRole] = currentRole
                     it[date] = KtLocalDate.parse(exp.date)
                     it[type] = exp.type
                     it[name] = exp.name
@@ -1108,6 +1025,7 @@ fun Route.dataRoutes() {
                     it[comment] = exp.comment
                     it[receiptSubmitted] = exp.receiptSubmitted
                     it[hasReceiptPhoto] = exp.hasReceiptPhoto
+                    it[category] = exp.category
                     it[createdAt] = System.currentTimeMillis()
                 }
                 exp.copy(id = id.toString())
@@ -1243,24 +1161,16 @@ fun Route.dataRoutes() {
             catch (e: Exception) { call.respond(HttpStatusCode.BadRequest, e.message ?: "Bad JSON"); return@post }
             val created = transaction {
                 val id = UUID.randomUUID()
-
-                val normalizedCategory =
-                    ReceiptCategory.normalize(request.category).code
-                val requestedSubprojectId = request.subprojectId
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let(UUID::fromString)
-
                 IncomesTable.insert {
                     it[IncomesTable.id] = id
                     it[userId] = UUID.fromString(income.userId)
                     if (!income.projectId.isNullOrBlank()) it[projectId] = UUID.fromString(income.projectId)
-                    it[subprojectId] = requestedSubprojectId
-                    it[category] = normalizedCategory
                     it[date] = KtLocalDate.parse(income.date)
                     it[type] = income.type
                     it[name] = income.name
                     it[amount] = income.amount
                     it[currency] = income.currency
+                    it[category] = income.category
                     it[createdAt] = System.currentTimeMillis()
                 }
                 income.copy(id = id.toString(), createdAt = System.currentTimeMillis())
@@ -1401,7 +1311,6 @@ fun Route.dataRoutes() {
                             telegramUsername = row[UsersTable.telegramUsername],
                             birthDate = row[UsersTable.birthDate]?.toString(),
                             positionId = row[UsersTable.positionId]?.value?.toString(),
-                            isRemote = row[UsersTable.isRemote],
                             onVacation = row[UsersTable.id].value in vacationUserIds
                         )
                     }
@@ -1431,7 +1340,6 @@ fun Route.dataRoutes() {
                     it[role] = user.role
                     it[position] = user.position
                     it[positionId] = user.positionId?.let(UUID::fromString)
-                    it[isRemote] = request.isRemote
                     it[defaultRateType] = user.defaultRateType
                     it[defaultRate] = user.defaultRate
                     it[defaultCurrency] = user.defaultCurrency
@@ -1486,7 +1394,6 @@ fun Route.dataRoutes() {
                     it[role] = user.role
                     it[position] = user.position
                     it[positionId] = user.positionId?.let(UUID::fromString)
-                    it[isRemote] = request.isRemote
                     it[defaultRateType] = user.defaultRateType
                     it[defaultRate] = user.defaultRate
                     it[defaultCurrency] = user.defaultCurrency
@@ -1907,7 +1814,6 @@ fun Route.dataRoutes() {
             val resultTrip = transaction {
                 if (trip.type == "DEPARTURE") {
                     val id = UUID.randomUUID()
-
                     BusinessTripsTable.insert {
                         it[BusinessTripsTable.id] = id
                         it[BusinessTripsTable.userId] = userId
@@ -2108,64 +2014,10 @@ fun Route.dataRoutes() {
                     it[completedDate] = newDate
                 }
                 val newId = UUID.randomUUID()
-
-                val normalizedStartDate = runCatching {
-                    LocalDate.parse(
-                        request.startDate.ifBlank { request.date }
-                    )
-                }.getOrElse {
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("error" to "Некорректная дата начала")
-                    )
-                }
-
-                val normalizedEndDate = request.endDate
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let {
-                        runCatching { LocalDate.parse(it) }.getOrNull()
-                            ?: return@post call.respond(
-                                HttpStatusCode.BadRequest,
-                                mapOf("error" to "Некорректная дата окончания")
-                            )
-                    }
-
-                if (
-                    normalizedEndDate != null &&
-                    normalizedEndDate < normalizedStartDate
-                ) {
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("error" to "Дата окончания раньше даты начала")
-                    )
-                }
-
-                val requestedProjectId = request.projectId
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let(UUID::fromString)
-                val requestedSubprojectId = request.subprojectId
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let(UUID::fromString)
-
-                if (requestedProjectId == null && requestedSubprojectId != null) {
-                    return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        mapOf("error" to "Нельзя выбрать подпроект без проекта")
-                    )
-                }
-
                 BusinessTripsTable.insert {
                     it[id] = newId
                     it[userId] = session.userId
-                    it[projectId] = requestedProjectId
-                    it[subprojectId] = requestedSubprojectId
-                    it[startDate] = normalizedStartDate
-                    it[endDate] = normalizedEndDate
-                    it[status] = if (normalizedEndDate == null) {
-                        BusinessTripStatus.ACTIVE.name
-                    } else {
-                        BusinessTripStatus.COMPLETED.name
-                    }
+                    it[projectId] = projectUuid
                     it[projectNumber] = incoming.projectNumber
                     it[companyName] = incoming.companyName
                     it[country] = incoming.country.trim()
@@ -3017,7 +2869,6 @@ fun Route.dataRoutes() {
                         val todayKt = kotlinx.datetime.LocalDate(todayJava.year, todayJava.monthValue, todayJava.dayOfMonth)
 
                         val expenseId = UUID.randomUUID()
-
                         ExpensesTable.insert {
                             it[ExpensesTable.id] = expenseId
                             it[userId] = expenseUserId
@@ -3284,7 +3135,6 @@ fun Route.dataRoutes() {
                             phone = row[UsersTable.phone],
                             telegramUsername = row[UsersTable.telegramUsername],
                             birthDate = row[UsersTable.birthDate]?.toString(),
-                            isRemote = row[UsersTable.isRemote],
                             positionId = row[UsersTable.positionId]?.value?.toString()
                         )
                     }
@@ -3511,29 +3361,6 @@ fun Route.dataRoutes() {
 
             // Сохраняем расчёт
             val recordId = UUID.randomUUID()
-
-            val penalty = request.penaltyAmount.coerceAtLeast(0.0)
-            val withholding = request.withholdingAmount.coerceAtLeast(0.0)
-            val repayment = request.withholdingRepaymentAmount.coerceAtLeast(0.0)
-
-            val gross = fixedAmount + pieceAmount + hourlyAmount + bonusAmount
-            val employeeIsRemote = UsersTable
-                .slice(UsersTable.isRemote)
-                .select { UsersTable.id eq employeeId }
-                .single()[UsersTable.isRemote]
-
-            val taxInclusiveCost = if (employeeIsRemote) {
-                gross / 0.87
-            } else {
-                gross * 1.37
-            }
-
-            val total = gross - penalty - withholding + repayment
-
-            require(total >= 0.0) {
-                "Сумма к выплате не может быть отрицательной"
-            }
-
             transaction {
                 // Удаляем старый расчёт если есть
                 SalaryRecordsTable.deleteWhere {
@@ -3550,49 +3377,9 @@ fun Route.dataRoutes() {
                     it[pieceAmount] = breakdown.piece
                     it[hourlyAmount] = breakdown.hourly
                     it[bonusAmount] = breakdown.bonus
-                    it[penaltyAmount] = penalty
-                    it[withholdingAmount] = withholding
-                    it[withholdingRepaymentAmount] = repayment
-                    it[grossAmount] = gross
-                    it[SalaryRecordsTable.taxInclusiveCost] = taxInclusiveCost
-                    it[remoteEmployee] = employeeIsRemote
-                    it[totalAmount] = total
+                    it[totalAmount] = breakdown.total
                     it[status] = "draft"
                     it[calculatedAt] = System.currentTimeMillis()
-                }
-            }
-
-            if (withholding > 0.0) {
-                EmployeeBalanceTransactionsTable.insert {
-                    it[id] = UUID.randomUUID()
-                    it[userId] = employeeId
-                    it[EmployeeBalanceTransactionsTable.salaryRecordId] =
-                        salaryRecordId
-                    it[transactionType] = "WITHHOLDING"
-                    it[amount] = BigDecimal.valueOf(withholding).setScale(2)
-                    it[comment] = "Удержание при расчёте зарплаты"
-                    it[createdBy] = currentUserId
-                    it[createdAt] = System.currentTimeMillis()
-                    it[reversedTransactionId] = null
-                    it[idempotencyKey] =
-                        "salary:$salaryRecordId:withholding"
-                }
-            }
-
-            if (repayment > 0.0) {
-                EmployeeBalanceTransactionsTable.insert {
-                    it[id] = UUID.randomUUID()
-                    it[userId] = employeeId
-                    it[EmployeeBalanceTransactionsTable.salaryRecordId] =
-                        salaryRecordId
-                    it[transactionType] = "REPAYMENT"
-                    it[amount] = BigDecimal.valueOf(repayment).setScale(2)
-                    it[comment] = "Частичное погашение удержания"
-                    it[createdBy] = currentUserId
-                    it[createdAt] = System.currentTimeMillis()
-                    it[reversedTransactionId] = null
-                    it[idempotencyKey] =
-                        "salary:$salaryRecordId:repayment"
                 }
             }
 
@@ -3731,28 +3518,6 @@ fun Route.dataRoutes() {
                 UUID.fromString(call.parameters["recordId"])
             }.getOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest)
 
-            val penalty = request.penaltyAmount.coerceAtLeast(0.0)
-            val withholding = request.withholdingAmount.coerceAtLeast(0.0)
-            val repayment = request.withholdingRepaymentAmount.coerceAtLeast(0.0)
-
-            val gross = fixedAmount + pieceAmount + hourlyAmount + bonusAmount
-            val employeeIsRemote = UsersTable
-                .slice(UsersTable.isRemote)
-                .select { UsersTable.id eq employeeId }
-                .single()[UsersTable.isRemote]
-
-            val taxInclusiveCost = if (employeeIsRemote) {
-                gross / 0.87
-            } else {
-                gross * 1.37
-            }
-
-            val total = gross - penalty - withholding + repayment
-
-            require(total >= 0.0) {
-                "Сумма к выплате не может быть отрицательной"
-            }
-
             val body = try { call.receive<Map<String, String>>() }
             catch (e: Exception) { return@put call.respond(HttpStatusCode.BadRequest) }
 
@@ -3761,50 +3526,9 @@ fun Route.dataRoutes() {
             transaction {
                 SalaryRecordsTable.update({ SalaryRecordsTable.id eq recordId }) {
                     it[SalaryRecordsTable.status] = status
-                    it[penaltyAmount] = penalty
-                    it[withholdingAmount] = withholding
-                    it[withholdingRepaymentAmount] = repayment
-                    it[grossAmount] = gross
-                    it[SalaryRecordsTable.taxInclusiveCost] = taxInclusiveCost
-                    it[remoteEmployee] = employeeIsRemote
-                    it[totalAmount] = total
                     if (status == "paid") {
                         it[paidAt] = System.currentTimeMillis()
                     }
-                }
-            }
-
-            if (withholding > 0.0) {
-                EmployeeBalanceTransactionsTable.insert {
-                    it[id] = UUID.randomUUID()
-                    it[userId] = employeeId
-                    it[EmployeeBalanceTransactionsTable.salaryRecordId] =
-                        salaryRecordId
-                    it[transactionType] = "WITHHOLDING"
-                    it[amount] = BigDecimal.valueOf(withholding).setScale(2)
-                    it[comment] = "Удержание при расчёте зарплаты"
-                    it[createdBy] = currentUserId
-                    it[createdAt] = System.currentTimeMillis()
-                    it[reversedTransactionId] = null
-                    it[idempotencyKey] =
-                        "salary:$salaryRecordId:withholding"
-                }
-            }
-
-            if (repayment > 0.0) {
-                EmployeeBalanceTransactionsTable.insert {
-                    it[id] = UUID.randomUUID()
-                    it[userId] = employeeId
-                    it[EmployeeBalanceTransactionsTable.salaryRecordId] =
-                        salaryRecordId
-                    it[transactionType] = "REPAYMENT"
-                    it[amount] = BigDecimal.valueOf(repayment).setScale(2)
-                    it[comment] = "Частичное погашение удержания"
-                    it[createdBy] = currentUserId
-                    it[createdAt] = System.currentTimeMillis()
-                    it[reversedTransactionId] = null
-                    it[idempotencyKey] =
-                        "salary:$salaryRecordId:repayment"
                 }
             }
             call.respond(HttpStatusCode.OK)
