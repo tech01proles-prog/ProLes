@@ -4,6 +4,7 @@ import com.proles.server.config.DatabaseFactory
 import com.proles.server.config.EmailService
 import com.proles.server.routes.authRoutes
 import com.proles.server.routes.dataRoutes
+import com.proles.server.routes.configurePlatformRoutes
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -145,6 +146,7 @@ fun Application.module() {
         }
         authRoutes()
         dataRoutes()
+        configurePlatformRoutes()
 
         // 🆕 Раздача статики веб-клиента
         staticFiles("/", File("web-client/dist")) {

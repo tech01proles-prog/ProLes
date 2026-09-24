@@ -21,6 +21,7 @@ object UsersTable : UUIDTable("users") {
     val telegramUsername = varchar("telegram_username", 100).default("")
     val birthDate = date("birth_date").nullable()
     val positionId = reference("position_id", PositionsTable).nullable()
+    val isRemote = bool("is_remote").default(false)
 }
 
 object PositionsTable : UUIDTable("positions") {
@@ -65,6 +66,38 @@ object ProjectsTable : UUIDTable("projects") {
     val completionDate = date("completion_date").nullable()
 }
 
+object SubprojectsTable : UUIDTable("subprojects") {
+    val projectId = reference(
+        "project_id",
+        ProjectsTable,
+        onDelete = ReferenceOption.CASCADE,
+        onUpdate = ReferenceOption.CASCADE
+    ).index()
+    val name = varchar("name", 255)
+    val code = varchar("code", 100).default("")
+    val description = text("description").default("")
+    val isActive = bool("is_active").default(true)
+    val sortOrder = integer("sort_order").default(0)
+    val createdAt = long("created_at").default(0L)
+    val updatedAt = long("updated_at").default(0L)
+    val archivedAt = long("archived_at").nullable()
+
+    init {
+        uniqueIndex(
+            "subprojects_project_name_uidx",
+            projectId,
+            name
+        )
+        index(
+            "subprojects_project_active_idx",
+            false,
+            projectId,
+            isActive,
+            sortOrder
+        )
+    }
+}
+
 object PersonalTimesheetCategoriesTable : UUIDTable("personal_timesheet_categories") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val name = varchar("name", 100)
@@ -96,6 +129,7 @@ object PersonalTimesheetTasksTable : UUIDTable("personal_timesheet_tasks") {
 object TimeEntriesTable : UUIDTable("time_entries") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.CASCADE)
+    val subprojectId = reference("subproject_id", SubprojectsTable, onDelete = ReferenceOption.SET_NULL).nullable().index()
     val projectName = varchar("project_name", 150).default("")
     val date = date("date").index()
     val hours = float("hours").default(0f)
@@ -111,6 +145,7 @@ object TimeEntriesTable : UUIDTable("time_entries") {
 object ExpensesTable : UUIDTable("expenses") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.CASCADE)
+    val subprojectId = reference("subproject_id", SubprojectsTable, onDelete = ReferenceOption.SET_NULL).nullable().index()
     val date = date("date").index()
     val type = varchar("type", 50)
     val name = varchar("name", 255).default("")
@@ -119,9 +154,11 @@ object ExpensesTable : UUIDTable("expenses") {
     val comment = text("comment").default("")
     val receiptSubmitted = bool("receipt_submitted").default(false)
     val hasReceiptPhoto = bool("has_receipt_photo").default(false)
-    val category = varchar("category", 20).default("WORK")  // 🆕 Надкатегория: WORK | PERSONAL
+    val category = varchar("category", 20).default("WITH_RECEIPT")
     val subcategory = varchar("subcategory", 50).nullable()  // 🆕 Подкатегория типа расхода
     val createdAt = long("created_at").default(0L)
+    val expenseScope = varchar("expense_scope", 32).default("GENERAL").index()
+    val creatorRole = varchar("creator_role", 20).default("")
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -130,12 +167,13 @@ object ExpensesTable : UUIDTable("expenses") {
 object IncomesTable : UUIDTable("incomes") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.CASCADE).nullable()
+    val subprojectId = reference("subproject_id", SubprojectsTable, onDelete = ReferenceOption.SET_NULL).nullable().index()
     val date = date("date").index()
     val type = varchar("type", 50).default("")  // 🆕 Тип дохода: HOUSEHOLD, CARD, CASH
     val name = varchar("name", 255).default("")
     val amount = double("amount").default(0.0)
     val currency = varchar("currency", 3).default("RUB")
-    val category = varchar("category", 20).default("WORK")  // 🆕 Надкатегория: WORK | PERSONAL
+    val category = varchar("category", 20).default("WITH_RECEIPT")
     val subcategory = varchar("subcategory", 50).nullable()  // 🆕 Подкатегория типа расхода
     val createdAt = long("created_at").default(0L)
 }
@@ -160,12 +198,16 @@ object DayOffsTable : UUIDTable("day_offs") {
 object BusinessTripsTable : UUIDTable("business_trips") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
     val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.SET_NULL).nullable()
+    val subprojectId = reference("subproject_id", SubprojectsTable, onDelete = ReferenceOption.SET_NULL).nullable().index()
     val projectNumber = varchar("project_number", 100).default("")
     val companyName = varchar("company_name", 255).default("")
     val country = varchar("country", 100).default("")
     val type = varchar("type", 20).default("DEPARTURE")
     val date = date("date")
     val completedDate = date("completed_date").nullable()
+    val startDate = date("start_date")
+    val endDate = date("end_date").nullable()
+    val status = varchar("status", 20).default("ACTIVE").index()
     val city = varchar("city", 255).default("")
     val participants = text("participants").default("[]")
     val transport = varchar("transport", 100).default("")
@@ -283,6 +325,7 @@ object SalaryComponentsTable : UUIDTable("salary_components") {
     val type = varchar("type", 20)  // FIXED, PIECE, HOURLY, BONUS
     val amount = double("amount").default(0.0)
     val projectId = reference("project_id", ProjectsTable).nullable()
+    val subprojectId = reference("subproject_id", SubprojectsTable, onDelete = ReferenceOption.SET_NULL).nullable().index()
     val ratePerHour = double("rate_per_hour").nullable()
     val ratePerUnit = double("rate_per_unit").nullable()
     val description = text("description").default("")
@@ -299,6 +342,14 @@ object SalaryRecordsTable : UUIDTable("salary_records") {
     val pieceAmount = double("piece_amount").default(0.0)
     val hourlyAmount = double("hourly_amount").default(0.0)
     val bonusAmount = double("bonus_amount").default(0.0)
+
+    val penaltyAmount = double("penalty_amount").default(0.0)
+    val withholdingAmount = double("withholding_amount").default(0.0)
+    val withholdingRepaymentAmount = double("withholding_repayment_amount").default(0.0)
+    val grossAmount = double("gross_amount").default(0.0)
+    val taxInclusiveCost = double("tax_inclusive_cost").default(0.0)
+    val remoteEmployee = bool("remote_employee").default(false)
+
     val totalAmount = double("total_amount").default(0.0)
     val status = varchar("status", 20).default("draft")  // draft, approved, paid
     val calculatedAt = long("calculated_at")
@@ -317,6 +368,7 @@ object SalaryRecordsTable : UUIDTable("salary_records") {
 object TicketsTable : UUIDTable("tickets") {
     val uploadedBy = reference("uploaded_by", UsersTable)
     val projectId = reference("project_id", ProjectsTable)
+    val subprojectId = reference("subproject_id", SubprojectsTable, onDelete = ReferenceOption.SET_NULL).nullable().index()
     val fileName = varchar("file_name", 255)
     val originalName = varchar("original_name", 255)
     val filePath = varchar("file_path", 500)
@@ -357,4 +409,153 @@ object SessionsTable : UUIDTable("sessions") {
     val createdAt = long("created_at").default(0L)
     val lastUsed = long("last_used").default(0L)
     val deviceInfo = text("device_info").default("")
+}
+
+object TnpaDocumentsTable : UUIDTable("tnpa_documents") {
+    val projectId = reference(
+        "project_id",
+        ProjectsTable,
+        onDelete = ReferenceOption.CASCADE
+    ).index()
+    val subprojectId = reference(
+        "subproject_id",
+        SubprojectsTable,
+        onDelete = ReferenceOption.SET_NULL
+    ).nullable().index()
+    val originalName = varchar("original_name", 500)
+    val storedName = varchar("stored_name", 500)
+    val storagePath = text("storage_path")
+    val mimeType = varchar("mime_type", 255)
+        .default("application/octet-stream")
+    val sizeBytes = long("size_bytes")
+    val checksumSha256 = char("checksum_sha256", 64)
+    val description = text("description").default("")
+    val uploadedBy = reference(
+        "uploaded_by",
+        UsersTable,
+        onDelete = ReferenceOption.RESTRICT
+    )
+    val uploadedAt = long("uploaded_at")
+    val deletedAt = long("deleted_at").nullable()
+    val deletedBy = reference(
+        "deleted_by",
+        UsersTable,
+        onDelete = ReferenceOption.SET_NULL
+    ).nullable()
+}
+
+object EmployeeBalanceTransactionsTable :
+    UUIDTable("employee_balance_transactions") {
+
+    val userId = reference(
+        "user_id",
+        UsersTable,
+        onDelete = ReferenceOption.RESTRICT
+    ).index()
+    val salaryRecordId = reference(
+        "salary_record_id",
+        SalaryRecordsTable,
+        onDelete = ReferenceOption.RESTRICT
+    ).nullable().index()
+    val transactionType = varchar("transaction_type", 32)
+    val amount = decimal("amount", 14, 2)
+    val comment = text("comment").default("")
+    val createdBy = reference(
+        "created_by",
+        UsersTable,
+        onDelete = ReferenceOption.RESTRICT
+    )
+    val createdAt = long("created_at").index()
+    val reversedTransactionId = uuid("reversed_transaction_id").nullable()
+    val idempotencyKey = varchar("idempotency_key", 100)
+        .nullable()
+        .uniqueIndex()
+}
+
+object ChatConversationsTable : UUIDTable("chat_conversations") {
+    val conversationType =
+        varchar("conversation_type", 20).default("DIRECT")
+    val directKey = varchar("direct_key", 80).nullable().uniqueIndex()
+    val createdBy = reference(
+        "created_by",
+        UsersTable,
+        onDelete = ReferenceOption.RESTRICT
+    )
+    val createdAt = long("created_at")
+    val updatedAt = long("updated_at").index()
+    val lastMessageId = uuid("last_message_id").nullable()
+}
+
+object ChatConversationMembersTable :
+    UUIDTable("chat_conversation_members") {
+
+    val conversationId = reference(
+        "conversation_id",
+        ChatConversationsTable,
+        onDelete = ReferenceOption.CASCADE
+    ).index()
+    val userId = reference(
+        "user_id",
+        UsersTable,
+        onDelete = ReferenceOption.CASCADE
+    ).index()
+    val joinedAt = long("joined_at")
+    val lastReadMessageId = uuid("last_read_message_id").nullable()
+    val lastReadAt = long("last_read_at").nullable()
+    val isArchived = bool("is_archived").default(false)
+
+    init {
+        uniqueIndex(
+            "chat_member_conversation_user_uidx",
+            conversationId,
+            userId
+        )
+    }
+}
+
+object ChatMessagesTable : UUIDTable("chat_messages") {
+    val conversationId = reference(
+        "conversation_id",
+        ChatConversationsTable,
+        onDelete = ReferenceOption.CASCADE
+    ).index()
+    val senderId = reference(
+        "sender_id",
+        UsersTable,
+        onDelete = ReferenceOption.RESTRICT
+    ).index()
+    val bodyCiphertext = text("body_ciphertext").default("")
+    val bodyIv = varchar("body_iv", 64).default("")
+    val bodyKeyVersion = integer("body_key_version").default(1)
+    val clientMessageId = varchar("client_message_id", 100)
+    val replyToMessageId = uuid("reply_to_message_id").nullable()
+    val createdAt = long("created_at").index()
+    val editedAt = long("edited_at").nullable()
+    val deletedAt = long("deleted_at").nullable()
+
+    init {
+        uniqueIndex(
+            "chat_message_sender_client_uidx",
+            senderId,
+            clientMessageId
+        )
+    }
+}
+
+object ChatAttachmentsTable : UUIDTable("chat_attachments") {
+    val messageId = reference(
+        "message_id",
+        ChatMessagesTable,
+        onDelete = ReferenceOption.CASCADE
+    ).index()
+    val originalName = varchar("original_name", 500)
+    val storedName = varchar("stored_name", 500)
+    val storagePath = text("storage_path")
+    val mimeType = varchar("mime_type", 255)
+        .default("application/octet-stream")
+    val sizeBytes = long("size_bytes")
+    val checksumSha256 = char("checksum_sha256", 64)
+    val encryptionIv = varchar("encryption_iv", 64)
+    val encryptionKeyVersion = integer("encryption_key_version").default(1)
+    val createdAt = long("created_at")
 }

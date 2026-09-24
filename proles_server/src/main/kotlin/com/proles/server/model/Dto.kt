@@ -41,6 +41,7 @@ data class UserDto(
     val birthDate: String? = null,
     val positionId: String? = null,
     val onVacation: Boolean = false,
+    val isRemote: Boolean = false,
     val newPassword: String? = null
 )
 
@@ -49,13 +50,15 @@ data class IncomeDto(
     val id: String = "",
     val userId: String = "",
     val projectId: String? = null,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val projectName: String = "",
     val date: String = "",
     val type: String = "",        // 🆕 Тип дохода (HOUSEHOLD, CARD, CASH)
     val name: String = "",
     val amount: Double = 0.0,
     val currency: String = "RUB",
-    val category: String = "WORK", // 🆕 Надкатегория: WORK | PERSONAL
+    val category: String = "WITH_RECEIPT",
     val subcategory: String? = null, // 🆕 Подкатегория типа расхода
     val createdAt: Long = 0L
 )
@@ -64,7 +67,9 @@ data class IncomeDto(
 data class ExpenseDto(
     val id: String,
     val userId: String,
-    val projectId: String,
+    val projectId: String? = null,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val projectName: String = "",
     val date: String,
     val type: String,
@@ -74,9 +79,12 @@ data class ExpenseDto(
     val comment: String = "",
     val receiptSubmitted: Boolean = false,
     val hasReceiptPhoto: Boolean = false, // 🆕
-    val category: String = "WORK",         // 🆕 Надкатегория: WORK | PERSONAL
+    val category: String = "WITH_RECEIPT",
     val subcategory: String? = null,       // 🆕 Подкатегория типа расхода
-    val receiptCount: Int = 0              // Количество прикрепленных файлов
+    val receiptCount: Int = 0,
+    val expenseScope: String = "GENERAL",
+    val creatorRole: String = "",
+    val createdAt: Long = 0L
 )
 
 
@@ -124,7 +132,8 @@ data class ProjectDto(
     val sellingPrice: Double = 0.0,
     val materials: Double = 0.0,
     val contractors: Double = 0.0,
-    val creditPercent: Double = 0.0
+    val creditPercent: Double = 0.0,
+    val subprojects: List<SubprojectDto> = emptyList()
 )
 
 @Serializable
@@ -206,6 +215,8 @@ data class TimeEntry(
     val id: String,
     val userId: String,
     val projectId: String,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val projectName: String = "",
     val date: String,
     val hours: Float = 0f,
@@ -224,6 +235,8 @@ data class BusinessTripDto(
     val userId: String,
     val userName: String = "",
     val projectId: String? = null,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val projectNumber: String = "",
     val companyName: String = "",
     val country: String = "",
@@ -237,7 +250,10 @@ data class BusinessTripDto(
     val notes: String = "",
     val participants: List<String> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
-    val perDiemRate: Double = 750.0  // 🆕 Размер суточных по умолчанию
+    val perDiemRate: Double = 750.0,
+    val startDate: String = date,
+    val endDate: String? = completedDate,
+    val status: String = if (completedDate == null) "ACTIVE" else "COMPLETED"
 )
 
 // 🆕 DTO для уведомлений
@@ -293,7 +309,15 @@ data class SalaryBreakdownResponse(
     val piece: Double,
     val hourly: Double,
     val bonus: Double,
-    val total: Double
+    val penalty: Double = 0.0,
+    val withholding: Double = 0.0,
+    val withholdingRepayment: Double = 0.0,
+    val gross: Double = fixed + piece + hourly + bonus,
+    val total: Double,
+    val balance: Double = 0.0,
+    val taxInclusiveCost: Double = 0.0,
+    val remoteEmployee: Boolean = false,
+    val projectGroups: List<PayrollProjectGroupDto> = emptyList()
 )
 
 @Serializable
@@ -303,6 +327,8 @@ data class SalaryComponentDto(
     val type: String = "",           // FIXED, HOURLY, PIECE, BONUS
     val amount: Double = 0.0,
     val projectId: String? = null,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val ratePerHour: Double? = null,
     val ratePerUnit: Double? = null,
     val description: String = "",
@@ -327,4 +353,255 @@ data class PositionDto(
     val parentName: String? = null,
     val isActive: Boolean = true,
     val sortOrder: Int = 0
+)
+
+@Serializable
+data class SubprojectDto(
+    val id: String = "",
+    val projectId: String,
+    val name: String,
+    val code: String = "",
+    val description: String = "",
+    val isActive: Boolean = true,
+    val sortOrder: Int = 0,
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L,
+    val archivedAt: Long? = null
+)
+
+@Serializable
+data class ProjectTreeDto(
+    val project: ProjectDto,
+    val subprojects: List<SubprojectDto> = emptyList()
+)
+
+@Serializable
+data class CreateSubprojectRequest(
+    val name: String,
+    val code: String = "",
+    val description: String = "",
+    val sortOrder: Int = 0
+)
+
+@Serializable
+data class UpdateSubprojectRequest(
+    val name: String? = null,
+    val code: String? = null,
+    val description: String? = null,
+    val isActive: Boolean? = null,
+    val sortOrder: Int? = null
+)
+
+@Serializable
+data class TnpaDocumentDto(
+    val id: String,
+    val projectId: String,
+    val projectName: String = "",
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
+    val originalName: String,
+    val mimeType: String = "application/octet-stream",
+    val sizeBytes: Long,
+    val checksumSha256: String,
+    val description: String = "",
+    val uploadedBy: String,
+    val uploaderName: String = "",
+    val uploadedAt: Long,
+    val downloadUrl: String = "",
+    val deletedAt: Long? = null
+)
+
+@Serializable
+data class CompleteBusinessTripRequest(
+    val endDate: String
+)
+
+@Serializable
+data class HoursProjectGroupDto(
+    val projectId: String? = null,
+    val projectName: String = "Без проекта",
+    val totalHours: Double = 0.0,
+    val subprojects: List<HoursSubprojectGroupDto> = emptyList(),
+    val entriesWithoutSubproject: List<TimeEntry> = emptyList()
+)
+
+@Serializable
+data class HoursSubprojectGroupDto(
+    val subprojectId: String,
+    val subprojectName: String,
+    val totalHours: Double = 0.0,
+    val entries: List<TimeEntry> = emptyList()
+)
+
+@Serializable
+data class GroupedHoursResponseDto(
+    val userId: String,
+    val totalHours: Double,
+    val groups: List<HoursProjectGroupDto> = emptyList()
+)
+
+@Serializable
+data class PayrollHourEntryDto(
+    val id: String,
+    val date: String,
+    val hours: Double,
+    val hourlyCost: Double = 0.0,
+    val amount: Double = 0.0,
+    val comment: String = ""
+)
+
+@Serializable
+data class PayrollSubprojectGroupDto(
+    val subprojectId: String,
+    val subprojectName: String,
+    val hours: Double = 0.0,
+    val amount: Double = 0.0,
+    val entries: List<PayrollHourEntryDto> = emptyList()
+)
+
+@Serializable
+data class PayrollProjectGroupDto(
+    val projectId: String? = null,
+    val projectName: String = "Без проекта",
+    val hours: Double = 0.0,
+    val amount: Double = 0.0,
+    val subprojects: List<PayrollSubprojectGroupDto> = emptyList(),
+    val entriesWithoutSubproject: List<PayrollHourEntryDto> = emptyList()
+)
+
+@Serializable
+data class PayrollAdjustmentRequest(
+    val penaltyAmount: Double = 0.0,
+    val withholdingAmount: Double = 0.0,
+    val withholdingRepaymentAmount: Double = 0.0,
+    val comment: String = "",
+    val idempotencyKey: String? = null
+)
+
+@Serializable
+data class EmployeeBalanceDto(
+    val userId: String,
+    val balance: Double,
+    val transactions: List<EmployeeBalanceTransactionDto> = emptyList()
+)
+
+@Serializable
+data class EmployeeBalanceTransactionDto(
+    val id: String,
+    val userId: String,
+    val salaryRecordId: String? = null,
+    val transactionType: String,
+    val amount: Double,
+    val comment: String = "",
+    val createdBy: String,
+    val createdByName: String = "",
+    val createdAt: Long,
+    val reversedTransactionId: String? = null
+)
+
+@Serializable
+data class BalanceRepaymentRequest(
+    val amount: Double,
+    val salaryRecordId: String? = null,
+    val comment: String = "",
+    val idempotencyKey: String? = null
+)
+
+@Serializable
+data class TaxInclusiveEmployeeCostDto(
+    val userId: String,
+    val earnedAmount: Double,
+    val isRemote: Boolean,
+    val taxInclusiveCost: Double
+)
+
+@Serializable
+data class DirectorExpenseNotificationPayload(
+    val expenseId: String,
+    val authorId: String,
+    val authorName: String,
+    val amount: Double,
+    val currency: String,
+    val date: String
+)
+
+@Serializable
+data class ChatUserDto(
+    val id: String,
+    val name: String,
+    val role: String,
+    val position: String = ""
+)
+
+@Serializable
+data class ChatConversationDto(
+    val id: String,
+    val type: String = "DIRECT",
+    val participant: ChatUserDto,
+    val lastMessage: ChatMessageDto? = null,
+    val unreadCount: Int = 0,
+    val updatedAt: Long
+)
+
+@Serializable
+data class CreateDirectConversationRequest(
+    val participantUserId: String
+)
+
+@Serializable
+data class ChatMessageDto(
+    val id: String,
+    val conversationId: String,
+    val senderId: String,
+    val senderName: String = "",
+    val body: String = "",
+    val clientMessageId: String,
+    val replyToMessageId: String? = null,
+    val attachments: List<ChatAttachmentDto> = emptyList(),
+    val createdAt: Long,
+    val editedAt: Long? = null,
+    val deletedAt: Long? = null,
+    val isOwn: Boolean = false
+)
+
+@Serializable
+data class SendChatMessageRequest(
+    val body: String = "",
+    val clientMessageId: String,
+    val replyToMessageId: String? = null,
+    val attachmentIds: List<String> = emptyList()
+)
+
+@Serializable
+data class ChatAttachmentDto(
+    val id: String,
+    val messageId: String? = null,
+    val originalName: String,
+    val mimeType: String = "application/octet-stream",
+    val sizeBytes: Long,
+    val checksumSha256: String,
+    val downloadUrl: String = "",
+    val createdAt: Long
+)
+
+@Serializable
+data class ChatMessagesPageDto(
+    val messages: List<ChatMessageDto>,
+    val nextCursor: String? = null,
+    val hasMore: Boolean = false
+)
+
+@Serializable
+data class MarkChatReadRequest(
+    val messageId: String
+)
+
+@Serializable
+data class ChatSocketEventDto(
+    val type: String,
+    val conversationId: String? = null,
+    val message: ChatMessageDto? = null,
+    val messageId: String? = null,
+    val userId: String? = null,
+    val occurredAt: Long = System.currentTimeMillis()
 )
