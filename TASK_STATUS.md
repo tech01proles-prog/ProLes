@@ -2,137 +2,178 @@
 
 Последнее обновление: 2026-09-25
 
-## Репозиторий и правила
+## Репозиторий и правила работы
 
-- Репозиторий: `https://github.com/tech01proles-prog/ProLes`
-- Ветка: `main`.
-- `DataRoutes.kt`: 4422 строки, около 193 KB.
-- Доступное представление заканчивается внутри
-  `route("/api/v1/incomes")`.
-- Последний полностью доступный тематический блок:
-  `route("/api/v1/expenses")`.
-- Для удаления используются маркеры комментариев и route, а не номера строк.
-- Нельзя переносить блок, если его конец не виден.
-- В конце каждого ответа публикуется полный актуальный `TASK_STATUS.md`.
+- Репозиторий: `https://github.com/tech01proles-prog/ProLes`.
+- Рабочая ветка: `main`.
+- Главная текущая задача: разбить большой `DataRoutes.kt` на тематические route-файлы.
+- Переносить за один этап 2–3 route-файла, если все блоки видны полностью.
+- Не разрывать `route`, обработчик или вспомогательную функцию.
+- Границы удаления определять по тематическим комментариям и `route(...)`, а не по номерам строк.
+- После каждого пакета запускать компиляцию и проверять уникальность URL.
+- После каждого push повторно читать актуальную версию репозитория.
+- Этот файл обновлять после каждого завершённого пакета.
 
-## Рефакторинг маршрутов
+## Текущее состояние DataRoutes.kt
 
-| Пакет | Файл | Содержание | Статус |
+- Размер до R9–R11: 144789 байт.
+- `IncomeRoutes.kt` создан и зарегистрирован.
+- Полностью видны блоки:
+  - `/api/v1/positions`;
+  - `/api/v1/users`;
+  - `/api/v1/vacations`;
+  - `/api/v1/dayoffs`.
+- Доступное представление обрывается внутри
+  `PUT /api/v1/business-trips`.
+- Последняя безопасная граница текущего пакета:
+  непосредственно перед `BUSINESS TRIPS`.
+
+## Рефакторинг DataRoutes.kt
+
+| Пакет | Файл | Краткое назначение | Статус |
 |---|---|---|---|
-| R1 | `DataRouteSupport.kt` | Сессия, UUID, подпроекты, mapper часов | APPLIED |
-| R2 | `FcmRoutes.kt` | `/api/v1/fcm` | APPLIED |
-| R3 | `TimeEntryRoutes.kt` | `/api/v1/entries` | APPLIED |
-| R4 | `ProjectCostRoutes.kt` | `/api/v1/project-costs` | APPLIED |
-| R5 | `ProjectRoutes.kt` | `/api/v1/projects` | FILE APPLIED; REGISTRATION BROKEN |
-| R6 | `DataRouteDtos.kt` | Локальные DTO маршрутов | NOT APPLIED |
-| R7 | `ExpenseRoutes.kt` | Расходы и чеки | READY TO EXTRACT |
-| R8 | `IncomeRoutes.kt` | Доходы | BLOCKED: блок виден не полностью |
-| R9 | `BusinessTripRoutes.kt` | Командировки | TODO |
-| R10 | `UserRoutes.kt` | Пользователи и сотрудники | TODO |
-| R11 | `PayrollRoutes.kt` | Payroll и компоненты | TODO |
-| R12 | `TicketRoutes.kt` | Билеты и чеки | TODO |
-| R13 | `NotificationRoutes.kt` | Уведомления | TODO |
-| R14 | `PermissionRoutes.kt` | Права ролей и пользователей | TODO |
-| R15 | `VacationRoutes.kt` | Отпуска и отгулы | TODO |
-| R16 | `ReferenceRoutes.kt` | Справочники и малые API | TODO |
-| R17 | `DataRoutes.kt` | Только агрегатор | TODO |
+| R1 | `DataRouteSupport.kt` | Общие session, UUID и subproject helpers | APPLIED |
+| R2 | `FcmRoutes.kt` | Регистрация и удаление FCM-токенов | APPLIED |
+| R3 | `TimeEntryRoutes.kt` | Учёт рабочего времени и часы | APPLIED |
+| R4 | `ProjectCostRoutes.kt` | Себестоимость и затраты проектов | APPLIED |
+| R5 | `ProjectRoutes.kt` | CRUD проектов и подпроектов | APPLIED |
+| R6 | `DataRouteDtos.kt` | Перенос локальных DTO из агрегатора | DEFERRED |
+| R7 | `ExpenseRoutes.kt` | Расходы, категории и чеки | APPLIED |
+| R8 | `IncomeRoutes.kt` | Доходы и привязка к подпроектам | APPLIED |
+| R9 | `PositionRoutes.kt` | Иерархия должностей | READY TO EXTRACT |
+| R10 | `UserRoutes.kt` | Сотрудники, профиль и удаление пользователя | READY TO EXTRACT |
+| R11 | `AbsenceRoutes.kt` | Отпуска и выходные | READY TO EXTRACT |
+| R12 | `BusinessTripRoutes.kt` | Командировки, маршруты и суточные | BLOCKED: виден не весь PUT |
+| R13 | `PayrollRoutes.kt` | Зарплата, начисления, штрафы и экспорт | TODO |
+| R14 | `TicketRoutes.kt` | Билеты, вложения и чеки | TODO |
+| R15 | `NotificationRoutes.kt` | Уведомления и пользовательские настройки | TODO |
+| R16 | `PermissionRoutes.kt` | Права ролей и индивидуальные overrides | TODO |
+| R17 | `VacationRoutes.kt` | Не используется отдельно: включён в R11 | MERGED INTO R11 |
+| R18 | `ReferenceRoutes.kt` | Справочники и небольшие API | TODO |
+| R19 | `DataRoutes.kt` | Оставить только регистрацию модулей | TODO |
 
-## Функциональные пакеты
+## Функциональные задачи сервера
 
-| Пакет | Содержание | Статус |
+| Пакет | Краткое назначение | Статус |
 |---|---|---|
-| D1 | Часы и подпроекты | APPLIED |
+| D1 | Учёт часов и проверка подпроектов | APPLIED |
 | D2 | Проекты и технический отдел | APPLIED |
-| D3 | Расходы, категории, scope, чеки | APPLIED; compile не подтверждён |
-| D4 | Доходы и подпроекты | APPLIED; compile не подтверждён |
-| D5 | Командировки | APPLIED; compile не подтверждён |
-| D6 | `isRemote` | PARTIAL |
-| D7 | Payroll, штрафы, удержания, налоги | TODO |
-| D8 | Баланс и идемпотентность | PARTIAL |
-| D9 | Билеты и подпроекты | TODO |
+| D3 | Расходы, scope, категории и чеки | APPLIED; TESTS TODO |
+| D4 | Доходы и подпроекты | APPLIED; TESTS TODO |
+| D5 | Командировки, даты и суточные | APPLIED; TESTS TODO |
+| D6 | Поле `isRemote` и расчёт налоговой нагрузки | PARTIAL |
+| D7 | Payroll, штрафы, удержания и налоги | TODO |
+| D8 | Баланс и идемпотентность операций | PARTIAL |
+| D9 | Билеты и привязка к подпроектам | TODO |
+| D10 | Удаление файлов ТНПА после удаления проекта | TODO |
+| D11 | Удаление файлов чеков после удаления записи | TODO |
 
-## Серверные пакеты
+## Платформа и база данных
 
-| Пакет | Содержание | Статус |
+| Пакет | Краткое назначение | Статус |
 |---|---|---|
-| P1 | `PlatformRoutes.kt` под `SessionManager` | Файл присутствует; функциональная проверка TODO |
-| A1 | Регистрация маршрутов и таблиц | PARTIAL |
-| M1 | PostgreSQL-миграция и backfill | TODO |
-| C1 | AES-GCM PRO-Chat | TODO |
-| C2 | REST и cursor pagination чата | TODO |
-| C3 | WebSocket чата | TODO |
-| C4 | Вложения чата до 100 MB | TODO |
-| S1 | Очистка файлов ТНПА | TODO |
-| S2 | Очистка файлов чеков | TODO |
+| P1 | `PlatformRoutes.kt` и работа через `SessionManager` | FILE PRESENT; REVIEW TODO |
+| A1 | Проверить регистрацию всех routes и таблиц | PARTIAL |
+| M1 | PostgreSQL-миграция новой схемы | TODO |
+| M2 | Backfill существующих данных | TODO |
+| M3 | Проверка миграции на чистой базе | TODO |
+| M4 | Проверка миграции на существующей базе | TODO |
 
-## WEB-пакеты
+## PRO-Chat
 
-| Пакет | Содержание | Статус |
+| Пакет | Краткое назначение | Статус |
 |---|---|---|
-| W1 | API-клиент и типы | TODO |
-| W2 | `/hours-calendar` | TODO |
-| W3 | `/payroll` | TODO |
-| W4 | `/management` и ТНПА | TODO |
+| C1 | AES-GCM шифрование сообщений и файлов | TODO |
+| C2 | REST API и cursor pagination | TODO |
+| C3 | WebSocket-доставка сообщений | TODO |
+| C4 | Вложения размером до 100 MB | TODO |
+| C5 | Проверка прав и доступа к диалогам | TODO |
+
+## WEB
+
+| Пакет | Краткое назначение | Статус |
+|---|---|---|
+| W1 | API-клиент и TypeScript-типы | TODO |
+| W2 | Страница календаря часов | TODO |
+| W3 | Интерфейс payroll | TODO |
+| W4 | Управление и файлы ТНПА | TODO |
 | W5 | CRUD подпроектов | TODO |
-| W6 | Расходы | TODO |
+| W6 | Интерфейс расходов и чеков | TODO |
 | W7 | Доходы и командировки | TODO |
-| W8 | Себестоимость | TODO |
-| W9 | PRO-Chat UI | TODO |
-| W10 | Пагинация и оптимизация | TODO |
+| W8 | Себестоимость проектов | TODO |
+| W9 | Интерфейс PRO-Chat | TODO |
+| W10 | Пагинация и оптимизация запросов | TODO |
+| W11 | Production build WEB | TODO |
 
-## Android-пакеты
+## Android
 
-| Пакет | Содержание | Статус |
+| Пакет | Краткое назначение | Статус |
 |---|---|---|
-| AN1 | Найти обработку фото | TODO |
-| AN2 | Удалить Bitmap/JPEG-сжатие | TODO |
-| AN3 | Исходные байты | TODO |
-| AN4 | MIME и имя файла | TODO |
-| AN5 | Проверка памяти | TODO |
+| AN1 | Найти весь pipeline обработки фотографий | TODO |
+| AN2 | Удалить повторное Bitmap/JPEG-сжатие | TODO |
+| AN3 | Загружать исходные байты файла | TODO |
+| AN4 | Сохранять MIME type и исходное имя | TODO |
+| AN5 | Ограничить потребление памяти при загрузке | TODO |
+| AN6 | Выполнить Android build и smoke test | TODO |
 
-## Проверки текущего пакета
+## Текущий пакет R9–R11
 
-- Исправить повторный `projectCostRoutes()` на `projectRoutes()`.
-- Заменить `validateSubprojectForProject` на `validateActiveSubproject`.
-- Создать `ExpenseRoutes.kt`.
-- Добавить `expenseRoutes()` после `projectRoutes()`.
-- Удалить старый блок `/api/v1/expenses`.
-- Перенести expense-only helpers и DTO.
-- Оставить общие helpers доступными доходам.
-- Выполнить `compileKotlin`.
-- Проверить уникальность routes.
-- Сделать push в `main`.
+- Создать `PositionRoutes.kt`.
+- Перенести полный `/api/v1/positions`.
+- Создать `UserRoutes.kt`.
+- Перенести полный `/api/v1/users`.
+- Исправить двойную запись email при создании пользователя.
+- Создать `AbsenceRoutes.kt`.
+- Перенести полный `/api/v1/vacations`.
+- Перенести полный `/api/v1/dayoffs`.
+- Добавить `positionRoutes()` после `incomeRoutes()`.
+- Добавить `userRoutes()` после `positionRoutes()`.
+- Добавить `absenceRoutes()` после `userRoutes()`.
+- Удалить старые четыре route-блока из `DataRoutes.kt`.
+- Удалить неиспользуемые expense-only helpers из `DataRoutes.kt`.
+- Не изменять неполный блок `/api/v1/business-trips`.
+- Запустить `compileKotlin`.
+- Проверить уникальность URL.
+- Выполнить commit и push в `main`.
 
 ## Тестирование
 
-| Пакет | Содержание | Статус |
+| Пакет | Краткое назначение | Статус |
 |---|---|---|
-| T1 | Компиляция после R5–R7 | TODO |
-| T2 | Уникальность routes | TODO |
-| T3 | SERVER tests | TODO |
-| T4 | Миграция чистой БД | TODO |
-| T5 | Миграция существующей БД | TODO |
-| T6 | Payroll и баланс | TODO |
-| T7 | Права директорских расходов | TODO |
-| T8 | WEB build | TODO |
-| T9 | Android build | TODO |
-| T10 | PRO-Chat 100 MB | TODO |
+| T1 | `compileKotlin` после каждого route-пакета | TODO |
+| T2 | Проверка отсутствия дублирующихся URL | TODO |
+| T3 | Полный набор SERVER tests | TODO |
+| T4 | Smoke test авторизации и сессий | TODO |
+| T5 | Тесты CRUD проектов и подпроектов | TODO |
+| T6 | Тесты расходов и доходов | TODO |
+| T7 | Тесты отпусков и выходных | TODO |
+| T8 | Тесты командировок | TODO |
+| T9 | Тесты payroll и баланса | TODO |
+| T10 | Проверка директорских расходов и прав | TODO |
+| T11 | WEB build | TODO |
+| T12 | Android build | TODO |
+| T13 | Проверка вложений PRO-Chat до 100 MB | TODO |
 
-## Критические замечания
+## Известные замечания
 
-- В `dataRoutes()` ошибочно дважды вызывается `projectCostRoutes()`.
-- `projectRoutes()` сейчас не вызывается.
-- `DataRouteDtos.kt` отсутствует.
-- `ExpenseRoutes.kt` можно безопасно вынести: блок расходов виден целиком.
-- `IncomeRoutes.kt` пока не переносить: доступное представление обрывается
-  внутри блока доходов.
-- Не дублировать общие helpers между расходами и доходами.
-- После удаления расхода запись помечается удалённой, но файлы чеков
-  автоматически не очищаются.
-- После применения R7 выполнить push для повторного чтения.
+- `TASK_STATUS.md` до этого обновления отставал от кода.
+- `DataRouteDtos.kt` пока не создан; DTO всё ещё частично находятся в
+  `DataRoutes.kt`.
+- В `DataRoutes.kt` остались expense-only helpers после извлечения R7.
+- `CrudResult` нельзя удалять до проверки оставшихся маршрутов.
+- `checkSession`, `json` и UUID helpers пока используются ниже.
+- В `POST /users` email записывается дважды; вторая запись отменяет
+  fallback `login@proles.local`.
+- Удаление пользователя физически удаляет большой набор связанных данных.
+- Удаление проекта и чеков требует отдельной очистки файлов.
+- Нельзя переносить `BusinessTripRoutes.kt`, пока полностью не виден PUT
+  и конец тематического блока.
 
 ## Следующая точка продолжения
 
-После push повторно прочитать уменьшенный `DataRoutes.kt`. Если
-`route("/api/v1/incomes")` виден полностью, вынести его в
-`IncomeRoutes.kt`. Затем проверить видимость полного блока командировок.
+После применения R9–R11 и push повторно прочитать уменьшенный
+`DataRoutes.kt`.
+
+Если `/api/v1/business-trips` виден полностью, включить его в следующий
+пакет. В тот же пакет добавить ещё один или два полностью видимых
+тематических route-файла, предпочтительно payroll и tickets.
