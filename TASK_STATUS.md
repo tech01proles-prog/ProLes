@@ -6,13 +6,13 @@
 
 - Репозиторий: `https://github.com/tech01proles-prog/ProLes`
 - Ветка: `main`.
-- `DataRoutes.kt`: 4639 строк, 206 KB.
+- `DataRoutes.kt`: 4422 строки, около 193 KB.
 - Доступное представление заканчивается внутри
-  `DELETE /api/v1/expenses/receipt`, после начала запроса
-  `ExpenseReceiptsTable.selectAll()`.
+  `route("/api/v1/incomes")`.
 - Последний полностью доступный тематический блок:
-  `route("/api/v1/projects")`.
+  `route("/api/v1/expenses")`.
 - Для удаления используются маркеры комментариев и route, а не номера строк.
+- Нельзя переносить блок, если его конец не виден.
 - В конце каждого ответа публикуется полный актуальный `TASK_STATUS.md`.
 
 ## Рефакторинг маршрутов
@@ -23,10 +23,10 @@
 | R2 | `FcmRoutes.kt` | `/api/v1/fcm` | APPLIED |
 | R3 | `TimeEntryRoutes.kt` | `/api/v1/entries` | APPLIED |
 | R4 | `ProjectCostRoutes.kt` | `/api/v1/project-costs` | APPLIED |
-| R5 | `ProjectRoutes.kt` | `/api/v1/projects` | CODE PROVIDED |
-| R6 | `DataRouteDtos.kt` | Локальные DTO маршрутов | CODE PROVIDED |
-| R7 | `ExpenseRoutes.kt` | Расходы и чеки | TODO после следующего push |
-| R8 | `IncomeRoutes.kt` | Доходы | TODO |
+| R5 | `ProjectRoutes.kt` | `/api/v1/projects` | FILE APPLIED; REGISTRATION BROKEN |
+| R6 | `DataRouteDtos.kt` | Локальные DTO маршрутов | NOT APPLIED |
+| R7 | `ExpenseRoutes.kt` | Расходы и чеки | READY TO EXTRACT |
+| R8 | `IncomeRoutes.kt` | Доходы | BLOCKED: блок виден не полностью |
 | R9 | `BusinessTripRoutes.kt` | Командировки | TODO |
 | R10 | `UserRoutes.kt` | Пользователи и сотрудники | TODO |
 | R11 | `PayrollRoutes.kt` | Payroll и компоненты | TODO |
@@ -55,8 +55,8 @@
 
 | Пакет | Содержание | Статус |
 |---|---|---|
-| P1 | `PlatformRoutes.kt` под `SessionManager` | Код выдан ранее; проверить применение |
-| A1 | Регистрация маршрутов и таблиц | Код выдан ранее; проверить применение |
+| P1 | `PlatformRoutes.kt` под `SessionManager` | Файл присутствует; функциональная проверка TODO |
+| A1 | Регистрация маршрутов и таблиц | PARTIAL |
 | M1 | PostgreSQL-миграция и backfill | TODO |
 | C1 | AES-GCM PRO-Chat | TODO |
 | C2 | REST и cursor pagination чата | TODO |
@@ -92,21 +92,22 @@
 
 ## Проверки текущего пакета
 
-- Создать `ProjectRoutes.kt`.
-- Создать `DataRouteDtos.kt`.
-- Добавить `projectRoutes()` после `projectCostRoutes()`.
-- Удалить старый блок `/api/v1/projects`.
-- Удалить перенесённые DTO из `DataRoutes.kt`.
-- Заменить вызов удалённого `validateSubprojectForProject` на
-  `validateActiveSubproject`.
+- Исправить повторный `projectCostRoutes()` на `projectRoutes()`.
+- Заменить `validateSubprojectForProject` на `validateActiveSubproject`.
+- Создать `ExpenseRoutes.kt`.
+- Добавить `expenseRoutes()` после `projectRoutes()`.
+- Удалить старый блок `/api/v1/expenses`.
+- Перенести expense-only helpers и DTO.
+- Оставить общие helpers доступными доходам.
 - Выполнить `compileKotlin`.
-- Проверить отсутствие двойных URL.
+- Проверить уникальность routes.
+- Сделать push в `main`.
 
 ## Тестирование
 
 | Пакет | Содержание | Статус |
 |---|---|---|
-| T1 | Компиляция после R5–R6 | TODO |
+| T1 | Компиляция после R5–R7 | TODO |
 | T2 | Уникальность routes | TODO |
 | T3 | SERVER tests | TODO |
 | T4 | Миграция чистой БД | TODO |
@@ -119,16 +120,19 @@
 
 ## Критические замечания
 
-- Не переносить `ExpenseRoutes.kt` сейчас: доступное содержимое обрывается
-  внутри удаления чека.
-- Удаление проекта сейчас физически удаляет связанные записи и метаданные
-  ТНПА; очистку файлов ТНПА нужно выполнять отдельно после commit.
-- `DataRoutes.kt` должен остаться агрегатором тематических модулей.
-- После применения R5–R6 выполнить push для следующего чтения.
+- В `dataRoutes()` ошибочно дважды вызывается `projectCostRoutes()`.
+- `projectRoutes()` сейчас не вызывается.
+- `DataRouteDtos.kt` отсутствует.
+- `ExpenseRoutes.kt` можно безопасно вынести: блок расходов виден целиком.
+- `IncomeRoutes.kt` пока не переносить: доступное представление обрывается
+  внутри блока доходов.
+- Не дублировать общие helpers между расходами и доходами.
+- После удаления расхода запись помечается удалённой, но файлы чеков
+  автоматически не очищаются.
+- После применения R7 выполнить push для повторного чтения.
 
 ## Следующая точка продолжения
 
-После push повторно прочитать уменьшенный `DataRoutes.kt`. Вынести полный
-`/api/v1/expenses` в `ExpenseRoutes.kt`, связанные helpers и `ExpenseTypes`.
-Если следующий блок доходов будет виден целиком, одновременно создать
-`IncomeRoutes.kt`.
+После push повторно прочитать уменьшенный `DataRoutes.kt`. Если
+`route("/api/v1/incomes")` виден полностью, вынести его в
+`IncomeRoutes.kt`. Затем проверить видимость полного блока командировок.
