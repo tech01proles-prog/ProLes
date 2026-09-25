@@ -59,6 +59,39 @@ export interface SubprojectDto {
   archivedAt: number | null;
 }
 
+export interface CreateSubprojectRequest {
+  name: string;
+  code: string;
+  description: string;
+  sortOrder: number;
+}
+
+export interface UpdateSubprojectRequest {
+  name?: string;
+  code?: string;
+  description?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
+export interface TnpaDocumentDto {
+  id: string;
+  projectId: string;
+  projectName: string;
+  subprojectId: string | null;
+  subprojectName: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  checksumSha256: string;
+  description: string;
+  uploadedBy: string;
+  uploaderName: string;
+  uploadedAt: number;
+  downloadUrl: string;
+  deletedAt: number | null;
+}
+
 export interface ProjectDto {
   id: string;
   name: string;
