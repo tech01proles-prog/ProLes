@@ -303,7 +303,7 @@ internal fun Route.payrollRoutes() {
 
             val projectId = body.projectId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
             val effectiveFrom = parsePayrollDate(body.effectiveFrom)
-                ?: return@post call.respond(
+                ?: return@put call.respond(
                     HttpStatusCode.BadRequest,
                     "Invalid effectiveFrom"
                 )
@@ -312,21 +312,21 @@ internal fun Route.payrollRoutes() {
                 null
             } else {
                 parsePayrollDate(body.effectiveTo)
-                    ?: return@post call.respond(
+                    ?: return@put call.respond(
                         HttpStatusCode.BadRequest,
                         "Invalid effectiveTo"
                     )
             }
 
             if (effectiveTo != null && effectiveTo < effectiveFrom) {
-                return@post call.respond(
+                return@put call.respond(
                     HttpStatusCode.BadRequest,
                     "effectiveTo precedes effectiveFrom"
                 )
             }
 
             if (!body.amount.isFinite() || body.amount < 0.0) {
-                return@post call.respond(
+                return@put call.respond(
                     HttpStatusCode.BadRequest,
                     "Invalid amount"
                 )
@@ -557,6 +557,36 @@ internal fun Route.payrollRoutes() {
                 )
             }
 
+            private val payrollStatusTransitions = mapOf(
+                "draft" to setOf("approved"),
+                "approved" to setOf("draft", "paid"),
+                "paid" to emptySet()
+            )
+
+            val currentStatus = transaction {
+                SalaryRecordsTable
+                    .selectAll()
+                    .where { SalaryRecordsTable.id eq recordId }
+                    .limit(1)
+                    .singleOrNull()
+                    ?.get(SalaryRecordsTable.status)
+                    ?.lowercase()
+            } ?: return@put call.respond(
+                HttpStatusCode.NotFound,
+                "Salary record not found"
+            )
+
+            if (status == currentStatus) {
+                return@put call.respond(HttpStatusCode.OK)
+            }
+
+            if (status !in payrollStatusTransitions[currentStatus].orEmpty()) {
+                return@put call.respond(
+                    HttpStatusCode.Conflict,
+                    "Invalid payroll status transition"
+                )
+            }
+
             val affected = transaction {
                 SalaryRecordsTable.update({
                     SalaryRecordsTable.id eq recordId
@@ -578,16 +608,6 @@ internal fun Route.payrollRoutes() {
             } else {
                 call.respond(HttpStatusCode.OK)
             }
-
-            transaction {
-                SalaryRecordsTable.update({ SalaryRecordsTable.id eq recordId }) {
-                    it[SalaryRecordsTable.status] = status
-                    if (status == "paid") {
-                        it[paidAt] = System.currentTimeMillis()
-                    }
-                }
-            }
-            call.respond(HttpStatusCode.OK)
         }
     }
 }

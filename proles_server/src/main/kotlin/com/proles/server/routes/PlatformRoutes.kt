@@ -986,23 +986,40 @@ private fun Route.tnpaRoutes(storageRoot: File) {
                         mapOf("error" to "Некорректный documentId")
                     )
 
-            val affected = transaction {
-                TnpaDocumentsTable.update(
-                    {
+            val storagePath = transaction {
+                val row = TnpaDocumentsTable
+                    .selectAll()
+                    .where {
                         (TnpaDocumentsTable.id eq documentId) and
                             TnpaDocumentsTable.deletedAt.isNull()
                     }
-                ) {
+                    .forUpdate()
+                    .singleOrNull()
+                    ?: return@transaction null
+
+                TnpaDocumentsTable.update({
+                    TnpaDocumentsTable.id eq documentId
+                }) {
                     it[deletedAt] = System.currentTimeMillis()
                     it[deletedBy] = session.id
                 }
+
+                row[TnpaDocumentsTable.storagePath]
             }
 
-            if (affected == 0) {
+            if (storagePath == null) {
                 call.respond(HttpStatusCode.NotFound)
-            } else {
-                call.respond(HttpStatusCode.NoContent)
+                return@delete
             }
+
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val file = File(storagePath)
+                    if (file.isFile) file.delete()
+                }
+            }
+
+            call.respond(HttpStatusCode.NoContent)
         }
     }
 }

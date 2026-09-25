@@ -153,6 +153,8 @@ internal fun Route.ticketRoutes() {
                 return@delete call.respond(HttpStatusCode.Forbidden, "Cannot delete another user's ticket")
             }
 
+
+
             transaction {
                 // Удаляем получателей
                 TicketRecipientsTable.deleteWhere { TicketRecipientsTable.ticketId eq ticketId }
@@ -161,10 +163,18 @@ internal fun Route.ticketRoutes() {
             }
 
             // Удаляем файл с диска
-            val filePath = ticket[TicketsTable.filePath]
-            val file = java.io.File("." + filePath)
+            val ticketFilePath = ticket[TicketsTable.filePath]
+            val ticketFilePath = ticket[TicketsTable.filePath]
+            val receiptPath = ticket[TicketsTable.receiptPath]
+            val file = java.io.File("." + ticketFilePath)
             if (file.exists()) {
                 file.delete()
+            }
+
+            listOfNotNull(ticketFilePath, receiptPath).forEach { path ->
+                runCatching {
+                    java.io.File("." + path).takeIf { it.isFile }?.delete()
+                }
             }
 
             call.respond(HttpStatusCode.NoContent)
@@ -188,11 +198,12 @@ internal fun Route.ticketRoutes() {
             }
 
             val projectId = runCatching {
-                projectId
+                UUID.fromString(request.projectId.trim())
             }.getOrNull() ?: return@post call.respond(
                 HttpStatusCode.BadRequest,
                 "Invalid projectId"
             )
+
 
             if (request.fileBase64.isBlank()) {
                 return@post call.respond(
@@ -209,7 +220,9 @@ internal fun Route.ticketRoutes() {
             }
 
             val allowedCurrencies = setOf("RUB", "BYN", "USD", "EUR")
-            val currency = currency.trim().uppercase()
+
+            val currency = request.currency.trim().uppercase()
+
 
             if (currency !in allowedCurrencies) {
                 return@post call.respond(
@@ -266,13 +279,18 @@ internal fun Route.ticketRoutes() {
                 )
             }
 
-            val knownRecipientIds = transaction {
-                UsersTable
-                    .selectAll()
-                    .where { UsersTable.id inList recipientIds }
-                    .map { it[UsersTable.id].value }
-                    .toSet()
-            }
+            val knownRecipientIds =
+                if (recipientIds.isEmpty()) {
+                    emptySet()
+                } else {
+                    transaction {
+                        UsersTable
+                            .selectAll()
+                            .where { UsersTable.id inList recipientIds }
+                            .map { it[UsersTable.id].value }
+                            .toSet()
+                    }
+                }
 
             if (knownRecipientIds.size != recipientIds.size) {
                 return@post call.respond(
@@ -289,34 +307,12 @@ internal fun Route.ticketRoutes() {
                 mkdirs()
             }
             val ticketFile = java.io.File(uploadDir, uniqueFileName)
-            java.io.File(uploadDir, uniqueFileName).writeBytes(fileBytes)
 
             // 🆕 Обработка чека если предоставлен
+            var receiptFile: java.io.File? = null
             var receiptFilePath: String? = null
             var receiptOriginalName: String? = null
             var receiptFileType: String? = null
-
-            if (!request.receiptBase64.isNullOrBlank()) {
-                val receiptBytes = try { java.util.Base64.getDecoder().decode(request.receiptBase64) }
-                catch (e: Exception) {
-                    println("⚠️ Invalid receipt Base64: ${e.message}")
-                    null
-                }
-
-                if (receiptBytes != null) {
-                    val companyFolder = "Proles Company"
-                    val receiptMonth = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"))
-                    val receiptDir = java.io.File("uploads/receipts/$receiptMonth/$companyFolder").apply { mkdirs() }
-                    val receiptFileName = request.receiptFileName ?: "receipt"
-                    val safeReceiptName = receiptFileName.replace(Regex("[^A-Za-zА-Яа-яЁё0-9._ -]"), "_")
-                    val uniqueReceiptFileName = "${ticketId}_$safeReceiptName"
-                    java.io.File(receiptDir, uniqueReceiptFileName).writeBytes(receiptBytes)
-                    receiptFilePath = "/uploads/receipts/$receiptMonth/$companyFolder/$uniqueReceiptFileName"
-                    receiptOriginalName = receiptFileName
-                    receiptFileType = request.receiptFileType ?: "application/octet-stream"
-                    println("✅ Receipt saved: $receiptFilePath (${receiptBytes.size / 1024} KB)")
-                }
-            }
 
             transaction {
                 // Находим UUID пользователя COMPANY для расходов компании
@@ -386,12 +382,10 @@ internal fun Route.ticketRoutes() {
                 }
 
                 request.recipientIds.forEach { recipientId ->
-                    runCatching {
-                        TicketRecipientsTable.insert {
-                            it[TicketRecipientsTable.id] = UUID.randomUUID()
-                            it[TicketRecipientsTable.ticketId] = ticketId
-                            it[TicketRecipientsTable.userId] = UUID.fromString(recipientId)
-                        }
+                    TicketRecipientsTable.insert {
+                        it[TicketRecipientsTable.id] = UUID.randomUUID()
+                        it[TicketRecipientsTable.ticketId] = ticketId
+                        it[TicketRecipientsTable.userId] = UUID.fromString(recipientId)
                     }
                 }
             }
@@ -441,7 +435,12 @@ internal fun Route.ticketRoutes() {
                         val ticketFile = java.io.File("uploads/tickets/$uniqueFileName")
                         val fileBytes = if (ticketFile.exists()) ticketFile.readBytes() else fileBytes
 
-                        val subject = "🎫 Новый билет по проекту «$projectName»"
+                        val emailProjectName = projectName
+                            .replace(Regex("[\\r\\n]"), " ")
+                            .take(200)
+
+                        val subject = "Новый билет по проекту «$emailProjectName»"
+
                         val safeSenderName = escapeHtml(senderName)
                         val safeProjectName = escapeHtml(projectName)
                         val safeDescription = escapeHtml(
@@ -454,18 +453,18 @@ internal fun Route.ticketRoutes() {
                             <h2 style="color: #2E7D32;">🎫 Новый билет загружен</h2>
                             <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
                                 <tr><td style="padding: 8px; background: #f5f5f5; font-weight: bold;">Загрузил:</td>
-                                    <td style="padding: 8px;">$senderName</td></tr>
+                                    <td style="padding: 8px;">$safeSenderName</td></tr>
                                 <tr><td style="padding: 8px; background: #f5f5f5; font-weight: bold;">Проект:</td>
-                                    <td style="padding: 8px;">$projectName</td></tr>
+                                    <td style="padding: 8px;">$safeProjectName</td></tr>
                                 ${if (request.amount > 0.0) """
                                 <tr><td style="padding: 8px; background: #FFF3E0; font-weight: bold; color: #E65100;">💰 Стоимость:</td>
                                     <td style="padding: 8px; background: #FFF3E0; font-weight: bold; color: #E65100;">
-                                        ${"%.2f".format(request.amount)} ${currency}
+                                        ${"%.2f".format(request.amount)} ${safeCurrency}
                                     </td></tr>
                                 """ else ""}
                                 ${if (request.description.isNotBlank()) """
                                 <tr><td style="padding: 8px; background: #f5f5f5; font-weight: bold;">Описание:</td>
-                                    <td style="padding: 8px;">${request.description}</td></tr>
+                                    <td style="padding: 8px;">${safeDescription}</td></tr>
                                 """ else ""}
                             </table>
                             <p style="color: #666; font-size: 12px; margin-top: 20px;">
