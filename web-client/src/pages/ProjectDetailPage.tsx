@@ -1,293 +1,614 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 import api from '../api/client';
-import type { ProjectDto, TimeEntryDto, ExpenseDto, IncomeDto } from '../types';
-import { formatMoney, formatDate } from '../lib/utils';
+import type {
+  ExpenseDto,
+  IncomeDto,
+  ProjectDto,
+  TimeEntryDto,
+} from '../types';
+import {
+  formatDate,
+  formatMoney,
+} from '../lib/utils';
+import {
+  ProjectActivityList,
+  ProjectDetailHero,
+  ProjectTabs,
+  type ProjectActivityItem,
+  type ProjectDetailTab,
+} from '../components/projects';
+import {
+  EmptyState,
+  PageSection,
+  StatCard,
+  StatusBadge,
+} from '../components/ui';
+
+const EXPENSE_TYPE_LABELS: Record<string, string> = {
+  HOUSEHOLD: 'Хозяйственные нужды',
+  CONTRACTORS: 'Подрядчики',
+  ROAD: 'Дорога',
+  PER_DIEM: 'Суточные',
+  PER_DIEM_EXTRA: 'Суточные сверх нормы',
+  CASH: 'Наличные',
+  CARD: 'Карта',
+  OTHER: 'Прочее',
+};
+
+const INCOME_TYPE_LABELS: Record<string, string> = {
+  HOUSEHOLD: 'Хозяйственный доход',
+  CARD: 'Безналичный доход',
+  CASH: 'Наличный доход',
+  OTHER: 'Прочий доход',
+};
+
+function formatHours(value: number) {
+  return new Intl.NumberFormat('ru-RU', {
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatOptionalDate(value: string | null) {
+  return value ? formatDate(value) : 'Не указана';
+}
+
+function sumByCurrency(
+  items: Array<{ amount: number; currency: string }>,
+) {
+  return items.reduce<Record<string, number>>(
+    (result, item) => {
+      const currency =
+        item.currency?.trim().toUpperCase() || 'RUB';
+
+      result[currency] =
+        (result[currency] ?? 0) + Number(item.amount || 0);
+
+      return result;
+    },
+    {},
+  );
+}
+
+function formatCurrencyTotals(
+  values: Record<string, number>,
+) {
+  const entries = Object.entries(values);
+
+  if (entries.length === 0) return '0 ₽';
+
+  return entries
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([currency, amount]) =>
+      formatMoney(amount, currency),
+    )
+    .join(' · ');
+}
+
+function getRubTotal(values: Record<string, number>) {
+  return values.RUB ?? 0;
+}
 
 export function ProjectDetailPage() {
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId } = useParams<{
+    projectId: string;
+  }>();
   const navigate = useNavigate();
-  const [project, setProject] = useState<ProjectDto | null>(null);
-  const [entries, setEntries] = useState<TimeEntryDto[]>([]);
-  const [expenses, setExpenses] = useState<ExpenseDto[]>([]);
-  const [incomes, setIncomes] = useState<IncomeDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'hours' | 'expenses'>('overview');
 
-  useEffect(() => {
-    if (!projectId) return;
-    (async () => {
-      setLoading(true);
-      const [projRes, entRes, expRes, incRes] = await Promise.allSettled([
-        api.get<ProjectDto[]>('/projects'),
-        api.get<TimeEntryDto[]>('/entries/all'),
-        api.get<ExpenseDto[]>('/expenses/all'),
-        api.get<IncomeDto[]>('/incomes/all'),
-      ]);
-      const projects = projRes.status === 'fulfilled' ? projRes.value.data : [];
-      const found = projects.find(p => p.id === projectId);
-      setProject(found || null);
-      const allEntries = entRes.status === 'fulfilled' ? entRes.value.data : [];
-      const allExpenses = expRes.status === 'fulfilled' ? expRes.value.data : [];
-      const allIncomes = incRes.status === 'fulfilled' ? incRes.value.data : [];
-      setEntries(allEntries.filter(e => e.projectId === projectId));
-      setExpenses(allExpenses.filter(e => e.projectId === projectId));
-      setIncomes(allIncomes.filter(i => i.projectId === projectId));
+  const [project, setProject] =
+    useState<ProjectDto | null>(null);
+  const [entries, setEntries] =
+    useState<TimeEntryDto[]>([]);
+  const [expenses, setExpenses] =
+    useState<ExpenseDto[]>([]);
+  const [incomes, setIncomes] =
+    useState<IncomeDto[]>([]);
+
+  const [activeTab, setActiveTab] =
+    useState<ProjectDetailTab>('overview');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadData = useCallback(async () => {
+    if (!projectId) {
+      setProject(null);
+      setError('Идентификатор проекта не указан.');
       setLoading(false);
-    })();
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    const [
+      projectsResult,
+      entriesResult,
+      expensesResult,
+      incomesResult,
+    ] = await Promise.allSettled([
+      api.get<ProjectDto[]>('/projects'),
+      api.get<TimeEntryDto[]>('/entries/all'),
+      api.get<ExpenseDto[]>('/expenses/all'),
+      api.get<IncomeDto[]>('/incomes/all'),
+    ]);
+
+    if (projectsResult.status === 'fulfilled') {
+      const selectedProject =
+        projectsResult.value.data.find(
+          (item) => item.id === projectId,
+        );
+
+      setProject(selectedProject ?? null);
+
+      if (!selectedProject) {
+        setError('Проект не найден.');
+      }
+    } else {
+      setProject(null);
+      setError('Не удалось загрузить карточку проекта.');
+    }
+
+    setEntries(
+      entriesResult.status === 'fulfilled'
+        ? entriesResult.value.data.filter(
+            (entry) => entry.projectId === projectId,
+          )
+        : [],
+    );
+
+    setExpenses(
+      expensesResult.status === 'fulfilled'
+        ? expensesResult.value.data.filter(
+            (expense) => expense.projectId === projectId,
+          )
+        : [],
+    );
+
+    setIncomes(
+      incomesResult.status === 'fulfilled'
+        ? incomesResult.value.data.filter(
+            (income) => income.projectId === projectId,
+          )
+        : [],
+    );
+
+    if (
+      projectsResult.status === 'fulfilled' &&
+      (entriesResult.status === 'rejected' ||
+        expensesResult.status === 'rejected' ||
+        incomesResult.status === 'rejected')
+    ) {
+      setError(
+        'Карточка проекта загружена, но часть связанных данных недоступна.',
+      );
+    }
+
+    setLoading(false);
   }, [projectId]);
 
-  const stats = useMemo(() => {
-    const totalHours = entries.reduce((s, e) => s + e.hours, 0);
-    const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
-    const totalIncomes = incomes.reduce((s, e) => s + e.amount, 0);
-    const workDays = new Set(entries.map(e => e.date)).size;
-    const expensesByType = expenses.reduce((acc, e) => {
-      acc[e.type] = (acc[e.type] || 0) + e.amount;
-      return acc;
-    }, {} as Record<string, number>);
-    const incomesByType = incomes.reduce((acc, i) => {
-      acc[i.name] = (acc[i.name] || 0) + i.amount;
-      return acc;
-    }, {} as Record<string, number>);
-    return { totalHours, totalExpenses, totalIncomes, workDays, expensesByType, incomesByType };
-  }, [entries, expenses, incomes]);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
-  const STATUS_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
-    new: { label: 'Новый', emoji: '🆕', color: 'from-blue-500 to-indigo-500' },
-    in_progress: { label: 'В работе', emoji: '🔄', color: 'from-orange-500 to-amber-500' },
-    completed: { label: 'Завершён', emoji: '✅', color: 'from-emerald-500 to-green-500' },
-    cancelled: { label: 'Отменён', emoji: '❌', color: 'from-red-500 to-rose-500' },
-  };
-
-  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
-  if (!project) return (
-    <div className="card p-12 text-center">
-      <div className="text-5xl mb-4">🔍</div>
-      <h3 className="text-lg font-semibold">Проект не найден</h3>
-      <button onClick={() => navigate('/projects')} className="btn-primary mt-4 px-5 py-2">← Назад к проектам</button>
-    </div>
+  const totalHours = useMemo(
+    () =>
+      entries.reduce(
+        (sum, entry) =>
+          sum + Number(entry.hours || 0),
+        0,
+      ),
+    [entries],
   );
 
-  const st = STATUS_CONFIG[project.status] || STATUS_CONFIG.new;
-  const profit = stats.totalIncomes - stats.totalExpenses;
+  const workDays = useMemo(
+    () => new Set(entries.map((entry) => entry.date)).size,
+    [entries],
+  );
+
+  const expensesByCurrency = useMemo(
+    () => sumByCurrency(expenses),
+    [expenses],
+  );
+
+  const incomesByCurrency = useMemo(
+    () => sumByCurrency(incomes),
+    [incomes],
+  );
+
+  const rubBalance =
+    getRubTotal(incomesByCurrency) -
+    getRubTotal(expensesByCurrency);
+
+  const expenseGroups = useMemo(
+    () =>
+      expenses.reduce<Record<string, number>>(
+        (result, expense) => {
+          result[expense.type] =
+            (result[expense.type] ?? 0) +
+            Number(expense.amount || 0);
+
+          return result;
+        },
+        {},
+      ),
+    [expenses],
+  );
+
+  const timeItems = useMemo<ProjectActivityItem[]>(
+    () =>
+      [...entries]
+        .sort((left, right) =>
+          right.date.localeCompare(left.date),
+        )
+        .map((entry) => ({
+          id: entry.id,
+          title: entry.projectName || 'Рабочее время',
+          description: entry.comment || undefined,
+          meta: `${formatDate(entry.date)} · ${
+            entry.country === 'BY'
+              ? 'Беларусь'
+              : 'Россия'
+          }`,
+          value: `${formatHours(entry.hours)} ч`,
+          badge: entry.synced
+            ? 'Синхронизировано'
+            : 'Черновик',
+          tone: 'indigo',
+        })),
+    [entries],
+  );
+
+  const expenseItems =
+    useMemo<ProjectActivityItem[]>(
+      () =>
+        [...expenses]
+          .sort((left, right) =>
+            right.date.localeCompare(left.date),
+          )
+          .map((expense) => ({
+            id: expense.id,
+            title:
+              expense.name ||
+              EXPENSE_TYPE_LABELS[expense.type] ||
+              'Расход',
+            description: expense.comment || undefined,
+            meta: formatDate(expense.date),
+            value: formatMoney(
+              expense.amount,
+              expense.currency,
+            ),
+            badge:
+              expense.receiptCount &&
+              expense.receiptCount > 0
+                ? `Чеков: ${expense.receiptCount}`
+                : expense.receiptSubmitted
+                  ? 'Чек предоставлен'
+                  : 'Без чека',
+            tone: 'rose',
+          })),
+      [expenses],
+    );
+
+  const incomeItems =
+    useMemo<ProjectActivityItem[]>(
+      () =>
+        [...incomes]
+          .sort((left, right) =>
+            right.date.localeCompare(left.date),
+          )
+          .map((income) => ({
+            id: income.id,
+            title:
+              income.name ||
+              INCOME_TYPE_LABELS[income.type] ||
+              'Доход',
+            meta: formatDate(income.date),
+            value: formatMoney(
+              income.amount,
+              income.currency,
+            ),
+            badge:
+              INCOME_TYPE_LABELS[income.type] ||
+              income.type ||
+              undefined,
+            tone: 'emerald',
+          })),
+      [incomes],
+    );
+
+  if (loading) {
+    return (
+      <div className="flex min-h-80 items-center justify-center">
+        <div
+          className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600 dark:border-slate-800 dark:border-t-indigo-400"
+          aria-label="Загрузка проекта"
+        />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <PageSection>
+        <EmptyState
+          title="Проект недоступен"
+          description={
+            error ||
+            'Карточка проекта не найдена или была удалена.'
+          }
+          action={
+            <button
+              type="button"
+              onClick={() => navigate('/projects')}
+              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+            >
+              Вернуться к проектам
+            </button>
+          }
+        />
+      </PageSection>
+    );
+  }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Кнопка назад */}
-      <button onClick={() => navigate('/projects')} className="btn-ghost text-sm gap-2 text-slate-500 dark:text-slate-400">
-        ← Назад к проектам
-      </button>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <ProjectDetailHero
+        project={project}
+        totalHours={totalHours}
+        onBack={() => navigate('/projects')}
+      />
 
-      {/* 🌲 Hero-карточка проекта */}
-      <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${st.color} p-6 md:p-8 text-white shadow-xl`}>
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-        <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-        <div className="relative z-10">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-sm font-medium text-white/80 mb-1">{st.emoji} {st.label}</div>
-              <h1 className="text-2xl md:text-3xl font-bold mb-2">{project.name}</h1>
-              <div className="flex flex-wrap gap-3 text-sm text-white/90">
-                {project.client && <span>👤 {project.client}</span>}
-                {project.location && <span>📍 {project.location}</span>}
-                {project.contract && <span>📄 {project.contract}</span>}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-3xl font-black">{stats.totalHours}</div>
-              <div className="text-xs text-white/70 uppercase font-bold">часов</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="card p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-100 dark:border-blue-900">
-          <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Часы</div>
-          <div className="text-2xl font-black text-blue-900 dark:text-blue-100 mt-1">{stats.totalHours.toFixed(1)}ч</div>
-          <div className="text-[10px] text-blue-500 mt-0.5">{stats.workDays} рабочих дней</div>
-        </div>
-        <div className="card p-4 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border-orange-100 dark:border-orange-900">
-          <div className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase">Расходы</div>
-          <div className="text-2xl font-black text-orange-900 dark:text-orange-100 mt-1">{formatMoney(stats.totalExpenses)}</div>
-          <div className="text-[10px] text-orange-500 mt-0.5">{expenses.length} записей</div>
-        </div>
-        <div className="card p-4 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 border-emerald-100 dark:border-emerald-900">
-          <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase">Расходы/Доходы</div>
-          <div className="text-2xl font-black text-emerald-900 dark:text-emerald-100 mt-1">{formatMoney(stats.totalIncomes - stats.totalExpenses)}</div>
-          <div className="text-[10px] text-emerald-500 mt-0.5">Сальдо проекта</div>
-        </div>
-        <div className={`card p-4 border ${profit >= 0 ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-green-100 dark:border-green-900' : 'bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 border-red-100 dark:border-red-900'}`}>
-          <div className={`text-xs font-bold uppercase ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>Прибыль</div>
-          <div className={`text-2xl font-black mt-1 ${profit >= 0 ? 'text-green-900 dark:text-green-100' : 'text-red-900 dark:text-red-100'}`}>{formatMoney(profit)}</div>
-          <div className={`text-[10px] mt-0.5 ${profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{stats.totalIncomes > 0 ? `${((profit / stats.totalIncomes) * 100).toFixed(1)}% маржа` : '—'}</div>
-        </div>
-      </div>
-
-      {/* Доп. информация о проекте */}
-      {(project.productService || project.quantity > 1 || project.deliveryDate || project.notes) && (
-        <div className="card p-5">
-          <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-3 flex items-center gap-2">
-            <span className="w-1.5 h-5 bg-indigo-500 rounded-full"></span>
-            Детали проекта
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            {project.productService && (
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                <div className="text-xs text-slate-500 dark:text-slate-400">🎯 Товар / Услуга</div>
-                <div className="font-medium text-slate-900 dark:text-slate-100 mt-0.5">{project.productService}</div>
-              </div>
-            )}
-            {project.quantity > 1 && (
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                <div className="text-xs text-slate-500 dark:text-slate-400">📦 Количество</div>
-                <div className="font-medium text-slate-900 dark:text-slate-100 mt-0.5">{project.quantity} шт.</div>
-              </div>
-            )}
-            {project.deliveryDate && (
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                <div className="text-xs text-slate-500 dark:text-slate-400">📅 Срок поставки</div>
-                <div className="font-medium text-slate-900 dark:text-slate-100 mt-0.5">{formatDate(project.deliveryDate)}</div>
-              </div>
-            )}
-            {project.notes && (
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg md:col-span-2">
-                <div className="text-xs text-amber-600 dark:text-amber-400">📝 Заметки</div>
-                <div className="font-medium text-slate-900 dark:text-slate-100 mt-0.5">{project.notes}</div>
-              </div>
-            )}
-          </div>
+      {error && (
+        <div
+          role="alert"
+          className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"
+        >
+          {error}
         </div>
       )}
 
-      {/* Табы */}
-      <div className="flex gap-1 bg-white dark:bg-slate-900 rounded-xl p-1 border border-slate-200 dark:border-slate-700 w-fit">
-        <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'overview' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-600 dark:text-slate-400'}`}>
-          📊 Обзор
-        </button>
-        <button onClick={() => setActiveTab('hours')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'hours' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-600 dark:text-slate-400'}`}>
-          ⏱ Часы ({entries.length})
-        </button>
-        <button onClick={() => setActiveTab('expenses')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'expenses' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-600 dark:text-slate-400'}`}>
-          💸 Расходы/Доходы ({expenses.length + incomes.length})
-        </button>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Рабочее время"
+          value={`${formatHours(totalHours)} ч`}
+          hint={`${workDays} рабочих дней`}
+          tone="indigo"
+          icon={<span aria-hidden="true">◷</span>}
+        />
+
+        <StatCard
+          label="Доходы"
+          value={formatCurrencyTotals(incomesByCurrency)}
+          hint={`${incomes.length} операций`}
+          tone="emerald"
+          icon={<span aria-hidden="true">↗</span>}
+        />
+
+        <StatCard
+          label="Расходы"
+          value={formatCurrencyTotals(expensesByCurrency)}
+          hint={`${expenses.length} операций`}
+          tone="rose"
+          icon={<span aria-hidden="true">↘</span>}
+        />
+
+        <StatCard
+          label="Баланс в RUB"
+          value={formatMoney(rubBalance, 'RUB')}
+          hint="Без пересчёта других валют"
+          tone={rubBalance >= 0 ? 'emerald' : 'rose'}
+          icon={<span aria-hidden="true">₽</span>}
+        />
       </div>
 
-      {/* Контент табов */}
+      <ProjectTabs
+        value={activeTab}
+        hoursCount={entries.length}
+        financeCount={expenses.length + incomes.length}
+        onChange={setActiveTab}
+      />
+
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Расходы по типам */}
-          <div className="card p-5">
-            <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-              <span className="w-1.5 h-5 bg-orange-500 rounded-full"></span>
-              Расходы по типам
-            </h3>
-            {Object.keys(stats.expensesByType).length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-sm">Нет расходов</div>
-            ) : (
-              <div className="space-y-3">
-                {Object.entries(stats.expensesByType).sort((a, b) => b[1] - a[1]).map(([type, amount]) => {
-                  const pct = (amount / stats.totalExpenses) * 100;
-                  const labels: Record<string, string> = {
-                    CONTRACTORS: '👷 Подрядчики', ROAD: '🚗 Дорога', PER_DIEM: '💵 Суточные',
-                    CASH: '💰 Наличные', CARD: '💳 Карта', OTHER: '📦 Прочее',
-                  };
-                  return (
-                    <div key={type}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{labels[type] || type}</span>
-                        <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{formatMoney(amount)}</span>
-                      </div>
-                      <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <PageSection
+            title="Параметры проекта"
+            description="Договорные и производственные сведения"
+          >
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Товар или услуга
+                </dt>
+                <dd className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                  {project.productService || 'Не указано'}
+                </dd>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Количество
+                </dt>
+                <dd className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                  {project.quantity}
+                </dd>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Срок поставки
+                </dt>
+                <dd className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                  {formatOptionalDate(
+                    project.deliveryDate,
+                  )}
+                </dd>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Дата завершения
+                </dt>
+                <dd className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                  {formatOptionalDate(
+                    project.completionDate,
+                  )}
+                </dd>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Код проекта
+                </dt>
+                <dd className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                  {project.projectCode || 'Не указан'}
+                </dd>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Заказчик
+                </dt>
+                <dd className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                  {project.customer ||
+                    project.client ||
+                    'Не указан'}
+                </dd>
+              </div>
+            </dl>
+
+            {project.notes && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+                <div className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                  Заметки
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">
+                  {project.notes}
+                </p>
               </div>
             )}
-          </div>
+          </PageSection>
+
+          <PageSection
+            title="Расходы по типам"
+            description="Структура расходов в RUB"
+          >
+            {Object.keys(expenseGroups).length === 0 ? (
+              <EmptyState
+                compact
+                title="Расходов пока нет"
+                description="Операции появятся после добавления расходов по проекту."
+              />
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(expenseGroups)
+                  .sort((left, right) => right[1] - left[1])
+                  .map(([type, amount]) => {
+                    const rubExpenses =
+                      expensesByCurrency.RUB ?? 0;
+                    const percentage =
+                      rubExpenses > 0
+                        ? Math.min(
+                            (amount / rubExpenses) * 100,
+                            100,
+                          )
+                        : 0;
+
+                    return (
+                      <div key={type}>
+                        <div className="mb-1.5 flex items-center justify-between gap-3">
+                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                            {EXPENSE_TYPE_LABELS[type] ||
+                              type}
+                          </span>
+                          <span className="text-sm font-bold text-rose-600 dark:text-rose-400">
+                            {formatMoney(amount, 'RUB')}
+                          </span>
+                        </div>
+
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-rose-500 to-orange-400"
+                            style={{
+                              width: `${percentage}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </PageSection>
         </div>
       )}
 
       {activeTab === 'hours' && (
-        <div className="card overflow-hidden">
-          {entries.length === 0 ? (
-            <div className="p-12 text-center text-slate-400">
-              <div className="text-4xl mb-2">⏱</div>
-              <p>Нет записей часов по этому проекту</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                  <tr>
-                    <th className="text-left p-3 font-semibold text-slate-600 dark:text-slate-400">Дата</th>
-                    <th className="text-right p-3 font-semibold text-slate-600 dark:text-slate-400">Часы</th>
-                    <th className="text-left p-3 font-semibold text-slate-600 dark:text-slate-400 hidden md:table-cell">Страна</th>
-                    <th className="text-left p-3 font-semibold text-slate-600 dark:text-slate-400 hidden md:table-cell">Комментарий</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.sort((a, b) => b.date.localeCompare(a.date)).map(entry => (
-                    <tr key={entry.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                      <td className="p-3 font-medium text-slate-900 dark:text-slate-100">{formatDate(entry.date)}</td>
-                      <td className="p-3 text-right font-bold text-blue-600 dark:text-blue-400 tabular-nums">{entry.hours}ч</td>
-                      <td className="p-3 text-slate-500 hidden md:table-cell">{entry.country === 'RF' ? '🇷🇺' : '🇧🇾'}</td>
-                      <td className="p-3 text-slate-500 truncate max-w-[200px] hidden md:table-cell">{entry.comment || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <PageSection
+          title="Рабочее время"
+          description="Все записи табеля по проекту"
+          action={
+            <StatusBadge tone="info">
+              {formatHours(totalHours)} ч
+            </StatusBadge>
+          }
+        >
+          <ProjectActivityList
+            items={timeItems}
+            emptyTitle="Записей рабочего времени нет"
+            emptyDescription="Часы появятся после заполнения табеля по этому проекту."
+          />
+        </PageSection>
       )}
 
-      {activeTab === 'expenses' && (
-        <div className="space-y-2">
-          {expenses.length === 0 ? (
-            <div className="card p-12 text-center text-slate-400">
-              <div className="text-4xl mb-2">💸</div>
-              <p>Нет расходов по этому проекту</p>
-            </div>
-          ) : (
-            expenses.sort((a, b) => b.date.localeCompare(a.date)).map(exp => (
-              <div
-                key={exp.id}
-                className={`card p-4 flex items-center justify-between transition-all ${
-                  exp.hasReceiptPhoto
-                    ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
-                    : ''
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold text-slate-400">{formatDate(exp.date)}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400">{exp.type}</span>
-                    {exp.hasReceiptPhoto && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 flex items-center gap-1">
-                        <span>✓</span>
-                        <span>Чек</span>
-                      </span>
-                    )}
-                  </div>
-                  <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{exp.name || 'Без названия'}</div>
-                </div>
-                <div className={`text-lg font-bold flex-shrink-0 ml-4 ${
-                  exp.hasReceiptPhoto
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-orange-600 dark:text-orange-400'
-                }`}>
-                  {formatMoney(exp.amount, exp.currency)}
-                </div>
-              </div>
-            ))
-          )}
+      {activeTab === 'finance' && (
+        <div className="grid gap-6 xl:grid-cols-2">
+          <PageSection
+            title="Доходы"
+            description={formatCurrencyTotals(
+              incomesByCurrency,
+            )}
+            action={
+              <StatusBadge tone="success">
+                {incomes.length}
+              </StatusBadge>
+            }
+          >
+            <ProjectActivityList
+              items={incomeItems}
+              emptyTitle="Доходов пока нет"
+              emptyDescription="Доходные операции по проекту отсутствуют."
+            />
+          </PageSection>
+
+          <PageSection
+            title="Расходы"
+            description={formatCurrencyTotals(
+              expensesByCurrency,
+            )}
+            action={
+              <StatusBadge tone="danger">
+                {expenses.length}
+              </StatusBadge>
+            }
+          >
+            <ProjectActivityList
+              items={expenseItems}
+              emptyTitle="Расходов пока нет"
+              emptyDescription="Расходные операции по проекту отсутствуют."
+            />
+          </PageSection>
         </div>
       )}
     </div>
   );
 }
+
+export default ProjectDetailPage;
