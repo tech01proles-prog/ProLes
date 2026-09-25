@@ -6,27 +6,43 @@
 
 - Репозиторий: `https://github.com/tech01proles-prog/ProLes`.
 - Рабочая ветка: `main`.
-- Главная текущая задача: разбить большой `DataRoutes.kt` на тематические route-файлы.
-- Переносить за один этап 2–3 route-файла, если все блоки видны полностью.
-- Не разрывать `route`, обработчик или вспомогательную функцию.
-- Границы удаления определять по тематическим комментариям и `route(...)`, а не по номерам строк.
-- После каждого пакета запускать компиляцию и проверять уникальность URL.
-- После каждого push повторно читать актуальную версию репозитория.
-- Этот файл обновлять после каждого завершённого пакета.
+- Главная текущая задача: разбить `DataRoutes.kt` на тематические
+  route-файлы.
+- За один этап переносить 2–4 route-файла, если их блоки видны полностью.
+- Не разрывать `route`, HTTP-обработчик, DTO или вспомогательную функцию.
+- Границы удаления определять по комментариям и `route(...)`, а не по
+  номерам строк.
+- При извлечении сначала сохранять бизнес-логику, меняя только импорты,
+  область видимости и имена локальных helpers.
+- После каждого пакета запускать `compileKotlin`.
+- После каждого пакета проверять уникальность URL.
+- После каждого push повторно читать актуальную ветку `main`.
+- Обновлять этот файл после каждого завершённого пакета.
 
 ## Текущее состояние DataRoutes.kt
 
-- Размер до R9–R11: 144789 байт.
-- `IncomeRoutes.kt` создан и зарегистрирован.
-- Полностью видны блоки:
-  - `/api/v1/positions`;
-  - `/api/v1/users`;
-  - `/api/v1/vacations`;
-  - `/api/v1/dayoffs`.
-- Доступное представление обрывается внутри
-  `PUT /api/v1/business-trips`.
-- Последняя безопасная граница текущего пакета:
-  непосредственно перед `BUSINESS TRIPS`.
+- Размер до текущего пакета: 70822 байта.
+- Зарегистрированы модули:
+  - `fcmRoutes`;
+  - `timeEntryRoutes`;
+  - `projectCostRoutes`;
+  - `projectRoutes`;
+  - `expenseRoutes`;
+  - `incomeRoutes`;
+  - `positionRoutes`;
+  - `userRoutes`;
+  - `absenceRoutes`;
+  - `businessTripRoutes`;
+  - `notificationRoutes`;
+  - `personalTimesheetRoutes`.
+- Полностью видны и готовы к извлечению:
+  - `/api/v1/notification-preferences`;
+  - `/api/v1/rbac`;
+  - `/api/v1/tickets`;
+  - `/api/v1/payroll`.
+- Текущий пакет создаёт четыре route-файла.
+- После пакета необходимо повторно определить полный список маршрутов,
+  оставшихся в `DataRoutes.kt`.
 
 ## Рефакторинг DataRoutes.kt
 
@@ -37,20 +53,45 @@
 | R3 | `TimeEntryRoutes.kt` | Учёт рабочего времени и часы | APPLIED |
 | R4 | `ProjectCostRoutes.kt` | Себестоимость и затраты проектов | APPLIED |
 | R5 | `ProjectRoutes.kt` | CRUD проектов и подпроектов | APPLIED |
-| R6 | `DataRouteDtos.kt` | Перенос локальных DTO из агрегатора | DEFERRED |
+| R6 | `DataRouteDtos.kt` | Общий DTO-файл | CANCELLED: DTO переносятся тематически |
 | R7 | `ExpenseRoutes.kt` | Расходы, категории и чеки | APPLIED |
 | R8 | `IncomeRoutes.kt` | Доходы и привязка к подпроектам | APPLIED |
-| R9 | `PositionRoutes.kt` | Иерархия должностей | READY TO EXTRACT |
-| R10 | `UserRoutes.kt` | Сотрудники, профиль и удаление пользователя | READY TO EXTRACT |
-| R11 | `AbsenceRoutes.kt` | Отпуска и выходные | READY TO EXTRACT |
-| R12 | `BusinessTripRoutes.kt` | Командировки, маршруты и суточные | BLOCKED: виден не весь PUT |
-| R13 | `PayrollRoutes.kt` | Зарплата, начисления, штрафы и экспорт | TODO |
-| R14 | `TicketRoutes.kt` | Билеты, вложения и чеки | TODO |
-| R15 | `NotificationRoutes.kt` | Уведомления и пользовательские настройки | TODO |
-| R16 | `PermissionRoutes.kt` | Права ролей и индивидуальные overrides | TODO |
-| R17 | `VacationRoutes.kt` | Не используется отдельно: включён в R11 | MERGED INTO R11 |
+| R9 | `PositionRoutes.kt` | Иерархия должностей | APPLIED |
+| R10 | `UserRoutes.kt` | Сотрудники, профиль и удаление пользователя | APPLIED |
+| R11 | `AbsenceRoutes.kt` | Отпуска и выходные | APPLIED |
+| R12 | `BusinessTripRoutes.kt` | Командировки, маршруты и суточные | APPLIED |
+| R13 | `PayrollRoutes.kt` | Зарплата, компоненты, расчёты и экспорт | READY TO EXTRACT |
+| R14 | `TicketRoutes.kt` | Билеты, получатели, файлы и чеки | READY TO EXTRACT |
+| R15 | `NotificationRoutes.kt` | Уведомления и отметки о прочтении | APPLIED |
+| R16 | `PermissionRoutes.kt` | Роли, права и пользовательские overrides | READY TO EXTRACT |
+| R17 | `VacationRoutes.kt` | Отдельный файл не нужен | MERGED INTO R11 |
 | R18 | `ReferenceRoutes.kt` | Справочники и небольшие API | TODO |
 | R19 | `DataRoutes.kt` | Оставить только регистрацию модулей | TODO |
+| R20 | `PersonalTimesheetRoutes.kt` | Персональный табель | APPLIED |
+| R21 | `NotificationPreferenceRoutes.kt` | Каналы и настройки уведомлений | READY TO EXTRACT |
+
+## Текущий пакет R13/R14/R16/R21
+
+- Создать `NotificationPreferenceRoutes.kt`.
+- Перенести `/api/v1/notification-preferences`.
+- Перенести два DTO настроек уведомлений.
+- Создать `PermissionRoutes.kt`.
+- Перенести `/api/v1/rbac`.
+- Перенести DTO обновления ролей и пользовательских overrides.
+- Создать `TicketRoutes.kt`.
+- Перенести `/api/v1/tickets`.
+- Перенести request/response DTO билетов.
+- Создать `PayrollRoutes.kt`.
+- Перенести `/api/v1/payroll`.
+- Перенести DTO расчёта и экспорта зарплаты.
+- Добавить четыре регистрации после `personalTimesheetRoutes()`.
+- Удалить четыре старых блока из `DataRoutes.kt`.
+- Удалить перенесённые DTO из `DataRoutes.kt`.
+- Удалить `taxInclusiveCost`, если после переноса он не используется.
+- Исключить межфайловые обращения к private session helpers.
+- Запустить `compileKotlin`.
+- Проверить уникальность URL.
+- Выполнить commit и push в `main`.
 
 ## Функциональные задачи сервера
 
@@ -61,12 +102,15 @@
 | D3 | Расходы, scope, категории и чеки | APPLIED; TESTS TODO |
 | D4 | Доходы и подпроекты | APPLIED; TESTS TODO |
 | D5 | Командировки, даты и суточные | APPLIED; TESTS TODO |
-| D6 | Поле `isRemote` и расчёт налоговой нагрузки | PARTIAL |
-| D7 | Payroll, штрафы, удержания и налоги | TODO |
+| D6 | Поле `isRemote` и налоговая нагрузка | PARTIAL |
+| D7 | Payroll, штрафы, удержания и налоги | PARTIAL; REVIEW TODO |
 | D8 | Баланс и идемпотентность операций | PARTIAL |
-| D9 | Билеты и привязка к подпроектам | TODO |
+| D9 | Билеты и привязка к подпроектам | PARTIAL; REVIEW TODO |
 | D10 | Удаление файлов ТНПА после удаления проекта | TODO |
 | D11 | Удаление файлов чеков после удаления записи | TODO |
+| D12 | Устранить вложенные транзакции в tickets/payroll | TODO |
+| D13 | Проверить лимиты и имена загружаемых файлов | TODO |
+| D14 | Проверить HTML-экранирование данных в email | TODO |
 
 ## Платформа и база данных
 
@@ -74,10 +118,12 @@
 |---|---|---|
 | P1 | `PlatformRoutes.kt` и работа через `SessionManager` | FILE PRESENT; REVIEW TODO |
 | A1 | Проверить регистрацию всех routes и таблиц | PARTIAL |
+| A2 | Проверить private/internal helpers между route-файлами | IN PROGRESS |
 | M1 | PostgreSQL-миграция новой схемы | TODO |
 | M2 | Backfill существующих данных | TODO |
 | M3 | Проверка миграции на чистой базе | TODO |
 | M4 | Проверка миграции на существующей базе | TODO |
+| M5 | Проверить индексы внешних ключей и частых фильтров | TODO |
 
 ## PRO-Chat
 
@@ -116,64 +162,54 @@
 | AN5 | Ограничить потребление памяти при загрузке | TODO |
 | AN6 | Выполнить Android build и smoke test | TODO |
 
-## Текущий пакет R9–R11
-
-- Создать `PositionRoutes.kt`.
-- Перенести полный `/api/v1/positions`.
-- Создать `UserRoutes.kt`.
-- Перенести полный `/api/v1/users`.
-- Исправить двойную запись email при создании пользователя.
-- Создать `AbsenceRoutes.kt`.
-- Перенести полный `/api/v1/vacations`.
-- Перенести полный `/api/v1/dayoffs`.
-- Добавить `positionRoutes()` после `incomeRoutes()`.
-- Добавить `userRoutes()` после `positionRoutes()`.
-- Добавить `absenceRoutes()` после `userRoutes()`.
-- Удалить старые четыре route-блока из `DataRoutes.kt`.
-- Удалить неиспользуемые expense-only helpers из `DataRoutes.kt`.
-- Не изменять неполный блок `/api/v1/business-trips`.
-- Запустить `compileKotlin`.
-- Проверить уникальность URL.
-- Выполнить commit и push в `main`.
-
 ## Тестирование
 
 | Пакет | Краткое назначение | Статус |
 |---|---|---|
-| T1 | `compileKotlin` после каждого route-пакета | TODO |
-| T2 | Проверка отсутствия дублирующихся URL | TODO |
+| T1 | `compileKotlin` после каждого route-пакета | REQUIRED |
+| T2 | Проверка отсутствия дублирующихся URL | REQUIRED |
 | T3 | Полный набор SERVER tests | TODO |
 | T4 | Smoke test авторизации и сессий | TODO |
-| T5 | Тесты CRUD проектов и подпроектов | TODO |
-| T6 | Тесты расходов и доходов | TODO |
-| T7 | Тесты отпусков и выходных | TODO |
-| T8 | Тесты командировок | TODO |
-| T9 | Тесты payroll и баланса | TODO |
-| T10 | Проверка директорских расходов и прав | TODO |
-| T11 | WEB build | TODO |
-| T12 | Android build | TODO |
-| T13 | Проверка вложений PRO-Chat до 100 MB | TODO |
+| T5 | CRUD проектов и подпроектов | TODO |
+| T6 | Расходы и доходы | TODO |
+| T7 | Отпуска и выходные | TODO |
+| T8 | Командировки | TODO |
+| T9 | Payroll и баланс | TODO |
+| T10 | Директорские расходы и права | TODO |
+| T11 | RBAC roles и overrides | TODO |
+| T12 | Tickets: upload, download, view и delete | TODO |
+| T13 | Настройки уведомлений и Telegram linking | TODO |
+| T14 | WEB production build | TODO |
+| T15 | Android build | TODO |
+| T16 | Вложения PRO-Chat до 100 MB | TODO |
 
 ## Известные замечания
 
-- `TASK_STATUS.md` до этого обновления отставал от кода.
-- `DataRouteDtos.kt` пока не создан; DTO всё ещё частично находятся в
-  `DataRoutes.kt`.
-- В `DataRoutes.kt` остались expense-only helpers после извлечения R7.
-- `CrudResult` нельзя удалять до проверки оставшихся маршрутов.
-- `checkSession`, `json` и UUID helpers пока используются ниже.
-- В `POST /users` email записывается дважды; вторая запись отменяет
-  fallback `login@proles.local`.
-- Удаление пользователя физически удаляет большой набор связанных данных.
-- Удаление проекта и чеков требует отдельной очистки файлов.
-- Нельзя переносить `BusinessTripRoutes.kt`, пока полностью не виден PUT
-  и конец тематического блока.
+- `TASK_STATUS.md` отставал от фактического кода после нескольких пакетов.
+- `DataRouteDtos.kt` не нужен: DTO переносятся в тематические файлы.
+- `DataRoutes.kt` всё ещё содержит DTO и общие helpers старого монолита.
+- `checkNotificationSession` нельзя вызывать из других файлов, если он
+  объявлен `private` в `NotificationRoutes.kt`.
+- В tickets есть вложенный `transaction` внутри внешнего `transaction`.
+- Ticket upload принимает Base64 в JSON, что увеличивает память и размер
+  запроса; позже перейти на streaming multipart.
+- Имена загружаемых ticket-файлов требуют нормализации.
+- HTML-письмо бухгалтеру включает пользовательский текст без явного
+  экранирования.
+- Удаление проекта, билета или чека должно удалять связанные файлы только
+  после успешной транзакции БД.
+- Payroll требует отдельной проверки формул, валют и налоговой нагрузки.
+- `PlatformRoutes.kt` требует ревью на дублирование URL с извлечёнными
+  модулями.
 
 ## Следующая точка продолжения
 
-После применения R9–R11 и push повторно прочитать уменьшенный
-`DataRoutes.kt`.
+После применения R13/R14/R16/R21 и push:
 
-Если `/api/v1/business-trips` виден полностью, включить его в следующий
-пакет. В тот же пакет добавить ещё один или два полностью видимых
-тематических route-файла, предпочтительно payroll и tickets.
+- повторно прочитать уменьшенный `DataRoutes.kt`;
+- получить полный список оставшихся `route("/api/v1/...")`;
+- вынести следующие 2–4 полностью видимых тематических блока;
+- перенести оставшиеся DTO в соответствующие файлы;
+- после извлечения последнего блока превратить `DataRoutes.kt` в чистый
+  агрегатор;
+- затем выполнить полный аудит уникальности URL, компиляцию и server tests.
