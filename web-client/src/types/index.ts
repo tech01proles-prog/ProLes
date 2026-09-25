@@ -16,6 +16,7 @@ export interface UserDto {
   birthDate: string | null;
   positionId: string | null;
   onVacation?: boolean;
+  isRemote: boolean;
   newPassword?: string;
 }
 
@@ -35,6 +36,8 @@ export interface TimeEntryDto {
   id: string;
   userId: string;
   projectId: string;
+  subprojectId: string | null;
+  subprojectName: string;
   projectName: string;
   date: string;
   hours: number;
@@ -43,36 +46,56 @@ export interface TimeEntryDto {
   synced: boolean;
 }
 
+export interface SubprojectDto {
+  id: string;
+  projectId: string;
+  name: string;
+  code: string;
+  description: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+}
+
 export interface ProjectDto {
   id: string;
   name: string;
   isActive: boolean;
   status: string;
-  client: string;
-  location: string;
   lead: string;
   revenue: number;
   expenses: number;
+  cost: number;
   profit: number;
   projectNumber: string;
   subProjectNumber: string;
+  client: string;
+  location: string;
   productService: string;
   quantity: number;
   deliveryDate: string | null;
   contract: string;
   notes: string;
-  productionCost: number;      // 🆕
-  transportToClient: number;   // 🆕
-  sellingPrice: number;        // 🆕
-  materials?: number;          // 🆕 Материалы (ручной ввод)
-  contractors?: number;        // 🆕 Услуги подрядчиков (ручной ввод)
-  creditPercent?: number;      // 🆕 % по кредиту (ручной ввод)
+  projectCode: string;
+  completionDate: string | null;
+  customer: string;
+  productionCost: number;
+  transportToClient: number;
+  sellingPrice: number;
+  materials: number;
+  contractors: number;
+  creditPercent: number;
+  subprojects: SubprojectDto[];
 }
 
 export interface ExpenseDto {
   id: string;
   userId: string;
-  projectId: string;
+  projectId: string | null;
+  subprojectId: string | null;
+  subprojectName: string;
   projectName: string;
   date: string;
   type: string;
@@ -82,9 +105,12 @@ export interface ExpenseDto {
   comment: string;
   receiptSubmitted: boolean;
   hasReceiptPhoto: boolean;
-  category: 'WORK' | 'PERSONAL';  // 🆕 Надкатегория
-  subcategory?: string;           // 🆕 Подкатегория типа расхода
-  receiptCount?: number;
+  category: string;
+  subcategory: string | null;
+  receiptCount: number;
+  expenseScope: string;
+  creatorRole: string;
+  createdAt: number;
 }
 
 export interface WaypointDto {
@@ -262,17 +288,18 @@ export interface TicketDto {
 // ═══════════════════════════════════════════════════════
 export interface IncomeDto {
   id: string;
-  userId: string;              // 🆕
-  projectId: string;
+  userId: string;
+  projectId: string | null;
+  subprojectId: string | null;
+  subprojectName: string;
   projectName: string;
   date: string;
-  type: string;                // 🆕 Тип дохода (HOUSEHOLD, CARD, CASH)
+  type: string;
   name: string;
   amount: number;
   currency: string;
-  comment: string;
-  category: 'WORK' | 'PERSONAL';  // 🆕 Надкатегория
-  subcategory?: string;           // 🆕 Подкатегория типа расхода
+  category: string;
+  subcategory: string | null;
   createdAt: number;
 }
 
