@@ -70,22 +70,100 @@ export function DashboardPage() {
     return mins > 0 ? `${hrs}ч ${mins}м` : `${hrs}ч`;
   };
 
+  const todayProgress = Math.min((todayHours / 8) * 100, 100);
+  const remainingHours = Math.max(8 - todayHours, 0);
+
+  const currentDateLabel = new Intl.DateTimeFormat('ru-RU', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date());
+
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 p-6 md:p-8 text-white shadow-xl shadow-indigo-200/50 dark:shadow-none">
-        <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-        <div className="relative z-10">
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">
-            {user?.firstName ? `Добрый день, ${user.firstName}! 👋` : 'Добро пожаловать!'}
-          </h1>
-          <p className="text-indigo-100 text-sm md:text-base capitalize">
-            {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
+    <div className="mx-auto max-w-6xl space-y-6">
+      {/* Рабочая сводка */}
+      <section className="relative overflow-hidden rounded-3xl bg-slate-950 p-6 text-white shadow-2xl shadow-slate-300/40 md:p-8 dark:bg-slate-900 dark:shadow-none">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-indigo-500/30 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-violet-500/20 blur-3xl" />
+
+        <div className="relative z-10 grid gap-8 lg:grid-cols-[1fr_340px] lg:items-end">
+          <div>
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Рабочий день
+            </div>
+
+            <h2 className="max-w-2xl text-2xl font-bold tracking-tight md:text-4xl">
+              {user?.firstName
+                ? `Добрый день, ${user.firstName}`
+                : 'Добро пожаловать в ProLes'}
+            </h2>
+
+            <p className="mt-2 text-sm capitalize text-slate-300 md:text-base">
+              {currentDateLabel}
+            </p>
+
+            <div className="mt-7 flex flex-wrap gap-3">
+              {can('projects', 'create') && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/timesheet')}
+                  className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 transition-transform hover:-translate-y-0.5"
+                >
+                  Добавить часы
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => navigate('/notifications')}
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+              >
+                Открыть уведомления
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-5 backdrop-blur-md">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                  Рабочее время сегодня
+                </div>
+                <div className="mt-2 text-3xl font-bold tabular-nums">
+                  {formatHours(todayHours)}
+                  <span className="ml-2 text-sm font-normal text-slate-400">
+                    / 8ч
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white/10 px-3 py-2 text-right">
+                <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                  Осталось
+                </div>
+                <div className="text-sm font-bold">
+                  {formatHours(remainingHours)}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-violet-400 transition-[width] duration-500"
+                style={{ width: `${todayProgress}%` }}
+              />
+            </div>
+
+            <div className="mt-2 flex justify-between text-[11px] text-slate-400">
+              <span>{todayEntries.length} записей</span>
+              <span>{Math.round(todayProgress)}%</span>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
       {error && (
         <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 text-sm flex items-center justify-between animate-fade-in">
