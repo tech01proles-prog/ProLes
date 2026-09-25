@@ -479,6 +479,18 @@ data class PayrollAdjustmentRequest(
 )
 
 @Serializable
+data class CalculateSalaryWithAdjustmentsRequest(
+    val userId: String,
+    val year: Int,
+    val month: Int,
+    val penaltyAmount: Double = 0.0,
+    val withholdingAmount: Double = 0.0,
+    val withholdingRepaymentAmount: Double = 0.0,
+    val comment: String = "",
+    val idempotencyKey: String? = null
+)
+
+@Serializable
 data class EmployeeBalanceDto(
     val userId: String,
     val balance: Double,

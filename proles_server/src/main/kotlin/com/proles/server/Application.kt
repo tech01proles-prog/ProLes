@@ -4,6 +4,7 @@ import com.proles.server.config.DatabaseFactory
 import com.proles.server.config.EmailService
 import com.proles.server.routes.authRoutes
 import com.proles.server.routes.dataRoutes
+import com.proles.server.routes.platformRoutes
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -56,14 +57,25 @@ fun Application.module() {
 
     transaction {
         SchemaUtils.createMissingTablesAndColumns(
-            UsersTable, PositionsTable, ProjectsTable, PersonalTimesheetTasksTable, PersonalTimesheetCategoriesTable, TimeEntriesTable, ExpensesTable,
-            IncomesTable,  // 🆕
+            UsersTable, PositionsTable, ProjectsTable, PersonalTimesheetTasksTable,
+            PersonalTimesheetCategoriesTable, TimeEntriesTable, ExpensesTable,
+            IncomesTable,
             VacationsTable, DayOffsTable, BusinessTripsTable,
             NotificationsTable, ExpenseReceiptsTable, FcmTokensTable,
-            NotificationPreferencesTable, TelegramLinksTable,  // 🆕
+            NotificationPreferencesTable, TelegramLinksTable,
             RolesTable, RolePermissionsTable, UserPermissionOverridesTable,
             TicketsTable, TicketRecipientsTable,
-            SalaryComponentsTable, SalaryRecordsTable, SessionsTable
+            SalaryComponentsTable,
+            SalaryRecordsTable,
+            SessionsTable,
+            SubprojectsTable,
+            TnpaDocumentsTable,
+            EmployeeBalanceTransactionsTable,
+            ChatConversationsTable,
+            ChatConversationMembersTable,
+            ChatMessagesTable,
+            ChatAttachmentsTable,
+            TicketReceiptsTable
         )
 
         // 🔐 Идемпотентно приводим таблицу настроек уведомлений к актуальной схеме.
@@ -145,6 +157,7 @@ fun Application.module() {
         }
         authRoutes()
         dataRoutes()
+        platformRoutes()
 
         // 🆕 Раздача статики веб-клиента
         staticFiles("/", File("web-client/dist")) {

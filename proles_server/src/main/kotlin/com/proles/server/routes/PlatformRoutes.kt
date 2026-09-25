@@ -1,59 +1,25 @@
 package com.proles.server.routes
 
-import com.proles.server.data.BusinessTripsTable
-import com.proles.server.data.EmployeeBalanceTransactionsTable
-import com.proles.server.data.ProjectsTable
-import com.proles.server.data.SubprojectsTable
-import com.proles.server.data.TimeEntriesTable
-import com.proles.server.data.TnpaDocumentsTable
-import com.proles.server.data.UsersTable
-import com.proles.server.model.BalanceRepaymentRequest
-import com.proles.server.model.CompleteBusinessTripRequest
-import com.proles.server.model.CreateSubprojectRequest
-import com.proles.server.model.EmployeeBalanceDto
-import com.proles.server.model.EmployeeBalanceTransactionDto
-import com.proles.server.model.GroupedHoursResponseDto
-import com.proles.server.model.HoursProjectGroupDto
-import com.proles.server.model.HoursSubprojectGroupDto
-import com.proles.server.model.SubprojectDto
-import com.proles.server.model.TnpaDocumentDto
-import com.proles.server.model.UpdateSubprojectRequest
-import io.ktor.http.ContentDisposition
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.content.PartData
-import io.ktor.http.content.forEachPart
-import io.ktor.server.application.Application
-import io.ktor.server.application.call
-import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.principal
-import io.ktor.server.request.receive
-import io.ktor.server.request.receiveMultipart
-import io.ktor.server.response.header
-import io.ktor.server.response.respond
-import io.ktor.server.response.respondFile
-import io.ktor.server.routing.delete
-import io.ktor.server.routing.get
-import io.ktor.server.routing.patch
-import io.ktor.server.routing.post
-import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
-import io.ktor.server.auth.jwt.JWTPrincipal
+import com.proles.server.config.SessionManager
+import com.proles.server.data.*
+import com.proles.server.model.*
+import io.ktor.http.*
+import io.ktor.http.content.*
+import io.ktor.server.application.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
-import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.select
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
 import java.io.File
 import java.math.BigDecimal
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
@@ -61,7 +27,7 @@ import java.util.UUID
 
 private const val MAX_TNPA_FILE_BYTES = 1024L * 1024L * 1024L
 
-private data class SessionUser(
+private data class PlatformSession(
     val id: UUID,
     val role: String
 )
@@ -77,54 +43,67 @@ private data class TnpaUpload(
     val sha256: String
 )
 
-fun Application.configurePlatformRoutes() {
+fun Route.platformRoutes() {
     val tnpaRoot = File(
-        System.getenv("TNPA_STORAGE_DIR")
-            ?: "data/tnpa"
+        System.getenv("TNPA_STORAGE_DIR") ?: "data/tnpa"
     ).apply { mkdirs() }
 
-    routing {
-        authenticate("auth-jwt") {
-            route("/api") {
-                subprojectRoutes()
-                groupedHoursRoutes()
-                employeeBalanceRoutes()
-                businessTripCompletionRoutes()
-                tnpaRoutes(tnpaRoot)
-            }
-        }
+    route("/api/v1") {
+        subprojectRoutes()
+        groupedHoursRoutes()
+        employeeBalanceRoutes()
+        tnpaRoutes(tnpaRoot)
     }
 }
 
-private fun io.ktor.server.routing.Route.subprojectRoutes() {
+private fun Route.subprojectRoutes() {
     route("/projects/{projectId}/subprojects") {
         get {
-            val session = call.requireSessionUser() ?: return@get
+            call.requirePlatformSession() ?: return@get
+
             val projectId = call.parameters["projectId"].asUuidOrNull()
                 ?: return@get call.respond(
                     HttpStatusCode.BadRequest,
                     mapOf("error" to "Некорректный projectId")
                 )
 
-            val rows = transaction {
-                ensureProjectExists(projectId)
+            val result = transaction {
+                val projectExists = ProjectsTable
+                    .selectAll()
+                    .where { ProjectsTable.id eq projectId }
+                    .limit(1)
+                    .any()
 
-                SubprojectsTable
-                    .select {
-                        SubprojectsTable.projectId eq projectId
-                    }
-                    .orderBy(
-                        SubprojectsTable.sortOrder to SortOrder.ASC,
-                        SubprojectsTable.name to SortOrder.ASC
-                    )
-                    .map(::subprojectDto)
+                if (!projectExists) {
+                    null
+                } else {
+                    SubprojectsTable
+                        .selectAll()
+                        .where {
+                            SubprojectsTable.projectId eq projectId
+                        }
+                        .orderBy(
+                            SubprojectsTable.sortOrder to SortOrder.ASC,
+                            SubprojectsTable.name to SortOrder.ASC
+                        )
+                        .map(::subprojectDto)
+                }
             }
 
-            call.respond(rows)
+            if (result == null) {
+                call.respond(
+                    HttpStatusCode.NotFound,
+                    mapOf("error" to "Проект не найден")
+                )
+            } else {
+                call.respond(result)
+            }
         }
 
         post {
-            val session = call.requireSessionUser() ?: return@post
+            val session =
+                call.requirePlatformSession() ?: return@post
+
             if (!session.canManageProjects()) {
                 return@post call.respond(HttpStatusCode.Forbidden)
             }
@@ -134,154 +113,216 @@ private fun io.ktor.server.routing.Route.subprojectRoutes() {
                     HttpStatusCode.BadRequest,
                     mapOf("error" to "Некорректный projectId")
                 )
-            val request = call.receive<CreateSubprojectRequest>()
-            val name = request.name.trim()
 
-            if (name.isBlank()) {
+            val request = try {
+                call.receive<CreateSubprojectRequest>()
+            } catch (e: Exception) {
                 return@post call.respond(
                     HttpStatusCode.BadRequest,
-                    mapOf("error" to "Название подпроекта обязательно")
+                    mapOf("error" to "Некорректный JSON")
                 )
             }
 
-            val now = System.currentTimeMillis()
-            val id = UUID.randomUUID()
+            val name = request.name.trim()
+            if (name.isBlank()) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to "Название обязательно")
+                )
+            }
 
-            val dto = try {
-                transaction {
-                    ensureProjectExists(projectId)
+            val result = transaction {
+                if (
+                    ProjectsTable
+                        .selectAll()
+                        .where { ProjectsTable.id eq projectId }
+                        .limit(1)
+                        .none()
+                ) {
+                    return@transaction SubprojectCreateResult.NotFound
+                }
 
-                    val duplicate = SubprojectsTable
-                        .select {
+                if (
+                    SubprojectsTable
+                        .selectAll()
+                        .where {
                             (SubprojectsTable.projectId eq projectId) and
                                 (SubprojectsTable.name eq name)
                         }
                         .limit(1)
                         .any()
+                ) {
+                    return@transaction SubprojectCreateResult.Duplicate
+                }
 
-                    if (duplicate) {
-                        throw DuplicateSubprojectException()
-                    }
+                val id = UUID.randomUUID()
+                val now = System.currentTimeMillis()
 
-                    SubprojectsTable.insert {
-                        it[SubprojectsTable.id] = id
-                        it[SubprojectsTable.projectId] = projectId
-                        it[SubprojectsTable.name] = name
-                        it[code] = request.code.trim()
-                        it[description] = request.description.trim()
-                        it[isActive] = true
-                        it[sortOrder] = request.sortOrder
-                        it[createdAt] = now
-                        it[updatedAt] = now
-                    }
+                SubprojectsTable.insert {
+                    it[SubprojectsTable.id] = id
+                    it[SubprojectsTable.projectId] = projectId
+                    it[SubprojectsTable.name] = name
+                    it[code] = request.code.trim()
+                    it[description] = request.description.trim()
+                    it[isActive] = true
+                    it[sortOrder] = request.sortOrder
+                    it[createdAt] = now
+                    it[updatedAt] = now
+                    it[archivedAt] = null
+                }
 
+                SubprojectCreateResult.Created(
                     SubprojectsTable
-                        .select { SubprojectsTable.id eq id }
+                        .selectAll()
+                        .where { SubprojectsTable.id eq id }
                         .single()
                         .let(::subprojectDto)
-                }
-            } catch (_: DuplicateSubprojectException) {
-                return@post call.respond(
-                    HttpStatusCode.Conflict,
-                    mapOf("error" to "Подпроект с таким названием уже существует")
-                )
-            } catch (_: ProjectNotFoundException) {
-                return@post call.respond(
-                    HttpStatusCode.NotFound,
-                    mapOf("error" to "Проект не найден")
                 )
             }
 
-            call.respond(HttpStatusCode.Created, dto)
+            when (result) {
+                SubprojectCreateResult.NotFound ->
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Проект не найден")
+                    )
+
+                SubprojectCreateResult.Duplicate ->
+                    call.respond(
+                        HttpStatusCode.Conflict,
+                        mapOf(
+                            "error" to
+                                "Подпроект с таким названием существует"
+                        )
+                    )
+
+                is SubprojectCreateResult.Created ->
+                    call.respond(HttpStatusCode.Created, result.dto)
+            }
         }
     }
 
     route("/subprojects/{subprojectId}") {
         patch {
-            val session = call.requireSessionUser() ?: return@patch
+            val session =
+                call.requirePlatformSession() ?: return@patch
+
             if (!session.canManageProjects()) {
                 return@patch call.respond(HttpStatusCode.Forbidden)
             }
 
-            val subprojectId = call.parameters["subprojectId"].asUuidOrNull()
-                ?: return@patch call.respond(
+            val subprojectId =
+                call.parameters["subprojectId"].asUuidOrNull()
+                    ?: return@patch call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Некорректный subprojectId")
+                    )
+
+            val request = try {
+                call.receive<UpdateSubprojectRequest>()
+            } catch (e: Exception) {
+                return@patch call.respond(
                     HttpStatusCode.BadRequest,
-                    mapOf("error" to "Некорректный subprojectId")
+                    mapOf("error" to "Некорректный JSON")
                 )
-            val request = call.receive<UpdateSubprojectRequest>()
+            }
 
-            val updated = transaction {
+            val result = transaction {
                 val existing = SubprojectsTable
-                    .select { SubprojectsTable.id eq subprojectId }
+                    .selectAll()
+                    .where { SubprojectsTable.id eq subprojectId }
                     .singleOrNull()
-                    ?: return@transaction null
+                    ?: return@transaction SubprojectUpdateResult.NotFound
 
-                val projectId = existing[SubprojectsTable.projectId].value
-                val newName = request.name?.trim()
+                val projectId =
+                    existing[SubprojectsTable.projectId].value
+                val newName = request.name
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
 
-                if (!newName.isNullOrBlank()) {
-                    val duplicate = SubprojectsTable
-                        .select {
+                if (
+                    newName != null &&
+                    SubprojectsTable
+                        .selectAll()
+                        .where {
                             (SubprojectsTable.projectId eq projectId) and
                                 (SubprojectsTable.name eq newName) and
                                 (SubprojectsTable.id neq subprojectId)
                         }
                         .limit(1)
                         .any()
-
-                    if (duplicate) {
-                        throw DuplicateSubprojectException()
-                    }
+                ) {
+                    return@transaction SubprojectUpdateResult.Duplicate
                 }
 
                 SubprojectsTable.update(
                     { SubprojectsTable.id eq subprojectId }
                 ) {
-                    request.name?.trim()?.takeIf(String::isNotBlank)
-                        ?.let { value -> it[name] = value }
-                    request.code?.trim()
-                        ?.let { value -> it[code] = value }
-                    request.description?.trim()
-                        ?.let { value -> it[description] = value }
-                    request.isActive
-                        ?.let { value -> it[isActive] = value }
-                    request.sortOrder
-                        ?.let { value -> it[sortOrder] = value }
-                    it[updatedAt] = System.currentTimeMillis()
-                    if (request.isActive == false) {
-                        it[archivedAt] = System.currentTimeMillis()
-                    } else if (request.isActive == true) {
-                        it[archivedAt] = null
+                    newName?.let { value -> it[name] = value }
+                    request.code?.trim()?.let { value ->
+                        it[code] = value
                     }
+                    request.description?.trim()?.let { value ->
+                        it[description] = value
+                    }
+                    request.isActive?.let { value ->
+                        it[isActive] = value
+                        it[archivedAt] = if (value) {
+                            null
+                        } else {
+                            System.currentTimeMillis()
+                        }
+                    }
+                    request.sortOrder?.let { value ->
+                        it[sortOrder] = value
+                    }
+                    it[updatedAt] = System.currentTimeMillis()
                 }
 
-                SubprojectsTable
-                    .select { SubprojectsTable.id eq subprojectId }
-                    .single()
-                    .let(::subprojectDto)
-            }
-
-            if (updated == null) {
-                return@patch call.respond(
-                    HttpStatusCode.NotFound,
-                    mapOf("error" to "Подпроект не найден")
+                SubprojectUpdateResult.Updated(
+                    SubprojectsTable
+                        .selectAll()
+                        .where { SubprojectsTable.id eq subprojectId }
+                        .single()
+                        .let(::subprojectDto)
                 )
             }
 
-            call.respond(updated)
+            when (result) {
+                SubprojectUpdateResult.NotFound ->
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Подпроект не найден")
+                    )
+
+                SubprojectUpdateResult.Duplicate ->
+                    call.respond(
+                        HttpStatusCode.Conflict,
+                        mapOf(
+                            "error" to
+                                "Подпроект с таким названием существует"
+                        )
+                    )
+
+                is SubprojectUpdateResult.Updated ->
+                    call.respond(result.dto)
+            }
         }
 
         delete {
-            val session = call.requireSessionUser() ?: return@delete
+            val session =
+                call.requirePlatformSession() ?: return@delete
+
             if (!session.canManageProjects()) {
                 return@delete call.respond(HttpStatusCode.Forbidden)
             }
 
-            val subprojectId = call.parameters["subprojectId"].asUuidOrNull()
-                ?: return@delete call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf("error" to "Некорректный subprojectId")
-                )
+            val subprojectId =
+                call.parameters["subprojectId"].asUuidOrNull()
+                    ?: return@delete call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Некорректный subprojectId")
+                    )
 
             val affected = transaction {
                 SubprojectsTable.update(
@@ -294,10 +335,7 @@ private fun io.ktor.server.routing.Route.subprojectRoutes() {
             }
 
             if (affected == 0) {
-                call.respond(
-                    HttpStatusCode.NotFound,
-                    mapOf("error" to "Подпроект не найден")
-                )
+                call.respond(HttpStatusCode.NotFound)
             } else {
                 call.respond(HttpStatusCode.NoContent)
             }
@@ -305,105 +343,154 @@ private fun io.ktor.server.routing.Route.subprojectRoutes() {
     }
 }
 
-private fun io.ktor.server.routing.Route.groupedHoursRoutes() {
+private fun Route.groupedHoursRoutes() {
     get("/hours/grouped") {
-        val session = call.requireSessionUser() ?: return@get
-        val requestedUserId = call.request.queryParameters["userId"]
-            .asUuidOrNull()
-            ?: session.id
+        val session =
+            call.requirePlatformSession() ?: return@get
 
-        if (requestedUserId != session.id && !session.canViewAllHours()) {
+        val userParameter =
+            call.request.queryParameters["userId"]
+        val requestedUserId =
+            if (userParameter == null) {
+                session.id
+            } else {
+                userParameter.asUuidOrNull()
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Некорректный userId")
+                    )
+            }
+
+        if (
+            requestedUserId != session.id &&
+            !session.canViewAllHours()
+        ) {
             return@get call.respond(HttpStatusCode.Forbidden)
         }
 
-        val from = call.request.queryParameters["from"]
-            ?.let(::parseDateOrNull)
-        val to = call.request.queryParameters["to"]
-            ?.let(::parseDateOrNull)
+        val fromParameter =
+            call.request.queryParameters["from"]
+        val toParameter =
+            call.request.queryParameters["to"]
 
-        if (
-            call.request.queryParameters["from"] != null &&
-            from == null
-        ) {
+        val from = fromParameter?.let(::parseDateOrNull)
+        val to = toParameter?.let(::parseDateOrNull)
+
+        if (fromParameter != null && from == null) {
             return@get call.respond(
                 HttpStatusCode.BadRequest,
                 mapOf("error" to "Некорректная дата from")
             )
         }
 
-        if (
-            call.request.queryParameters["to"] != null &&
-            to == null
-        ) {
+        if (toParameter != null && to == null) {
             return@get call.respond(
                 HttpStatusCode.BadRequest,
                 mapOf("error" to "Некорректная дата to")
             )
         }
 
+        if (from != null && to != null && from > to) {
+            return@get call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("error" to "from позже to")
+            )
+        }
+
         val response = transaction {
-            var condition =
+            var condition: Op<Boolean> =
                 TimeEntriesTable.userId eq requestedUserId
 
             if (from != null) {
                 condition = condition and
                     (TimeEntriesTable.date greaterEq from)
             }
+
             if (to != null) {
                 condition = condition and
                     (TimeEntriesTable.date lessEq to)
             }
 
-            val entries = (
-                TimeEntriesTable
-                    .leftJoin(ProjectsTable)
-                    .leftJoin(SubprojectsTable)
-                )
-                .select { condition }
+            val rows = TimeEntriesTable
+                .selectAll()
+                .where { condition }
                 .orderBy(TimeEntriesTable.date to SortOrder.DESC)
                 .toList()
 
-            val groups = entries
-                .groupBy { row ->
-                    row[TimeEntriesTable.projectId].value
+            val projects = ProjectsTable
+                .selectAll()
+                .associate {
+                    it[ProjectsTable.id].value to
+                        it[ProjectsTable.name]
                 }
-                .map { (projectId, projectEntries) ->
-                    val projectName = projectEntries.firstOrNull()
-                        ?.getOrNull(ProjectsTable.name)
-                        ?: "Без проекта"
 
-                    val withoutSubproject = projectEntries
+            val subprojects = SubprojectsTable
+                .selectAll()
+                .associate {
+                    it[SubprojectsTable.id].value to
+                        it[SubprojectsTable.name]
+                }
+
+            val groups = rows
+                .groupBy {
+                    it[TimeEntriesTable.projectId].value
+                }
+                .map { (projectId, projectRows) ->
+                    val withoutSubproject = projectRows
                         .filter {
                             it[TimeEntriesTable.subprojectId] == null
                         }
-                        .map(::existingTimeEntryDto)
+                        .map {
+                            timeEntryDto(
+                                it,
+                                null,
+                                ""
+                            )
+                        }
 
-                    val subprojectGroups = projectEntries
+                    val subprojectGroups = projectRows
                         .filter {
                             it[TimeEntriesTable.subprojectId] != null
                         }
                         .groupBy {
                             it[TimeEntriesTable.subprojectId]!!.value
                         }
-                        .map { (subprojectId, subprojectEntries) ->
+                        .map { (subprojectId, subprojectRows) ->
                             HoursSubprojectGroupDto(
-                                subprojectId = subprojectId.toString(),
-                                subprojectName = subprojectEntries
-                                    .first()
-                                    .getOrNull(SubprojectsTable.name)
-                                    ?: "Подпроект",
-                                totalHours = subprojectEntries
-                                    .sumOf(::entryHours),
-                                entries = subprojectEntries
-                                    .map(::existingTimeEntryDto)
+                                subprojectId =
+                                    subprojectId.toString(),
+                                subprojectName =
+                                    subprojects[subprojectId]
+                                        ?: "Подпроект",
+                                totalHours =
+                                    subprojectRows.sumOf {
+                                        it[TimeEntriesTable.hours]
+                                            .toDouble()
+                                    },
+                                entries = subprojectRows.map {
+                                    timeEntryDto(
+                                        it,
+                                        subprojectId,
+                                        subprojects[subprojectId]
+                                            .orEmpty()
+                                    )
+                                }
                             )
                         }
-                        .sortedBy { it.subprojectName.lowercase() }
+                        .sortedBy {
+                            it.subprojectName.lowercase()
+                        }
 
                     HoursProjectGroupDto(
                         projectId = projectId.toString(),
-                        projectName = projectName,
-                        totalHours = projectEntries.sumOf(::entryHours),
+                        projectName =
+                            projects[projectId]
+                                ?: projectRows.first()[
+                                    TimeEntriesTable.projectName
+                                ],
+                        totalHours = projectRows.sumOf {
+                            it[TimeEntriesTable.hours].toDouble()
+                        },
                         subprojects = subprojectGroups,
                         entriesWithoutSubproject = withoutSubproject
                     )
@@ -412,7 +499,9 @@ private fun io.ktor.server.routing.Route.groupedHoursRoutes() {
 
             GroupedHoursResponseDto(
                 userId = requestedUserId.toString(),
-                totalHours = entries.sumOf(::entryHours),
+                totalHours = rows.sumOf {
+                    it[TimeEntriesTable.hours].toDouble()
+                },
                 groups = groups
             )
         }
@@ -421,262 +510,270 @@ private fun io.ktor.server.routing.Route.groupedHoursRoutes() {
     }
 }
 
-private fun io.ktor.server.routing.Route.employeeBalanceRoutes() {
+private fun Route.employeeBalanceRoutes() {
     route("/employee-balances/{userId}") {
         get {
-            val session = call.requireSessionUser() ?: return@get
-            val userId = call.parameters["userId"].asUuidOrNull()
-                ?: return@get call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf("error" to "Некорректный userId")
-                )
+            val session =
+                call.requirePlatformSession() ?: return@get
+            val userId =
+                call.parameters["userId"].asUuidOrNull()
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Некорректный userId")
+                    )
 
-            if (userId != session.id && !session.canManagePayroll()) {
+            if (
+                userId != session.id &&
+                !session.canManagePayroll()
+            ) {
                 return@get call.respond(HttpStatusCode.Forbidden)
             }
 
             val response = transaction {
-                if (!userExists(userId)) {
+                if (
+                    UsersTable
+                        .selectAll()
+                        .where { UsersTable.id eq userId }
+                        .limit(1)
+                        .none()
+                ) {
                     return@transaction null
                 }
 
-                val transactions = EmployeeBalanceTransactionsTable
-                    .select {
-                        EmployeeBalanceTransactionsTable.userId eq userId
+                val rows = EmployeeBalanceTransactionsTable
+                    .selectAll()
+                    .where {
+                        EmployeeBalanceTransactionsTable.userId eq
+                            userId
                     }
                     .orderBy(
                         EmployeeBalanceTransactionsTable.createdAt to
                             SortOrder.DESC
                     )
-                    .map(::balanceTransactionDto)
+                    .toList()
 
                 EmployeeBalanceDto(
                     userId = userId.toString(),
-                    balance = calculateBalance(transactions),
-                    transactions = transactions
+                    balance = calculateBalance(rows),
+                    transactions = rows.map(
+                        ::balanceTransactionDto
+                    )
                 )
             }
 
             if (response == null) {
-                call.respond(
-                    HttpStatusCode.NotFound,
-                    mapOf("error" to "Сотрудник не найден")
-                )
+                call.respond(HttpStatusCode.NotFound)
             } else {
                 call.respond(response)
             }
         }
 
         post("/repayments") {
-            val session = call.requireSessionUser() ?: return@post
+            val session =
+                call.requirePlatformSession() ?: return@post
+
             if (!session.canManagePayroll()) {
                 return@post call.respond(HttpStatusCode.Forbidden)
             }
 
-            val userId = call.parameters["userId"].asUuidOrNull()
-                ?: return@post call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf("error" to "Некорректный userId")
-                )
-            val request = call.receive<BalanceRepaymentRequest>()
+            val userId =
+                call.parameters["userId"].asUuidOrNull()
+                    ?: return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Некорректный userId")
+                    )
 
-            if (!request.amount.isFinite() || request.amount <= 0.0) {
+            val request = try {
+                call.receive<BalanceRepaymentRequest>()
+            } catch (e: Exception) {
                 return@post call.respond(
                     HttpStatusCode.BadRequest,
-                    mapOf("error" to "Сумма погашения должна быть больше нуля")
+                    mapOf("error" to "Некорректный JSON")
                 )
             }
 
-            val result = try {
-                transaction {
-                    UsersTable
-                        .select { UsersTable.id eq userId }
-                        .forUpdate()
-                        .singleOrNull()
-                        ?: throw UserNotFoundException()
+            if (
+                !request.amount.isFinite() ||
+                request.amount <= 0.0
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to "Сумма должна быть больше нуля")
+                )
+            }
 
-                    val currentTransactions =
-                        EmployeeBalanceTransactionsTable
-                            .select {
-                                EmployeeBalanceTransactionsTable.userId eq
-                                    userId
-                            }
-                            .map(::balanceTransactionDto)
+            val idempotencyKey = request.idempotencyKey
+                ?.trim()
+                ?.takeIf(String::isNotBlank)
 
-                    val currentBalance =
-                        calculateBalance(currentTransactions)
+            val result = transaction {
+                val user = UsersTable
+                    .selectAll()
+                    .where { UsersTable.id eq userId }
+                    .forUpdate()
+                    .singleOrNull()
+                    ?: return@transaction RepaymentResult.UserNotFound
 
-                    if (request.amount > currentBalance + 0.005) {
-                        throw InsufficientBalanceException(currentBalance)
-                    }
-
-                    val existing = request.idempotencyKey
-                        ?.trim()
-                        ?.takeIf(String::isNotBlank)
-                        ?.let { key ->
-                            EmployeeBalanceTransactionsTable
-                                .select {
-                                    EmployeeBalanceTransactionsTable
-                                        .idempotencyKey eq key
-                                }
-                                .singleOrNull()
-                        }
-
-                    if (existing != null) {
-                        return@transaction balanceTransactionDto(existing)
-                    }
-
-                    val id = UUID.randomUUID()
-                    val salaryRecordId = request.salaryRecordId.asUuidOrNull()
-
-                    EmployeeBalanceTransactionsTable.insert {
-                        it[EmployeeBalanceTransactionsTable.id] = id
-                        it[EmployeeBalanceTransactionsTable.userId] = userId
-                        it[
-                            EmployeeBalanceTransactionsTable.salaryRecordId
-                        ] = salaryRecordId
-                        it[transactionType] = "REPAYMENT"
-                        it[amount] = BigDecimal
-                            .valueOf(request.amount)
-                            .setScale(2)
-                        it[comment] = request.comment.trim()
-                        it[createdBy] = session.id
-                        it[createdAt] = System.currentTimeMillis()
-                        it[reversedTransactionId] = null
-                        it[idempotencyKey] = request.idempotencyKey
-                            ?.trim()
-                            ?.takeIf(String::isNotBlank)
-                    }
-
+                idempotencyKey?.let { key ->
                     EmployeeBalanceTransactionsTable
-                        .select {
+                        .selectAll()
+                        .where {
+                            EmployeeBalanceTransactionsTable
+                                .idempotencyKey eq key
+                        }
+                        .singleOrNull()
+                        ?.let {
+                            return@transaction RepaymentResult.Created(
+                                balanceTransactionDto(it)
+                            )
+                        }
+                }
+
+                val currentRows =
+                    EmployeeBalanceTransactionsTable
+                        .selectAll()
+                        .where {
+                            EmployeeBalanceTransactionsTable.userId eq
+                                user[UsersTable.id].value
+                        }
+                        .toList()
+
+                val balance = calculateBalance(currentRows)
+
+                if (request.amount > balance + 0.005) {
+                    return@transaction RepaymentResult.Insufficient(
+                        balance
+                    )
+                }
+
+                val salaryRecordId =
+                    request.salaryRecordId.asUuidOrNull()
+
+                if (
+                    request.salaryRecordId?.isNotBlank() == true &&
+                    salaryRecordId == null
+                ) {
+                    return@transaction RepaymentResult.InvalidSalary
+                }
+
+                val id = UUID.randomUUID()
+
+                EmployeeBalanceTransactionsTable.insert {
+                    it[EmployeeBalanceTransactionsTable.id] = id
+                    it[EmployeeBalanceTransactionsTable.userId] =
+                        userId
+                    it[
+                        EmployeeBalanceTransactionsTable.salaryRecordId
+                    ] = salaryRecordId
+                    it[transactionType] = "REPAYMENT"
+                    it[amount] = request.amount.toMoney()
+                    it[comment] = request.comment.trim()
+                    it[createdBy] = session.id
+                    it[createdAt] = System.currentTimeMillis()
+                    it[reversedTransactionId] = null
+                    it[
+                        EmployeeBalanceTransactionsTable.idempotencyKey
+                    ] = idempotencyKey
+                }
+
+                RepaymentResult.Created(
+                    EmployeeBalanceTransactionsTable
+                        .selectAll()
+                        .where {
                             EmployeeBalanceTransactionsTable.id eq id
                         }
                         .single()
                         .let(::balanceTransactionDto)
-                }
-            } catch (_: UserNotFoundException) {
-                return@post call.respond(
-                    HttpStatusCode.NotFound,
-                    mapOf("error" to "Сотрудник не найден")
-                )
-            } catch (error: InsufficientBalanceException) {
-                return@post call.respond(
-                    HttpStatusCode.Conflict,
-                    mapOf(
-                        "error" to "Сумма превышает доступный баланс",
-                        "balance" to error.balance
-                    )
                 )
             }
 
-            call.respond(HttpStatusCode.Created, result)
+            when (result) {
+                RepaymentResult.UserNotFound ->
+                    call.respond(HttpStatusCode.NotFound)
+
+                RepaymentResult.InvalidSalary ->
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Некорректный salaryRecordId")
+                    )
+
+                is RepaymentResult.Insufficient ->
+                    call.respond(
+                        HttpStatusCode.Conflict,
+                        mapOf(
+                            "error" to
+                                "Сумма превышает доступный баланс",
+                            "balance" to result.balance
+                        )
+                    )
+
+                is RepaymentResult.Created ->
+                    call.respond(
+                        HttpStatusCode.Created,
+                        result.dto
+                    )
+            }
         }
     }
 }
 
-private fun io.ktor.server.routing.Route.businessTripCompletionRoutes() {
-    post("/business-trips/{tripId}/complete") {
-        val session = call.requireSessionUser() ?: return@post
-        val tripId = call.parameters["tripId"].asUuidOrNull()
-            ?: return@post call.respond(
-                HttpStatusCode.BadRequest,
-                mapOf("error" to "Некорректный tripId")
-            )
-        val request = call.receive<CompleteBusinessTripRequest>()
-        val endDate = parseDateOrNull(request.endDate)
-            ?: return@post call.respond(
-                HttpStatusCode.BadRequest,
-                mapOf("error" to "Некорректная дата окончания")
-            )
-
-        val result = transaction {
-            val trip = BusinessTripsTable
-                .select { BusinessTripsTable.id eq tripId }
-                .singleOrNull()
-                ?: return@transaction TripCompletionResult.NotFound
-
-            val ownerId = trip[BusinessTripsTable.userId].value
-
-            if (ownerId != session.id && !session.canManageTrips()) {
-                return@transaction TripCompletionResult.Forbidden
-            }
-
-            val startDate = trip[BusinessTripsTable.startDate]
-            if (endDate < startDate) {
-                return@transaction TripCompletionResult.InvalidRange
-            }
-
-            BusinessTripsTable.update(
-                { BusinessTripsTable.id eq tripId }
-            ) {
-                it[BusinessTripsTable.endDate] = endDate
-                it[BusinessTripsTable.completedDate] = endDate
-                it[BusinessTripsTable.status] = "COMPLETED"
-            }
-
-            TripCompletionResult.Success
-        }
-
-        when (result) {
-            TripCompletionResult.NotFound ->
-                call.respond(
-                    HttpStatusCode.NotFound,
-                    mapOf("error" to "Командировка не найдена")
-                )
-            TripCompletionResult.Forbidden ->
-                call.respond(HttpStatusCode.Forbidden)
-            TripCompletionResult.InvalidRange ->
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf(
-                        "error" to
-                            "Дата окончания раньше даты начала"
-                    )
-                )
-            TripCompletionResult.Success ->
-                call.respond(mapOf("success" to true))
-        }
-    }
-}
-
-private fun io.ktor.server.routing.Route.tnpaRoutes(
-    storageRoot: File
-) {
+private fun Route.tnpaRoutes(storageRoot: File) {
     route("/tnpa") {
         get {
-            val session = call.requireSessionUser() ?: return@get
+            val session =
+                call.requirePlatformSession() ?: return@get
+
             if (!session.canReadTnpa()) {
                 return@get call.respond(HttpStatusCode.Forbidden)
             }
 
-            val projectId = call.request.queryParameters["projectId"]
-                .asUuidOrNull()
-            val subprojectId = call.request.queryParameters["subprojectId"]
-                .asUuidOrNull()
+            val projectParameter =
+                call.request.queryParameters["projectId"]
+            val subprojectParameter =
+                call.request.queryParameters["subprojectId"]
+
+            val projectId =
+                projectParameter.asUuidOrNull()
+            val subprojectId =
+                subprojectParameter.asUuidOrNull()
+
+            if (projectParameter != null && projectId == null) {
+                return@get call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to "Некорректный projectId")
+                )
+            }
+
+            if (
+                subprojectParameter != null &&
+                subprojectId == null
+            ) {
+                return@get call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to "Некорректный subprojectId")
+                )
+            }
 
             val result = transaction {
-                var condition =
+                var condition: Op<Boolean> =
                     TnpaDocumentsTable.deletedAt.isNull()
 
-                if (projectId != null) {
+                projectId?.let {
                     condition = condition and
-                        (TnpaDocumentsTable.projectId eq projectId)
-                }
-                if (subprojectId != null) {
-                    condition = condition and
-                        (TnpaDocumentsTable.subprojectId eq subprojectId)
+                        (TnpaDocumentsTable.projectId eq it)
                 }
 
-                (
-                    TnpaDocumentsTable
-                        .innerJoin(ProjectsTable)
-                        .leftJoin(SubprojectsTable)
-                        .innerJoin(UsersTable)
-                    )
-                    .select { condition }
+                subprojectId?.let {
+                    condition = condition and
+                        (TnpaDocumentsTable.subprojectId eq it)
+                }
+
+                TnpaDocumentsTable
+                    .selectAll()
+                    .where { condition }
                     .orderBy(
-                        TnpaDocumentsTable.uploadedAt to SortOrder.DESC
+                        TnpaDocumentsTable.uploadedAt to
+                            SortOrder.DESC
                     )
                     .map(::tnpaDocumentDto)
             }
@@ -685,51 +782,89 @@ private fun io.ktor.server.routing.Route.tnpaRoutes(
         }
 
         post {
-            val session = call.requireSessionUser() ?: return@post
+            val session =
+                call.requirePlatformSession() ?: return@post
+
             if (!session.canManageTnpa()) {
                 return@post call.respond(HttpStatusCode.Forbidden)
             }
 
             val upload = try {
-                receiveTnpaUpload(storageRoot)
-            } catch (error: UploadValidationException) {
+                call.receiveTnpaUpload(storageRoot)
+            } catch (e: UploadValidationException) {
                 return@post call.respond(
-                    error.status,
-                    mapOf("error" to error.message)
+                    e.status,
+                    mapOf("error" to e.message)
                 )
             }
 
             val id = UUID.randomUUID()
-            val finalDirectory = File(
+            val directory = File(
                 storageRoot,
-                "${upload.projectId}/${upload.subprojectId ?: "root"}"
+                "${upload.projectId}/" +
+                    "${upload.subprojectId ?: "root"}"
             ).apply { mkdirs() }
+
             val storedName = "$id.bin"
-            val finalFile = File(finalDirectory, storedName)
+            val finalFile = File(directory, storedName)
 
             try {
                 withContext(Dispatchers.IO) {
-                    Files.move(
-                        upload.temporaryFile.toPath(),
-                        finalFile.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING,
-                        StandardCopyOption.ATOMIC_MOVE
-                    )
+                    try {
+                        Files.move(
+                            upload.temporaryFile.toPath(),
+                            finalFile.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING,
+                            StandardCopyOption.ATOMIC_MOVE
+                        )
+                    } catch (
+                        _: AtomicMoveNotSupportedException
+                    ) {
+                        Files.move(
+                            upload.temporaryFile.toPath(),
+                            finalFile.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING
+                        )
+                    }
                 }
 
-                val dto = transaction {
-                    ensureProjectExists(upload.projectId)
-                    validateSubproject(
-                        upload.projectId,
-                        upload.subprojectId
-                    )
+                val result = transaction {
+                    if (
+                        ProjectsTable
+                            .selectAll()
+                            .where {
+                                ProjectsTable.id eq upload.projectId
+                            }
+                            .limit(1)
+                            .none()
+                    ) {
+                        return@transaction TnpaCreateResult.ProjectMissing
+                    }
+
+                    if (
+                        upload.subprojectId != null &&
+                        SubprojectsTable
+                            .selectAll()
+                            .where {
+                                (SubprojectsTable.id eq
+                                    upload.subprojectId) and
+                                    (SubprojectsTable.projectId eq
+                                        upload.projectId) and
+                                    (SubprojectsTable.isActive eq true)
+                            }
+                            .limit(1)
+                            .none()
+                    ) {
+                        return@transaction TnpaCreateResult.InvalidSubproject
+                    }
 
                     TnpaDocumentsTable.insert {
                         it[TnpaDocumentsTable.id] = id
                         it[projectId] = upload.projectId
                         it[subprojectId] = upload.subprojectId
                         it[originalName] = upload.originalName
-                        it[TnpaDocumentsTable.storedName] = storedName
+                        it[TnpaDocumentsTable.storedName] =
+                            storedName
                         it[storagePath] = finalFile.absolutePath
                         it[mimeType] = upload.mimeType
                         it[sizeBytes] = upload.sizeBytes
@@ -741,54 +876,68 @@ private fun io.ktor.server.routing.Route.tnpaRoutes(
                         it[deletedBy] = null
                     }
 
-                    (
+                    TnpaCreateResult.Created(
                         TnpaDocumentsTable
-                            .innerJoin(ProjectsTable)
-                            .leftJoin(SubprojectsTable)
-                            .innerJoin(UsersTable)
-                        )
-                        .select { TnpaDocumentsTable.id eq id }
-                        .single()
-                        .let(::tnpaDocumentDto)
+                            .selectAll()
+                            .where {
+                                TnpaDocumentsTable.id eq id
+                            }
+                            .single()
+                            .let(::tnpaDocumentDto)
+                    )
                 }
 
-                call.respond(HttpStatusCode.Created, dto)
-            } catch (_: ProjectNotFoundException) {
+                when (result) {
+                    TnpaCreateResult.ProjectMissing -> {
+                        finalFile.delete()
+                        call.respond(
+                            HttpStatusCode.NotFound,
+                            mapOf("error" to "Проект не найден")
+                        )
+                    }
+
+                    TnpaCreateResult.InvalidSubproject -> {
+                        finalFile.delete()
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            mapOf(
+                                "error" to
+                                    "Некорректный подпроект"
+                            )
+                        )
+                    }
+
+                    is TnpaCreateResult.Created ->
+                        call.respond(
+                            HttpStatusCode.Created,
+                            result.dto
+                        )
+                }
+            } catch (e: Throwable) {
                 finalFile.delete()
-                call.respond(
-                    HttpStatusCode.NotFound,
-                    mapOf("error" to "Проект не найден")
-                )
-            } catch (_: InvalidSubprojectException) {
-                finalFile.delete()
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf(
-                        "error" to
-                            "Подпроект не принадлежит выбранному проекту"
-                    )
-                )
-            } catch (error: Throwable) {
-                finalFile.delete()
-                throw error
+                throw e
             }
         }
 
         get("/{documentId}/download") {
-            val session = call.requireSessionUser() ?: return@get
+            val session =
+                call.requirePlatformSession() ?: return@get
+
             if (!session.canReadTnpa()) {
                 return@get call.respond(HttpStatusCode.Forbidden)
             }
 
-            val documentId = call.parameters["documentId"].asUuidOrNull()
-                ?: return@get call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf("error" to "Некорректный documentId")
-                )
+            val documentId =
+                call.parameters["documentId"].asUuidOrNull()
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Некорректный documentId")
+                    )
 
             val document = transaction {
                 TnpaDocumentsTable
-                    .select {
+                    .selectAll()
+                    .where {
                         (TnpaDocumentsTable.id eq documentId) and
                             TnpaDocumentsTable.deletedAt.isNull()
                     }
@@ -802,11 +951,8 @@ private fun io.ktor.server.routing.Route.tnpaRoutes(
                     }
             } ?: return@get call.respond(HttpStatusCode.NotFound)
 
-            if (!document.third.exists() || !document.third.isFile) {
-                return@get call.respond(
-                    HttpStatusCode.NotFound,
-                    mapOf("error" to "Файл отсутствует в хранилище")
-                )
+            if (!document.third.isFile) {
+                return@get call.respond(HttpStatusCode.NotFound)
             }
 
             call.response.header(
@@ -818,21 +964,27 @@ private fun io.ktor.server.routing.Route.tnpaRoutes(
                     )
                     .toString()
             )
-            call.response.header(HttpHeaders.ContentType, document.second)
+            call.response.header(
+                HttpHeaders.ContentType,
+                document.second
+            )
             call.respondFile(document.third)
         }
 
         delete("/{documentId}") {
-            val session = call.requireSessionUser() ?: return@delete
+            val session =
+                call.requirePlatformSession() ?: return@delete
+
             if (!session.canManageTnpa()) {
                 return@delete call.respond(HttpStatusCode.Forbidden)
             }
 
-            val documentId = call.parameters["documentId"].asUuidOrNull()
-                ?: return@delete call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf("error" to "Некорректный documentId")
-                )
+            val documentId =
+                call.parameters["documentId"].asUuidOrNull()
+                    ?: return@delete call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Некорректный documentId")
+                    )
 
             val affected = transaction {
                 TnpaDocumentsTable.update(
@@ -855,10 +1007,9 @@ private fun io.ktor.server.routing.Route.tnpaRoutes(
     }
 }
 
-private suspend fun io.ktor.server.application.ApplicationCall
-    .receiveTnpaUpload(
-        storageRoot: File
-    ): TnpaUpload {
+private suspend fun ApplicationCall.receiveTnpaUpload(
+    storageRoot: File
+): TnpaUpload {
     val multipart = receiveMultipart()
     var projectId: UUID? = null
     var subprojectId: UUID? = null
@@ -876,56 +1027,77 @@ private suspend fun io.ktor.server.application.ApplicationCall
                     is PartData.FormItem -> when (part.name) {
                         "projectId" ->
                             projectId = part.value.asUuidOrNull()
+
                         "subprojectId" ->
                             subprojectId = part.value.asUuidOrNull()
+
                         "description" ->
                             description = part.value.trim()
                     }
 
                     is PartData.FileItem -> {
-                        if (part.name != "file" || temporaryFile != null) {
+                        if (
+                            part.name != "file" ||
+                            temporaryFile != null
+                        ) {
                             return@forEachPart
                         }
 
                         originalName = sanitizeFileName(
                             part.originalFileName ?: "document"
                         )
-                        mimeType = part.contentType?.toString()
-                            ?: "application/octet-stream"
+                        mimeType =
+                            part.contentType?.toString()
+                                ?: "application/octet-stream"
 
-                        val tempDirectory =
-                            File(storageRoot, ".tmp").apply { mkdirs() }
-                        val temp = File.createTempFile(
+                        val temporaryDirectory = File(
+                            storageRoot,
+                            ".tmp"
+                        ).apply { mkdirs() }
+
+                        val temporary = File.createTempFile(
                             "tnpa-",
                             ".upload",
-                            tempDirectory
+                            temporaryDirectory
                         )
-                        val digest = MessageDigest.getInstance("SHA-256")
+                        val digest =
+                            MessageDigest.getInstance("SHA-256")
 
                         withContext(Dispatchers.IO) {
                             part.streamProvider().use { input ->
-                                temp.outputStream().use { output ->
-                                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                                temporary.outputStream().use { output ->
+                                    val buffer =
+                                        ByteArray(DEFAULT_BUFFER_SIZE)
+
                                     while (true) {
                                         val read = input.read(buffer)
                                         if (read < 0) break
 
                                         sizeBytes += read
-                                        if (sizeBytes > MAX_TNPA_FILE_BYTES) {
+
+                                        if (
+                                            sizeBytes >
+                                            MAX_TNPA_FILE_BYTES
+                                        ) {
                                             throw UploadValidationException(
-                                                HttpStatusCode.PayloadTooLarge,
+                                                HttpStatusCode
+                                                    .PayloadTooLarge,
                                                 "Файл превышает 1 ГБ"
                                             )
                                         }
 
-                                        digest.update(buffer, 0, read)
+                                        digest.update(
+                                            buffer,
+                                            0,
+                                            read
+                                        )
                                         output.write(buffer, 0, read)
                                     }
                                 }
                             }
                         }
 
-                        temporaryFile = temp
+                        temporaryFile = temporary
                         sha256 = digest.digest().toHex()
                     }
 
@@ -941,7 +1113,8 @@ private suspend fun io.ktor.server.application.ApplicationCall
                 HttpStatusCode.BadRequest,
                 "projectId обязателен"
             )
-        val requiredTemporaryFile = temporaryFile
+
+        val requiredFile = temporaryFile
             ?: throw UploadValidationException(
                 HttpStatusCode.BadRequest,
                 "Файл обязателен"
@@ -953,14 +1126,33 @@ private suspend fun io.ktor.server.application.ApplicationCall
             description = description,
             originalName = originalName ?: "document",
             mimeType = mimeType,
-            temporaryFile = requiredTemporaryFile,
+            temporaryFile = requiredFile,
             sizeBytes = sizeBytes,
             sha256 = sha256
         )
-    } catch (error: Throwable) {
+    } catch (e: Throwable) {
         temporaryFile?.delete()
-        throw error
+        throw e
     }
+}
+
+private suspend fun ApplicationCall.requirePlatformSession():
+    PlatformSession? {
+    val token = request.headers["X-Session-Token"]
+    val session = SessionManager.validate(token)
+
+    if (session == null) {
+        respond(
+            HttpStatusCode.Unauthorized,
+            mapOf("error" to "Session expired")
+        )
+        return null
+    }
+
+    return PlatformSession(
+        id = session.userId,
+        role = session.role.trim().lowercase()
+    )
 }
 
 private fun subprojectDto(row: ResultRow) = SubprojectDto(
@@ -976,188 +1168,168 @@ private fun subprojectDto(row: ResultRow) = SubprojectDto(
     archivedAt = row[SubprojectsTable.archivedAt]
 )
 
-private fun balanceTransactionDto(
-    row: ResultRow
-) = EmployeeBalanceTransactionDto(
-    id = row[EmployeeBalanceTransactionsTable.id].value.toString(),
-    userId = row[
-        EmployeeBalanceTransactionsTable.userId
-    ].value.toString(),
-    salaryRecordId = row[
-        EmployeeBalanceTransactionsTable.salaryRecordId
-    ]?.value?.toString(),
-    transactionType = row[
-        EmployeeBalanceTransactionsTable.transactionType
-    ],
-    amount = row[
-        EmployeeBalanceTransactionsTable.amount
-    ].toDouble(),
-    comment = row[EmployeeBalanceTransactionsTable.comment],
-    createdBy = row[
-        EmployeeBalanceTransactionsTable.createdBy
-    ].value.toString(),
-    createdAt = row[EmployeeBalanceTransactionsTable.createdAt],
-    reversedTransactionId = row[
-        EmployeeBalanceTransactionsTable.reversedTransactionId
-    ]?.toString()
+private fun timeEntryDto(
+    row: ResultRow,
+    subprojectId: UUID?,
+    subprojectName: String
+) = TimeEntry(
+    id = row[TimeEntriesTable.id].value.toString(),
+    userId = row[TimeEntriesTable.userId].value.toString(),
+    projectId = row[TimeEntriesTable.projectId].value.toString(),
+    subprojectId = subprojectId?.toString(),
+    subprojectName = subprojectName,
+    projectName = row[TimeEntriesTable.projectName],
+    date = row[TimeEntriesTable.date].toString(),
+    hours = row[TimeEntriesTable.hours],
+    country = row[TimeEntriesTable.country],
+    comment = row[TimeEntriesTable.comment].orEmpty(),
+    synced = row[TimeEntriesTable.synced]
 )
 
-private fun calculateBalance(
-    rows: List<EmployeeBalanceTransactionDto>
-): Double {
-    val byId = rows.associateBy { it.id }
+private fun balanceTransactionDto(
+    row: ResultRow
+): EmployeeBalanceTransactionDto {
+    val creatorId =
+        row[EmployeeBalanceTransactionsTable.createdBy].value
 
-    return rows.sumOf { row ->
-        when (row.transactionType) {
+    val creatorName = UsersTable
+        .selectAll()
+        .where { UsersTable.id eq creatorId }
+        .limit(1)
+        .singleOrNull()
+        ?.get(UsersTable.name)
+        .orEmpty()
+
+    return EmployeeBalanceTransactionDto(
+        id = row[
+            EmployeeBalanceTransactionsTable.id
+        ].value.toString(),
+        userId = row[
+            EmployeeBalanceTransactionsTable.userId
+        ].value.toString(),
+        salaryRecordId = row[
+            EmployeeBalanceTransactionsTable.salaryRecordId
+        ]?.value?.toString(),
+        transactionType = row[
+            EmployeeBalanceTransactionsTable.transactionType
+        ],
+        amount = row[
+            EmployeeBalanceTransactionsTable.amount
+        ].toDouble(),
+        comment = row[
+            EmployeeBalanceTransactionsTable.comment
+        ],
+        createdBy = creatorId.toString(),
+        createdByName = creatorName,
+        createdAt = row[
+            EmployeeBalanceTransactionsTable.createdAt
+        ],
+        reversedTransactionId = row[
+            EmployeeBalanceTransactionsTable.reversedTransactionId
+        ]?.toString()
+    )
+}
+
+private fun calculateBalance(rows: List<ResultRow>): Double =
+    rows.sumOf { row ->
+        val amount = row[
+            EmployeeBalanceTransactionsTable.amount
+        ].toDouble()
+
+        when (
+            row[
+                EmployeeBalanceTransactionsTable.transactionType
+            ]
+        ) {
             "WITHHOLDING",
-            "ADJUSTMENT_INCREASE" -> row.amount
+            "ADJUSTMENT_INCREASE" -> amount
 
             "REPAYMENT",
-            "ADJUSTMENT_DECREASE" -> -row.amount
-
-            "REVERSAL" -> {
-                when (
-                    byId[row.reversedTransactionId]?.transactionType
-                ) {
-                    "WITHHOLDING",
-                    "ADJUSTMENT_INCREASE" -> -row.amount
-                    "REPAYMENT",
-                    "ADJUSTMENT_DECREASE" -> row.amount
-                    else -> 0.0
-                }
-            }
+            "ADJUSTMENT_DECREASE" -> -amount
 
             else -> 0.0
         }
-    }.let { kotlin.math.round(it * 100.0) / 100.0 }
-}
+    }.toMoneyDouble()
 
-private fun tnpaDocumentDto(row: ResultRow) = TnpaDocumentDto(
-    id = row[TnpaDocumentsTable.id].value.toString(),
-    projectId = row[TnpaDocumentsTable.projectId].value.toString(),
-    projectName = row.getOrNull(ProjectsTable.name).orEmpty(),
-    subprojectId = row[
-        TnpaDocumentsTable.subprojectId
-    ]?.value?.toString(),
-    subprojectName = row.getOrNull(SubprojectsTable.name).orEmpty(),
-    originalName = row[TnpaDocumentsTable.originalName],
-    mimeType = row[TnpaDocumentsTable.mimeType],
-    sizeBytes = row[TnpaDocumentsTable.sizeBytes],
-    checksumSha256 = row[TnpaDocumentsTable.checksumSha256],
-    description = row[TnpaDocumentsTable.description],
-    uploadedBy = row[TnpaDocumentsTable.uploadedBy].value.toString(),
-    uploaderName = row.getOrNull(UsersTable.name).orEmpty(),
-    uploadedAt = row[TnpaDocumentsTable.uploadedAt],
-    downloadUrl =
-        "/api/tnpa/${row[TnpaDocumentsTable.id].value}/download",
-    deletedAt = row[TnpaDocumentsTable.deletedAt]
-)
+private fun tnpaDocumentDto(row: ResultRow): TnpaDocumentDto {
+    val projectId = row[TnpaDocumentsTable.projectId].value
+    val subprojectId =
+        row[TnpaDocumentsTable.subprojectId]?.value
+    val uploaderId = row[TnpaDocumentsTable.uploadedBy].value
 
-private fun ensureProjectExists(projectId: UUID) {
-    if (
-        ProjectsTable
-            .select { ProjectsTable.id eq projectId }
-            .limit(1)
-            .none()
-    ) {
-        throw ProjectNotFoundException()
-    }
-}
-
-private fun validateSubproject(
-    projectId: UUID,
-    subprojectId: UUID?
-) {
-    if (subprojectId == null) return
-
-    val valid = SubprojectsTable
-        .select {
-            (SubprojectsTable.id eq subprojectId) and
-                (SubprojectsTable.projectId eq projectId)
-        }
+    val projectName = ProjectsTable
+        .selectAll()
+        .where { ProjectsTable.id eq projectId }
         .limit(1)
-        .any()
-
-    if (!valid) throw InvalidSubprojectException()
-}
-
-private fun userExists(userId: UUID): Boolean =
-    UsersTable
-        .select { UsersTable.id eq userId }
-        .limit(1)
-        .any()
-
-private fun String?.asUuidOrNull(): UUID? =
-    this?.trim()?.takeIf(String::isNotBlank)?.let {
-        runCatching { UUID.fromString(it) }.getOrNull()
-    }
-
-private fun parseDateOrNull(value: String): LocalDate? =
-    runCatching { LocalDate.parse(value.trim()) }.getOrNull()
-
-private fun SessionUser.canManageProjects(): Boolean =
-    role in setOf("super-admin", "admin")
-
-private fun SessionUser.canViewAllHours(): Boolean =
-    role in setOf("super-admin", "admin", "director")
-
-private fun SessionUser.canManagePayroll(): Boolean =
-    role in setOf("super-admin", "admin")
-
-private fun SessionUser.canManageTrips(): Boolean =
-    role in setOf("super-admin", "admin", "logist")
-
-private fun SessionUser.canReadTnpa(): Boolean = true
-
-private fun SessionUser.canManageTnpa(): Boolean =
-    role in setOf("super-admin", "admin")
-
-private suspend fun io.ktor.server.application.ApplicationCall
-    .requireSessionUser(): SessionUser? {
-    val principal = principal<JWTPrincipal>()
-        ?: run {
-            respond(HttpStatusCode.Unauthorized)
-            return null
-        }
-
-    val id = principal.payload
-        .getClaim("userId")
-        .asString()
-        .asUuidOrNull()
-        ?: principal.payload.subject.asUuidOrNull()
-        ?: run {
-            respond(HttpStatusCode.Unauthorized)
-            return null
-        }
-
-    val role = principal.payload
-        .getClaim("role")
-        .asString()
-        ?.trim()
-        ?.lowercase()
+        .singleOrNull()
+        ?.get(ProjectsTable.name)
         .orEmpty()
 
-    return SessionUser(id = id, role = role)
-}
+    val subprojectName = subprojectId?.let { id ->
+        SubprojectsTable
+            .selectAll()
+            .where { SubprojectsTable.id eq id }
+            .limit(1)
+            .singleOrNull()
+            ?.get(SubprojectsTable.name)
+    }.orEmpty()
 
-private fun entryHours(row: ResultRow): Double {
-    return row[TimeEntriesTable.hours]
-}
+    val uploaderName = UsersTable
+        .selectAll()
+        .where { UsersTable.id eq uploaderId }
+        .limit(1)
+        .singleOrNull()
+        ?.get(UsersTable.name)
+        .orEmpty()
 
-private fun existingTimeEntryDto(row: ResultRow) =
-    com.proles.server.model.TimeEntry(
-        id = row[TimeEntriesTable.id].value.toString(),
-        userId = row[TimeEntriesTable.userId].value.toString(),
-        projectId = row[TimeEntriesTable.projectId].value.toString(),
-        subprojectId = row[
-            TimeEntriesTable.subprojectId
-        ]?.value?.toString(),
-        subprojectName = row.getOrNull(SubprojectsTable.name).orEmpty(),
-        date = row[TimeEntriesTable.date].toString(),
-        hours = row[TimeEntriesTable.hours],
-        description = row[TimeEntriesTable.description],
-        createdAt = row[TimeEntriesTable.createdAt]
+    return TnpaDocumentDto(
+        id = row[TnpaDocumentsTable.id].value.toString(),
+        projectId = projectId.toString(),
+        projectName = projectName,
+        subprojectId = subprojectId?.toString(),
+        subprojectName = subprojectName,
+        originalName = row[TnpaDocumentsTable.originalName],
+        mimeType = row[TnpaDocumentsTable.mimeType],
+        sizeBytes = row[TnpaDocumentsTable.sizeBytes],
+        checksumSha256 =
+            row[TnpaDocumentsTable.checksumSha256],
+        description = row[TnpaDocumentsTable.description],
+        uploadedBy = uploaderId.toString(),
+        uploaderName = uploaderName,
+        uploadedAt = row[TnpaDocumentsTable.uploadedAt],
+        downloadUrl =
+            "/api/v1/tnpa/" +
+                "${row[TnpaDocumentsTable.id].value}/download",
+        deletedAt = row[TnpaDocumentsTable.deletedAt]
     )
+}
+
+private fun String?.asUuidOrNull(): UUID? =
+    this
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
+        ?.let {
+            runCatching { UUID.fromString(it) }.getOrNull()
+        }
+
+private fun parseDateOrNull(value: String): LocalDate? =
+    runCatching {
+        LocalDate.parse(value.trim())
+    }.getOrNull()
+
+private fun PlatformSession.canManageProjects(): Boolean =
+    role in setOf("superadmin", "admin")
+
+private fun PlatformSession.canViewAllHours(): Boolean =
+    role in setOf("superadmin", "admin", "director")
+
+private fun PlatformSession.canManagePayroll(): Boolean =
+    role in setOf("superadmin", "admin", "director")
+
+private fun PlatformSession.canReadTnpa(): Boolean = true
+
+private fun PlatformSession.canManageTnpa(): Boolean =
+    role in setOf("superadmin", "admin")
 
 private fun sanitizeFileName(value: String): String =
     value
@@ -1170,21 +1342,50 @@ private fun sanitizeFileName(value: String): String =
 private fun ByteArray.toHex(): String =
     joinToString("") { byte -> "%02x".format(byte) }
 
-private sealed interface TripCompletionResult {
-    data object Success : TripCompletionResult
-    data object NotFound : TripCompletionResult
-    data object Forbidden : TripCompletionResult
-    data object InvalidRange : TripCompletionResult
+private fun Double.toMoney(): BigDecimal =
+    BigDecimal.valueOf(this).setScale(
+        2,
+        java.math.RoundingMode.HALF_UP
+    )
+
+private fun Double.toMoneyDouble(): Double =
+    toMoney().toDouble()
+
+private sealed interface SubprojectCreateResult {
+    data object NotFound : SubprojectCreateResult
+    data object Duplicate : SubprojectCreateResult
+    data class Created(
+        val dto: SubprojectDto
+    ) : SubprojectCreateResult
 }
 
-private class ProjectNotFoundException : RuntimeException()
-private class UserNotFoundException : RuntimeException()
-private class InvalidSubprojectException : RuntimeException()
-private class DuplicateSubprojectException : RuntimeException()
+private sealed interface SubprojectUpdateResult {
+    data object NotFound : SubprojectUpdateResult
+    data object Duplicate : SubprojectUpdateResult
+    data class Updated(
+        val dto: SubprojectDto
+    ) : SubprojectUpdateResult
+}
 
-private class InsufficientBalanceException(
-    val balance: Double
-) : RuntimeException()
+private sealed interface RepaymentResult {
+    data object UserNotFound : RepaymentResult
+    data object InvalidSalary : RepaymentResult
+    data class Insufficient(
+        val balance: Double
+    ) : RepaymentResult
+
+    data class Created(
+        val dto: EmployeeBalanceTransactionDto
+    ) : RepaymentResult
+}
+
+private sealed interface TnpaCreateResult {
+    data object ProjectMissing : TnpaCreateResult
+    data object InvalidSubproject : TnpaCreateResult
+    data class Created(
+        val dto: TnpaDocumentDto
+    ) : TnpaCreateResult
+}
 
 private class UploadValidationException(
     val status: HttpStatusCode,
