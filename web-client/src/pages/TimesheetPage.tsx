@@ -917,26 +917,6 @@ function StandardTimesheetPage({
   );
 }
 
-function PersonalTimesheetPage({
-  user,
-}: {
-  user: UserDto;
-}) {
-  return (
-    <PageSection
-      title="Персональный табель"
-      description={`Пользователь: ${
-        user.login || user.id
-      }`}
-    >
-      <EmptyState
-        title="Персональный режим временно сохранён отдельно"
-        description="Расширенный персональный табель из прежней версии нужно вынести в отдельный компонент PersonalTimesheetPage.tsx. Стандартный табель уже полностью переведён на новый интерфейс."
-      />
-    </PageSection>
-  );
-}
-
 export function TimesheetPage() {
   const [user] = useState<UserDto | null>(() =>
     getStoredUser(),
