@@ -4,30 +4,45 @@ import {
   useMemo,
   useState,
 } from 'react';
+
 import {
   useNavigate,
   useParams,
 } from 'react-router-dom';
+
 import api from '../api/client';
+
 import type {
+  CreateSubprojectRequest,
   ExpenseDto,
   IncomeDto,
   ProjectDto,
+  SubprojectDto,
   TimeEntryDto,
+  TnpaDocumentDto,
 } from '../types';
+
 import {
   formatDate,
   formatMoney,
 } from '../lib/utils';
+
 import {
   ProjectActivityList,
   ProjectDetailHero,
   ProjectTabs,
+  SubprojectForm,
+  SubprojectList,
+  TnpaDocumentList,
+  TnpaUploadForm,
+  type TnpaUploadValue,
   type ProjectActivityItem,
   type ProjectDetailTab,
 } from '../components/projects';
+
 import {
   EmptyState,
+  Modal,
   PageSection,
   StatCard,
   StatusBadge,
@@ -103,6 +118,20 @@ export function ProjectDetailPage() {
   }>();
   const navigate = useNavigate();
 
+  const storedUser = useMemo(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem('proles_user') || 'null',
+      ) as { role?: string } | null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const canManagePlatformProject =
+    storedUser?.role?.trim().toLowerCase() === 'admin' ||
+    storedUser?.role?.trim().toLowerCase() === 'superadmin';
+
   const [project, setProject] =
     useState<ProjectDto | null>(null);
   const [entries, setEntries] =
@@ -111,6 +140,27 @@ export function ProjectDetailPage() {
     useState<ExpenseDto[]>([]);
   const [incomes, setIncomes] =
     useState<IncomeDto[]>([]);
+
+  const [subprojects, setSubprojects] =
+    useState<SubprojectDto[]>([]);
+  const [documents, setDocuments] =
+    useState<TnpaDocumentDto[]>([]);
+
+  const [subprojectModalOpen, setSubprojectModalOpen] =
+    useState(false);
+  const [editingSubproject, setEditingSubproject] =
+    useState<SubprojectDto | null>(null);
+  const [documentModalOpen, setDocumentModalOpen] =
+    useState(false);
+
+  const [savingSubproject, setSavingSubproject] =
+    useState(false);
+  const [uploadingDocument, setUploadingDocument] =
+    useState(false);
+  const [busySubprojectId, setBusySubprojectId] =
+    useState<string | null>(null);
+  const [busyDocumentId, setBusyDocumentId] =
+    useState<string | null>(null);
 
   const [activeTab, setActiveTab] =
     useState<ProjectDetailTab>('overview');
@@ -133,11 +183,19 @@ export function ProjectDetailPage() {
       entriesResult,
       expensesResult,
       incomesResult,
+      subprojectsResult,
+      documentsResult,
     ] = await Promise.allSettled([
       api.get<ProjectDto[]>('/projects'),
       api.get<TimeEntryDto[]>('/entries/all'),
       api.get<ExpenseDto[]>('/expenses/all'),
       api.get<IncomeDto[]>('/incomes/all'),
+      api.get<SubprojectDto[]>(
+        `/projects/${projectId}/subprojects`,
+      ),
+      api.get<TnpaDocumentDto[]>('/tnpa', {
+        params: { projectId },
+      }),
     ]);
 
     if (projectsResult.status === 'fulfilled') {
@@ -180,11 +238,26 @@ export function ProjectDetailPage() {
         : [],
     );
 
+    setSubprojects(
+      subprojectsResult.status === 'fulfilled'
+        ? subprojectsResult.value.data
+        : [],
+    );
+
+    setDocuments(
+      documentsResult.status === 'fulfilled'
+        ? documentsResult.value.data
+        : [],
+    );
+
+
     if (
       projectsResult.status === 'fulfilled' &&
       (entriesResult.status === 'rejected' ||
         expensesResult.status === 'rejected' ||
-        incomesResult.status === 'rejected')
+        incomesResult.status === 'rejected' ||
+        subprojectsResult.status === 'rejected' ||
+        documentsResult.status === 'rejected')
     ) {
       setError(
         'Карточка проекта загружена, но часть связанных данных недоступна.',
@@ -323,6 +396,174 @@ export function ProjectDetailPage() {
           })),
       [incomes],
     );
+
+  const openCreateSubproject = () => {
+    setEditingSubproject(null);
+    setSubprojectModalOpen(true);
+  };
+
+  const openEditSubproject = (item: SubprojectDto) => {
+    setEditingSubproject(item);
+    setSubprojectModalOpen(true);
+  };
+
+  const closeSubprojectModal = () => {
+    if (savingSubproject) return;
+
+    setSubprojectModalOpen(false);
+    setEditingSubproject(null);
+  };
+
+  const saveSubproject = async (
+    value: CreateSubprojectRequest,
+  ) => {
+    if (!projectId) return;
+
+    setSavingSubproject(true);
+    setError('');
+
+    try {
+      if (editingSubproject) {
+        await api.patch(
+          `/subprojects/${editingSubproject.id}`,
+          value,
+        );
+      } else {
+        await api.post(
+          `/projects/${projectId}/subprojects`,
+          value,
+        );
+      }
+
+      setSubprojectModalOpen(false);
+      setEditingSubproject(null);
+      await loadData();
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось сохранить подпроект.');
+    } finally {
+      setSavingSubproject(false);
+    }
+  };
+
+  const toggleSubproject = async (
+    item: SubprojectDto,
+  ) => {
+    if (
+      item.isActive &&
+      !window.confirm(
+        `Переместить подпроект «${item.name}» в архив?`,
+      )
+    ) {
+      return;
+    }
+
+    setBusySubprojectId(item.id);
+    setError('');
+
+    try {
+      if (item.isActive) {
+        await api.delete(`/subprojects/${item.id}`);
+      } else {
+        await api.patch(`/subprojects/${item.id}`, {
+          isActive: true,
+        });
+      }
+
+      await loadData();
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось изменить статус подпроекта.');
+    } finally {
+      setBusySubprojectId(null);
+    }
+  };
+
+  const uploadDocument = async (
+    value: TnpaUploadValue,
+  ) => {
+    if (!projectId) return;
+
+    setUploadingDocument(true);
+    setError('');
+
+    try {
+      const body = new FormData();
+      body.append('projectId', projectId);
+
+      if (value.subprojectId) {
+        body.append('subprojectId', value.subprojectId);
+      }
+
+      body.append('description', value.description);
+      body.append('file', value.file);
+
+      await api.post('/tnpa', body);
+
+      setDocumentModalOpen(false);
+      await loadData();
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось загрузить документ ТНПА.');
+    } finally {
+      setUploadingDocument(false);
+    }
+  };
+
+  const downloadDocument = async (
+    document: TnpaDocumentDto,
+  ) => {
+    setBusyDocumentId(document.id);
+    setError('');
+
+    try {
+      const response = await api.get<Blob>(
+        `/tnpa/${document.id}/download`,
+        { responseType: 'blob' },
+      );
+
+      const objectUrl = URL.createObjectURL(response.data);
+      const link = window.document.createElement('a');
+
+      link.href = objectUrl;
+      link.download = document.originalName || 'document';
+      window.document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      URL.revokeObjectURL(objectUrl);
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось скачать документ.');
+    } finally {
+      setBusyDocumentId(null);
+    }
+  };
+
+  const deleteDocument = async (
+    document: TnpaDocumentDto,
+  ) => {
+    if (
+      !window.confirm(
+        `Удалить документ «${document.originalName}»?`,
+      )
+    ) {
+      return;
+    }
+
+    setBusyDocumentId(document.id);
+    setError('');
+
+    try {
+      await api.delete(`/tnpa/${document.id}`);
+      await loadData();
+    } catch (requestError) {
+      console.error(requestError);
+      setError('Не удалось удалить документ.');
+    } finally {
+      setBusyDocumentId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -607,6 +848,110 @@ export function ProjectDetailPage() {
           </PageSection>
         </div>
       )}
+
+            <div className="grid gap-6 xl:grid-cols-2">
+        <PageSection
+          title="Подпроекты"
+          description="Этапы и направления работ"
+          action={
+            canManagePlatformProject ? (
+              <button
+                type="button"
+                onClick={openCreateSubproject}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                + Подпроект
+              </button>
+            ) : (
+              <StatusBadge tone="neutral">
+                {subprojects.length}
+              </StatusBadge>
+            )
+          }
+        >
+          <SubprojectList
+            items={subprojects}
+            canManage={canManagePlatformProject}
+            busyId={busySubprojectId}
+            onCreate={openCreateSubproject}
+            onEdit={openEditSubproject}
+            onToggleActive={(item) =>
+              void toggleSubproject(item)
+            }
+          />
+        </PageSection>
+
+        <PageSection
+          title="Документы ТНПА"
+          description="Нормативные и технические документы"
+          action={
+            canManagePlatformProject ? (
+              <button
+                type="button"
+                onClick={() => setDocumentModalOpen(true)}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                + Документ
+              </button>
+            ) : (
+              <StatusBadge tone="neutral">
+                {documents.length}
+              </StatusBadge>
+            )
+          }
+        >
+          <TnpaDocumentList
+            items={documents}
+            canManage={canManagePlatformProject}
+            busyId={busyDocumentId}
+            onUpload={() => setDocumentModalOpen(true)}
+            onDownload={(document) =>
+              void downloadDocument(document)
+            }
+            onDelete={(document) =>
+              void deleteDocument(document)
+            }
+          />
+        </PageSection>
+      </div>
+
+      <Modal
+        open={subprojectModalOpen}
+        title={
+          editingSubproject
+            ? 'Изменение подпроекта'
+            : 'Новый подпроект'
+        }
+        description="Укажите название, код и место подпроекта в списке."
+        onClose={closeSubprojectModal}
+      >
+        <SubprojectForm
+          initialValue={editingSubproject}
+          submitting={savingSubproject}
+          onCancel={closeSubprojectModal}
+          onSubmit={saveSubproject}
+        />
+      </Modal>
+
+      <Modal
+        open={documentModalOpen}
+        title="Новый документ ТНПА"
+        description="Документ можно связать со всем проектом или с отдельным подпроектом."
+        size="lg"
+        closeOnBackdrop={!uploadingDocument}
+        onClose={() => {
+          if (!uploadingDocument) {
+            setDocumentModalOpen(false);
+          }
+        }}
+      >
+        <TnpaUploadForm
+          subprojects={subprojects}
+          submitting={uploadingDocument}
+          onCancel={() => setDocumentModalOpen(false)}
+          onSubmit={uploadDocument}
+        />
+      </Modal>
     </div>
   );
 }
