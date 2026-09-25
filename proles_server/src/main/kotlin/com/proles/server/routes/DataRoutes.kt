@@ -132,16 +132,6 @@ data class PayrollExportResponse(
     val employees: List<PayrollExportEmployeeDto>
 )
 
-@Serializable
-data class SalaryBreakdownResponse(
-    val id: String,
-    val fixed: Double,
-    val piece: Double,
-    val hourly: Double,
-    val bonus: Double,
-    val penalty: Double = 0.0,
-    val total: Double
-)
 
 @Serializable
 data class CalculateSalaryRequest(
@@ -193,17 +183,293 @@ private suspend fun ApplicationCall.checkSession(vararg allowedRoles: String): S
 }
 
 private fun mapRowToEntryDto(row: ResultRow): TimeEntry {
+    val subprojectId = row[TimeEntriesTable.subprojectId]?.value
+
+    val subprojectName = subprojectId?.let { id ->
+        SubprojectsTable
+            .selectAll()
+            .where { SubprojectsTable.id eq id }
+            .limit(1)
+            .singleOrNull()
+            ?.get(SubprojectsTable.name)
+            .orEmpty()
+    }.orEmpty()
+
     return TimeEntry(
         id = row[TimeEntriesTable.id].value.toString(),
         userId = row[TimeEntriesTable.userId].value.toString(),
         projectId = row[TimeEntriesTable.projectId].value.toString(),
+        subprojectId = subprojectId?.toString(),
+        subprojectName = subprojectName,
         projectName = row[TimeEntriesTable.projectName],
         date = row[TimeEntriesTable.date].toString(),
         hours = row[TimeEntriesTable.hours],
         country = row[TimeEntriesTable.country],
-        comment = row[TimeEntriesTable.comment] ?: "",
+        comment = row[TimeEntriesTable.comment].orEmpty(),
         synced = row[TimeEntriesTable.synced]
     )
+}
+
+
+private fun normalizeReceiptCategory(value: String?): String =
+    when (value.orEmpty().trim().uppercase()) {
+        "PERSONAL", "WITHOUT_RECEIPT" -> "WITHOUT_RECEIPT"
+        else -> "WITH_RECEIPT"
+    }
+
+private fun String?.toUuidOrNull(): UUID? =
+    this
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+
+private fun validateSubprojectForProject(
+    projectId: UUID,
+    subprojectId: UUID?
+): Boolean {
+    if (subprojectId == null) return true
+
+    return SubprojectsTable
+        .selectAll()
+        .where {
+            (SubprojectsTable.id eq subprojectId) and
+                (SubprojectsTable.projectId eq projectId) and
+                (SubprojectsTable.isActive eq true)
+        }
+        .limit(1)
+        .any()
+}
+
+private fun taxInclusiveCost(
+    earnedAmount: Double,
+    isRemote: Boolean
+): Double =
+    if (isRemote) {
+        earnedAmount / 0.87
+    } else {
+        earnedAmount * 1.37
+    }
+
+private val directorExpenseRoles =
+    setOf("superadmin", "admin", "director")
+
+private fun normalizeExpenseScope(
+    requestedScope: String?,
+    creatorRole: String
+): String {
+    val requested = requestedScope
+        .orEmpty()
+        .trim()
+        .uppercase()
+
+    return if (
+        requested == "DIRECTOR" &&
+        creatorRole.lowercase() == "director"
+    ) {
+        "DIRECTOR"
+    } else {
+        "GENERAL"
+    }
+}
+
+private fun validateNullableSubprojectForProject(
+    projectId: UUID?,
+    subprojectId: UUID?
+): Boolean {
+    if (subprojectId == null) return true
+    if (projectId == null) return false
+
+    return validateSubprojectForProject(projectId, subprojectId)
+}
+
+private fun expenseSubprojectName(row: ResultRow): String {
+    val subprojectId = row[ExpensesTable.subprojectId]?.value
+        ?: return ""
+
+    return SubprojectsTable
+        .selectAll()
+        .where { SubprojectsTable.id eq subprojectId }
+        .limit(1)
+        .singleOrNull()
+        ?.get(SubprojectsTable.name)
+        .orEmpty()
+}
+
+private fun mapRowToExpenseDto(row: ResultRow): ExpenseDto {
+    val expenseId = row[ExpensesTable.id].value
+
+    val receiptCount = ExpenseReceiptsTable
+        .selectAll()
+        .where {
+            ExpenseReceiptsTable.expenseId eq expenseId
+        }
+        .count()
+        .toInt()
+
+    return ExpenseDto(
+        id = expenseId.toString(),
+        userId = row[ExpensesTable.userId].value.toString(),
+        projectId = row[ExpensesTable.projectId].value.toString(),
+        subprojectId = row[
+            ExpensesTable.subprojectId
+        ]?.value?.toString(),
+        subprojectName = expenseSubprojectName(row),
+        projectName = row.getOrNull(ProjectsTable.name).orEmpty(),
+        date = row[ExpensesTable.date].toString(),
+        type = row[ExpensesTable.type],
+        name = row[ExpensesTable.name],
+        amount = row[ExpensesTable.amount],
+        currency = row[ExpensesTable.currency],
+        comment = row[ExpensesTable.comment],
+        receiptSubmitted = row[ExpensesTable.receiptSubmitted],
+        hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
+        category = normalizeReceiptCategory(
+            row[ExpensesTable.category]
+        ),
+        subcategory = row[ExpensesTable.subcategory],
+        receiptCount = receiptCount,
+        expenseScope = row[ExpensesTable.expenseScope],
+        creatorRole = row[ExpensesTable.creatorRole],
+        createdAt = row[ExpensesTable.createdAt]
+    )
+}
+
+private fun incomeSubprojectName(row: ResultRow): String {
+    val subprojectId = row[IncomesTable.subprojectId]?.value
+        ?: return ""
+
+    return SubprojectsTable
+        .selectAll()
+        .where { SubprojectsTable.id eq subprojectId }
+        .limit(1)
+        .singleOrNull()
+        ?.get(SubprojectsTable.name)
+        .orEmpty()
+}
+
+private fun mapRowToIncomeDto(row: ResultRow): IncomeDto =
+    IncomeDto(
+        id = row[IncomesTable.id].value.toString(),
+        userId = row[IncomesTable.userId].value.toString(),
+        projectId = row[
+            IncomesTable.projectId
+        ]?.value?.toString(),
+        subprojectId = row[
+            IncomesTable.subprojectId
+        ]?.value?.toString(),
+        subprojectName = incomeSubprojectName(row),
+        projectName = row[IncomesTable.projectId]?.value
+            ?.let { projectId ->
+                ProjectsTable
+                    .selectAll()
+                    .where { ProjectsTable.id eq projectId }
+                    .limit(1)
+                    .singleOrNull()
+                    ?.get(ProjectsTable.name)
+            }
+            .orEmpty(),
+        date = row[IncomesTable.date].toString(),
+        type = row[IncomesTable.type],
+        name = row[IncomesTable.name],
+        amount = row[IncomesTable.amount],
+        currency = row[IncomesTable.currency],
+        category = normalizeReceiptCategory(
+            row[IncomesTable.category]
+        ),
+        subcategory = row[IncomesTable.subcategory],
+        createdAt = row[IncomesTable.createdAt]
+    )
+
+private fun businessTripSubprojectName(row: ResultRow): String {
+    val subprojectId = row[BusinessTripsTable.subprojectId]?.value
+        ?: return ""
+
+    return SubprojectsTable
+        .selectAll()
+        .where { SubprojectsTable.id eq subprojectId }
+        .limit(1)
+        .singleOrNull()
+        ?.get(SubprojectsTable.name)
+        .orEmpty()
+}
+
+private fun mapRowToBusinessTripDto(row: ResultRow): BusinessTripDto {
+    val userId = row[BusinessTripsTable.userId].value
+    val projectId = row[BusinessTripsTable.projectId]?.value
+    val startDate = row[BusinessTripsTable.startDate] ?: row[BusinessTripsTable.date]
+    val endDate = row[BusinessTripsTable.endDate]
+
+    val userName = UsersTable
+        .selectAll()
+        .where { UsersTable.id eq userId }
+        .limit(1)
+        .singleOrNull()
+        ?.get(UsersTable.name)
+        .orEmpty()
+
+    val projectName = projectId?.let { id ->
+        ProjectsTable
+            .selectAll()
+            .where { ProjectsTable.id eq id }
+            .limit(1)
+            .singleOrNull()
+            ?.get(ProjectsTable.name)
+    }.orEmpty()
+
+    val waypoints = runCatching {
+        json.decodeFromString<List<WaypointDto>>(
+            row[BusinessTripsTable.waypoints]
+        )
+    }.getOrDefault(emptyList())
+
+    val participants = runCatching {
+        json.decodeFromString<List<String>>(
+            row[BusinessTripsTable.participants]
+        )
+    }.getOrDefault(emptyList())
+
+    return BusinessTripDto(
+        id = row[BusinessTripsTable.id].value.toString(),
+        userId = userId.toString(),
+        userName = userName,
+        projectId = projectId?.toString(),
+        subprojectId = row[
+            BusinessTripsTable.subprojectId
+        ]?.value?.toString(),
+        subprojectName = businessTripSubprojectName(row),
+        projectNumber = row[BusinessTripsTable.projectNumber],
+        companyName = row[BusinessTripsTable.companyName],
+        country = row[BusinessTripsTable.country],
+        projectName = projectName,
+        type = row[BusinessTripsTable.type],
+        date = row[BusinessTripsTable.date].toString(),
+        completedDate = row[
+            BusinessTripsTable.completedDate
+        ]?.toString(),
+        city = row[BusinessTripsTable.city],
+        waypoints = waypoints,
+        transport = row[BusinessTripsTable.transport],
+        notes = row[BusinessTripsTable.notes],
+        participants = participants,
+        createdAt = row[BusinessTripsTable.createdAt],
+        perDiemRate = row[BusinessTripsTable.perDiemRate],
+        startDate = startDate.toString(),
+        endDate = endDate?.toString(),
+        status = row[BusinessTripsTable.status]
+    )
+}
+
+private enum class CrudResult {
+    NOT_FOUND,
+    FORBIDDEN,
+    UPDATED,
+    DELETED
+}
+
+private enum class ExpenseDeleteResult {
+    NOT_FOUND,
+    FORBIDDEN,
+    DELETED
 }
 
 fun Route.dataRoutes() {
@@ -312,87 +578,68 @@ fun Route.dataRoutes() {
         }
 
         post {
-            if (call.checkSession() == null) return@post
+            val session = call.checkSession() ?: return@post
+
             val entry = try {
                 call.receive<TimeEntry>()
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}"); return@post
-            }
-            transaction {
-                TimeEntriesTable.insert {
-                    it[TimeEntriesTable.id] = UUID.fromString(entry.id)
-                    it[TimeEntriesTable.userId] = UUID.fromString(entry.userId)
-                    it[TimeEntriesTable.projectId] = UUID.fromString(entry.projectId)
-                    it[TimeEntriesTable.projectName] = entry.projectName
-                    it[TimeEntriesTable.date] = KtLocalDate.parse(entry.date)
-                    it[TimeEntriesTable.hours] = entry.hours
-                    it[TimeEntriesTable.country] = entry.country
-                    it[TimeEntriesTable.comment] = entry.comment
-                    it[TimeEntriesTable.synced] = entry.synced
-                }
-            }
-            call.respond(HttpStatusCode.Created, entry)
-        }
-
-        // ✅ PUT: UPSERT (обновить или создать)
-        put {
-            if (call.checkSession() == null) return@put
-            val entry = try { call.receive<TimeEntry>() }
-            catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}"); return@put
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON: ${e.message}"
+                )
             }
 
-            // 🔥 ЗАПРЕТ: нельзя добавлять часы за будущие даты
-            val entryDate = KtLocalDate.parse(entry.date)
-            val today = java.time.LocalDate.now()
-            val entryJavaDate = java.time.LocalDate.of(entryDate.year, entryDate.monthNumber, entryDate.dayOfMonth)
-            if (entryJavaDate > today) {
-                call.respond(HttpStatusCode.BadRequest, "Нельзя добавлять часы за будущие даты")
-                return@put
+            val entryId = entry.id.toUuidOrNull() ?: UUID.randomUUID()
+            val userId = entry.userId.toUuidOrNull()
+                ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid userId"
+                )
+            val projectId = entry.projectId.toUuidOrNull()
+                ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid projectId"
+                )
+            val subprojectId = entry.subprojectId.toUuidOrNull()
+            val entryDate = runCatching {
+                KtLocalDate.parse(entry.date)
+            }.getOrElse {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid date"
+                )
             }
 
-            val userId = UUID.fromString(entry.userId)
-            val projectId = UUID.fromString(entry.projectId)
+            if (entry.hours <= 0f) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Hours must be greater than zero"
+                )
+            }
 
-            // 🔥 Возвращаем из транзакции и данные, и флаг "было ли обновление"
-            val result = transaction {
-                val existing = TimeEntriesTable.selectAll()
-                    .where {
-                        (TimeEntriesTable.userId eq userId) and
-                                (TimeEntriesTable.projectId eq projectId) and
-                                (TimeEntriesTable.date eq entryDate)
+            if (
+                userId != session.userId &&
+                session.role !in setOf("superadmin", "admin", "director")
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied"
+                )
+            }
+
+            val created = try {
+                transaction {
+                    if (!validateSubprojectForProject(projectId, subprojectId)) {
+                        throw IllegalArgumentException(
+                            "Подпроект не принадлежит проекту или архивирован"
+                        )
                     }
-                    .firstOrNull()
 
-                if (existing != null) {
-                    // 🔄 ОБНОВЛЕНИЕ
-                    val newHours = existing[TimeEntriesTable.hours] + entry.hours
-                    val oldComment = existing[TimeEntriesTable.comment] ?: ""
-                    val newComment = if (entry.comment.isNotBlank() && entry.comment != oldComment) {
-                        if (oldComment.isNotBlank()) "$oldComment | ${entry.comment}" else entry.comment
-                    } else oldComment
-
-                    TimeEntriesTable.update({
-                        (TimeEntriesTable.userId eq userId) and
-                                (TimeEntriesTable.projectId eq projectId) and
-                                (TimeEntriesTable.date eq entryDate)
-                    }) {
-                        it[TimeEntriesTable.hours] = newHours
-                        it[TimeEntriesTable.comment] = newComment
-                        it[TimeEntriesTable.synced] = entry.synced
-                    }
-                    // Возвращаем обновлённую запись + флаг
-                    val updated = TimeEntriesTable.selectAll()
-                        .where { TimeEntriesTable.id eq existing[TimeEntriesTable.id] }
-                        .map { row -> mapRowToEntryDto(row) }
-                        .first()
-                    Pair(updated, true) // true = было обновление
-                } else {
-                    // ➕ СОЗДАНИЕ
                     TimeEntriesTable.insert {
-                        it[TimeEntriesTable.id] = UUID.fromString(entry.id)
+                        it[TimeEntriesTable.id] = entryId
                         it[TimeEntriesTable.userId] = userId
                         it[TimeEntriesTable.projectId] = projectId
+                        it[TimeEntriesTable.subprojectId] = subprojectId
                         it[TimeEntriesTable.projectName] = entry.projectName
                         it[TimeEntriesTable.date] = entryDate
                         it[TimeEntriesTable.hours] = entry.hours
@@ -400,14 +647,184 @@ fun Route.dataRoutes() {
                         it[TimeEntriesTable.comment] = entry.comment
                         it[TimeEntriesTable.synced] = entry.synced
                     }
-                    Pair(entry, false) // false = было создание
+
+                    TimeEntriesTable
+                        .selectAll()
+                        .where { TimeEntriesTable.id eq entryId }
+                        .single()
+                        .let(::mapRowToEntryDto)
                 }
+            } catch (e: IllegalArgumentException) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Invalid subproject"
+                )
             }
 
-            // Теперь используем результат транзакции
-            val (dto, wasUpdate) = result
-            val statusCode = if (wasUpdate) HttpStatusCode.OK else HttpStatusCode.Created
-            call.respond(statusCode, dto)
+            call.respond(HttpStatusCode.Created, created)
+        }
+
+        // UPSERT с разделением записей по подпроектам
+        put {
+            val session = call.checkSession() ?: return@put
+
+            val entry = try {
+                call.receive<TimeEntry>()
+            } catch (e: Exception) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON: ${e.message}"
+                )
+            }
+
+            val entryId = entry.id.toUuidOrNull() ?: UUID.randomUUID()
+            val userId = entry.userId.toUuidOrNull()
+                ?: return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid userId"
+                )
+            val projectId = entry.projectId.toUuidOrNull()
+                ?: return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid projectId"
+                )
+            val subprojectId = entry.subprojectId.toUuidOrNull()
+            val entryDate = runCatching {
+                KtLocalDate.parse(entry.date)
+            }.getOrElse {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid date"
+                )
+            }
+
+            val javaEntryDate = JavaLocalDate.of(
+                entryDate.year,
+                entryDate.monthNumber,
+                entryDate.dayOfMonth
+            )
+
+            if (javaEntryDate > JavaLocalDate.now()) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Нельзя добавлять часы за будущие даты"
+                )
+            }
+
+            if (entry.hours <= 0f) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Hours must be greater than zero"
+                )
+            }
+
+            if (
+                userId != session.userId &&
+                session.role !in setOf("superadmin", "admin", "director")
+            ) {
+                return@put call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied"
+                )
+            }
+
+            val result = try {
+                transaction {
+                    if (!validateSubprojectForProject(projectId, subprojectId)) {
+                        throw IllegalArgumentException(
+                            "Подпроект не принадлежит проекту или архивирован"
+                        )
+                    }
+
+                    val baseCondition =
+                        (TimeEntriesTable.userId eq userId) and
+                            (TimeEntriesTable.projectId eq projectId) and
+                            (TimeEntriesTable.date eq entryDate)
+
+                    val existing = TimeEntriesTable
+                        .selectAll()
+                        .where {
+                            if (subprojectId == null) {
+                                baseCondition and
+                                    TimeEntriesTable.subprojectId.isNull()
+                            } else {
+                                baseCondition and
+                                    (TimeEntriesTable.subprojectId eq subprojectId)
+                            }
+                        }
+                        .firstOrNull()
+
+                    if (existing != null) {
+                        val existingId = existing[TimeEntriesTable.id].value
+                        val newHours =
+                            existing[TimeEntriesTable.hours] + entry.hours
+                        val oldComment =
+                            existing[TimeEntriesTable.comment].orEmpty()
+                        val newComment =
+                            if (
+                                entry.comment.isNotBlank() &&
+                                entry.comment != oldComment
+                            ) {
+                                listOf(oldComment, entry.comment)
+                                    .filter(String::isNotBlank)
+                                    .joinToString(" | ")
+                            } else {
+                                oldComment
+                            }
+
+                        TimeEntriesTable.update(
+                            { TimeEntriesTable.id eq existingId }
+                        ) {
+                            it[hours] = newHours
+                            it[comment] = newComment
+                            it[country] = entry.country
+                            it[synced] = entry.synced
+                        }
+
+                        val updated = TimeEntriesTable
+                            .selectAll()
+                            .where { TimeEntriesTable.id eq existingId }
+                            .single()
+                            .let(::mapRowToEntryDto)
+
+                        updated to true
+                    } else {
+                        TimeEntriesTable.insert {
+                            it[id] = entryId
+                            it[TimeEntriesTable.userId] = userId
+                            it[TimeEntriesTable.projectId] = projectId
+                            it[TimeEntriesTable.subprojectId] = subprojectId
+                            it[projectName] = entry.projectName
+                            it[date] = entryDate
+                            it[hours] = entry.hours
+                            it[country] = entry.country
+                            it[comment] = entry.comment
+                            it[synced] = entry.synced
+                        }
+
+                        val created = TimeEntriesTable
+                            .selectAll()
+                            .where { TimeEntriesTable.id eq entryId }
+                            .single()
+                            .let(::mapRowToEntryDto)
+
+                        created to false
+                    }
+                }
+            } catch (e: IllegalArgumentException) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Invalid subproject"
+                )
+            }
+
+            val status = if (result.second) {
+                HttpStatusCode.OK
+            } else {
+                HttpStatusCode.Created
+            }
+
+            call.respond(status, result.first)
         }
 
         delete {
@@ -433,7 +850,7 @@ fun Route.dataRoutes() {
             if (!call.checkPermission(Permission.COST_CALCULATION, "view")) return@get
             val data = transaction {
                 val employees = UsersTable.selectAll()
-                    .where { UsersTable.role eq "employee" }
+                    .where { UsersTable.role inList listOf("employee", "tech") }
                     .orderBy(UsersTable.lastName to SortOrder.ASC, UsersTable.firstName to SortOrder.ASC)
                     .map { row ->
                         UserDto(
@@ -452,7 +869,8 @@ fun Route.dataRoutes() {
                             phone = row[UsersTable.phone],
                             telegramUsername = row[UsersTable.telegramUsername],
                             birthDate = row[UsersTable.birthDate]?.toString(),
-                            positionId = row[UsersTable.positionId]?.value?.toString()
+                            positionId = row[UsersTable.positionId]?.value?.toString(),
+                            isRemote = row[UsersTable.isRemote]
                         )
                     }
                 val components = SalaryComponentsTable.selectAll()
@@ -464,6 +882,18 @@ fun Route.dataRoutes() {
                             type = row[SalaryComponentsTable.type],
                             amount = row[SalaryComponentsTable.amount],
                             projectId = row[SalaryComponentsTable.projectId]?.value?.toString(),
+                            subprojectId = row[
+                                SalaryComponentsTable.subprojectId
+                            ]?.value?.toString(),
+                            subprojectName = row[
+                                SalaryComponentsTable.subprojectId
+                            ]?.value?.let { subprojectId ->
+                                SubprojectsTable
+                                    .selectAll()
+                                    .where { SubprojectsTable.id eq subprojectId }
+                                    .singleOrNull()
+                                    ?.get(SubprojectsTable.name)
+                            }.orEmpty(),
                             ratePerHour = row[SalaryComponentsTable.ratePerHour],
                             ratePerUnit = row[SalaryComponentsTable.ratePerUnit],
                             description = row[SalaryComponentsTable.description],
@@ -539,7 +969,37 @@ fun Route.dataRoutes() {
                             sellingPrice = row[ProjectsTable.sellingPrice],
                             materials = row[ProjectsTable.materials],
                             contractors = row[ProjectsTable.contractors],
-                            creditPercent = row[ProjectsTable.creditPercent]
+                            creditPercent = row[ProjectsTable.creditPercent],
+                            subprojects = SubprojectsTable
+                                .selectAll()
+                                .where {
+                                    SubprojectsTable.projectId eq
+                                        row[ProjectsTable.id].value
+                                }
+                                .orderBy(
+                                    SubprojectsTable.sortOrder to SortOrder.ASC,
+                                    SubprojectsTable.name to SortOrder.ASC
+                                )
+                                .map { subproject ->
+                                    SubprojectDto(
+                                        id = subproject[SubprojectsTable.id]
+                                            .value
+                                            .toString(),
+                                        projectId = subproject[
+                                            SubprojectsTable.projectId
+                                        ].value.toString(),
+                                        name = subproject[SubprojectsTable.name],
+                                        code = subproject[SubprojectsTable.code],
+                                        description = subproject[
+                                            SubprojectsTable.description
+                                        ],
+                                        isActive = subproject[SubprojectsTable.isActive],
+                                        sortOrder = subproject[SubprojectsTable.sortOrder],
+                                        createdAt = subproject[SubprojectsTable.createdAt],
+                                        updatedAt = subproject[SubprojectsTable.updatedAt],
+                                        archivedAt = subproject[SubprojectsTable.archivedAt]
+                                    )
+                                }
                         )
                     }
             }
@@ -643,6 +1103,12 @@ fun Route.dataRoutes() {
             transaction {
                 // 🔥 КАСКАДНОЕ УДАЛЕНИЕ: удаляем ВСЕ зависимые записи перед удалением проекта
 
+                // Документы ТНПА удаляем из БД до проекта.
+                // Файлы следует удалять отдельной сервисной процедурой после commit.
+                TnpaDocumentsTable.deleteWhere {
+                    TnpaDocumentsTable.projectId eq projectUuid
+                }
+
                 // 1. Билеты и их получатели
                 val ticketIds = TicketsTable.selectAll()
                     .where { TicketsTable.projectId eq projectUuid }
@@ -673,6 +1139,8 @@ fun Route.dataRoutes() {
                 // 6. Доходы (если есть таблица IncomesTable)
                 IncomesTable.deleteWhere { IncomesTable.projectId eq projectUuid }
 
+                SubprojectsTable.deleteWhere { SubprojectsTable.projectId eq projectUuid }
+
                 // 7. Сам проект (последним, когда все зависимости удалены)
                 ProjectsTable.deleteWhere { ProjectsTable.id eq projectUuid }
             }
@@ -694,122 +1162,235 @@ fun Route.dataRoutes() {
             })
         }
 
-        suspend fun handleExpenseAttachment(call: ApplicationCall, requireImage: Boolean = false) {
+        suspend fun handleExpenseAttachment(
+            call: ApplicationCall,
+            requireImage: Boolean = false
+        ) {
             val session = call.checkSession() ?: return
+
             val requestBody = try {
                 call.receive<Map<String, String>>()
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}")
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON: ${e.message}"
+                )
                 return
             }
 
             val expenseId = requestBody["expenseId"]
-            val fileBase64 = requestBody["fileBase64"] ?: requestBody["imageBase64"]
-            val originalName = requestBody["fileName"] ?: "receipt.jpg"
-            val mimeType = requestBody["mimeType"] ?: "image/jpeg"
+            val fileBase64 =
+                requestBody["fileBase64"] ?: requestBody["imageBase64"]
+            val originalName =
+                requestBody["fileName"] ?: "receipt.jpg"
+            val mimeType =
+                requestBody["mimeType"] ?: "image/jpeg"
 
             if (expenseId.isNullOrBlank() || fileBase64.isNullOrBlank()) {
-                call.respond(HttpStatusCode.BadRequest, "Missing expenseId or fileBase64")
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Missing expenseId or fileBase64"
+                )
                 return
             }
 
             if (requireImage && !mimeType.startsWith("image/")) {
-                call.respond(HttpStatusCode.BadRequest, "Receipt must be an image")
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Receipt must be an image"
+                )
                 return
             }
 
-            val expenseUuid = try { UUID.fromString(expenseId) } catch (_: Exception) {
-                call.respond(HttpStatusCode.BadRequest, "Invalid expenseId")
+            val expenseUuid = expenseId.toUuidOrNull()
+            if (expenseUuid == null) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid expenseId"
+                )
                 return
             }
 
             val fileBytes = try {
                 Base64.getDecoder().decode(fileBase64)
             } catch (_: Exception) {
-                call.respond(HttpStatusCode.BadRequest, "Invalid Base64 file data")
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid Base64 file data"
+                )
                 return
             }
 
             val expenseWithProject = transaction {
                 (ExpensesTable innerJoin ProjectsTable)
                     .selectAll()
-                    .where { ExpensesTable.id eq expenseUuid }
+                    .where {
+                        (ExpensesTable.id eq expenseUuid) and
+                            ExpensesTable.deletedAt.isNull()
+                    }
                     .singleOrNull()
             }
 
             if (expenseWithProject == null) {
-                call.respond(HttpStatusCode.NotFound, "Expense not found")
+                call.respond(
+                    HttpStatusCode.NotFound,
+                    "Expense not found"
+                )
                 return
             }
 
-            val expenseUserId = expenseWithProject[ExpensesTable.userId].value
-            val projectName = expenseWithProject[ProjectsTable.name]
-            val canUploadForeignExpense = session.role in listOf("admin", "director", "superadmin")
-            if (expenseUserId != session.userId && !canUploadForeignExpense) {
-                call.respond(HttpStatusCode.Forbidden, "Access denied: not your expense")
+            val category = normalizeReceiptCategory(
+                expenseWithProject[ExpensesTable.category]
+            )
+
+            if (category == "WITHOUT_RECEIPT") {
+                call.respond(
+                    HttpStatusCode.Conflict,
+                    "Для расхода без чека вложение запрещено"
+                )
+                return
+            }
+
+            val scope = expenseWithProject[ExpensesTable.expenseScope]
+            if (
+                scope == "DIRECTOR" &&
+                session.role !in directorExpenseRoles
+            ) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied"
+                )
+                return
+            }
+
+            val expenseUserId =
+                expenseWithProject[ExpensesTable.userId].value
+            val projectName =
+                expenseWithProject[ProjectsTable.name]
+
+            val canUploadForeignExpense =
+                session.role in directorExpenseRoles
+
+            if (
+                expenseUserId != session.userId &&
+                !canUploadForeignExpense
+            ) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied: not your expense"
+                )
                 return
             }
 
             val userFullNameShort = transaction {
-                UsersTable.selectAll()
+                UsersTable
+                    .selectAll()
                     .where { UsersTable.id eq expenseUserId }
                     .singleOrNull()
                     ?.let { row ->
                         val lastName = row[UsersTable.lastName]
                         val firstName = row[UsersTable.firstName]
                         val middleName = row[UsersTable.middleName]
+
                         val initials = buildString {
-                            if (firstName.isNotEmpty()) append(firstName.first().uppercase())
-                            if (middleName.isNotEmpty()) append(".").append(middleName.first().uppercase()).append(".")
+                            firstName.firstOrNull()?.let {
+                                append(it.uppercase())
+                                append('.')
+                            }
+                            middleName.firstOrNull()?.let {
+                                append(it.uppercase())
+                                append('.')
+                            }
                         }
+
                         "$lastName $initials".trim()
-                    } ?: "unknown_user"
+                    }
+                    ?: "unknown_user"
             }
 
-            val currentMonth = java.time.LocalDate.now().format(
+            val currentMonth = JavaLocalDate.now().format(
                 java.time.format.DateTimeFormatter.ofPattern("yyyy-MM")
             )
+
             val safeUserFolder = userFullNameShort
-                .replace(Regex("[^A-Za-zА-Яа-яЁё0-9._ -]"), "_")
+                .replace(
+                    Regex("[^A-Za-zА-Яа-яЁё0-9._ -]"),
+                    "_"
+                )
                 .replace("..", "_")
                 .ifBlank { "unknown_user" }
 
-            val uploadDir = java.io.File("uploads/receipts/$currentMonth/$safeUserFolder").apply { mkdirs() }
+            val uploadDir = java.io.File(
+                "uploads/receipts/$currentMonth/$safeUserFolder"
+            ).apply { mkdirs() }
 
             val safeProject = projectName
-                .replace(Regex("[^A-Za-zА-Яа-яЁё0-9._ -]"), "_")
+                .replace(
+                    Regex("[^A-Za-zА-Яа-яЁё0-9._ -]"),
+                    "_"
+                )
                 .replace("..", "_")
                 .take(80)
                 .ifBlank { "project" }
-            val extension = originalName.substringAfterLast('.', "").lowercase().take(10).let {
-                if (it.matches(Regex("[a-z0-9]+"))) it else when {
-                    mimeType == "application/pdf" -> "pdf"
-                    mimeType.startsWith("image/") -> "jpg"
-                    else -> "bin"
-                }
-            }
-            val fileName = "${safeProject}_${java.time.LocalDate.now()}_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}.$extension"
-            java.io.File(uploadDir, fileName).writeBytes(fileBytes)
 
-            val fileUrl = "/uploads/receipts/$currentMonth/$safeUserFolder/$fileName"
+            val extension = originalName
+                .substringAfterLast('.', "")
+                .lowercase()
+                .take(10)
+                .let {
+                    if (it.matches(Regex("[a-z0-9]+"))) {
+                        it
+                    } else {
+                        when {
+                            mimeType == "application/pdf" -> "pdf"
+                            mimeType.startsWith("image/") -> "jpg"
+                            else -> "bin"
+                        }
+                    }
+                }
+
+            val fileName =
+                "${safeProject}_${JavaLocalDate.now()}_" +
+                    "${System.currentTimeMillis()}_" +
+                    "${UUID.randomUUID().toString().take(8)}.$extension"
+
+            val targetFile = java.io.File(uploadDir, fileName)
+            targetFile.writeBytes(fileBytes)
+
+            val fileUrl =
+                "/uploads/receipts/$currentMonth/" +
+                    "$safeUserFolder/$fileName"
             val receiptId = UUID.randomUUID()
-            transaction {
-                ExpenseReceiptsTable.insert {
-                    it[id] = receiptId
-                    it[ExpenseReceiptsTable.expenseId] = expenseUuid
-                    it[ExpenseReceiptsTable.imageUrl] = fileUrl
-                    it[uploadedAt] = System.currentTimeMillis()
+
+            try {
+                transaction {
+                    ExpenseReceiptsTable.insert {
+                        it[id] = receiptId
+                        it[ExpenseReceiptsTable.expenseId] = expenseUuid
+                        it[imageUrl] = fileUrl
+                        it[uploadedAt] = System.currentTimeMillis()
+                    }
+
+                    ExpensesTable.update(
+                        { ExpensesTable.id eq expenseUuid }
+                    ) {
+                        it[hasReceiptPhoto] =
+                            mimeType.startsWith("image/")
+                        it[receiptSubmitted] = true
+                    }
                 }
-                ExpensesTable.update({ ExpensesTable.id eq expenseUuid }) {
-                    it[hasReceiptPhoto] = mimeType.startsWith("image/")
-                    it[receiptSubmitted] = true
-                }
+            } catch (e: Exception) {
+                targetFile.delete()
+                throw e
             }
 
-            println("✅ Вложение расхода сохранено: $fileUrl (${fileBytes.size / 1024} КБ, $mimeType) | expense=$expenseId")
             call.respond(
                 HttpStatusCode.Created,
-                mapOf("id" to receiptId.toString(), "url" to fileUrl, "fileName" to fileName)
+                mapOf(
+                    "id" to receiptId.toString(),
+                    "url" to fileUrl,
+                    "fileName" to fileName
+                )
             )
         }
 
@@ -841,6 +1422,24 @@ fun Route.dataRoutes() {
                 call.respond(HttpStatusCode.NotFound, "Expense not found")
                 return@get
             }
+
+            if (expense[ExpensesTable.deletedAt] != null) {
+                return@get call.respond(
+                    HttpStatusCode.NotFound,
+                    "Expense not found"
+                )
+            }
+
+            if (
+                expense[ExpensesTable.expenseScope] == "DIRECTOR" &&
+                session.role !in directorExpenseRoles
+            ) {
+                return@get call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied"
+                )
+            }
+
 
             val expenseUserId = expense[ExpensesTable.userId].value
             val canViewForeignExpense = session.role in listOf("admin", "director", "superadmin")
@@ -916,293 +1515,1059 @@ fun Route.dataRoutes() {
             call.respond(HttpStatusCode.NoContent)
         }
 
-        //  Эндпоинт для админа: все расходы всех сотрудников
         get("/all") {
-            if (!call.checkPermission(Permission.EXPENSES_ALL, "view")) return@get
-            val dateFrom = call.request.queryParameters["dateFrom"]
-            val dateTo = call.request.queryParameters["dateTo"]
-            val list = transaction {
-                val query = (ExpensesTable innerJoin ProjectsTable)
-                    .selectAll()
-                    .apply {
-                        if (!dateFrom.isNullOrBlank()) {
-                            where { ExpensesTable.date greaterEq KtLocalDate.parse(dateFrom) }
-                        }
-                    }
-                    .apply {
-                        if (!dateTo.isNullOrBlank()) {
-                            where { ExpensesTable.date lessEq KtLocalDate.parse(dateTo) }
-                        }
-                    }
-                    .orderBy(ExpensesTable.date to SortOrder.DESC)
-                query.map { row ->
-                        ExpenseDto(
-                            id = row[ExpensesTable.id].value.toString(),
-                            userId = row[ExpensesTable.userId].value.toString(),
-                            projectId = row[ExpensesTable.projectId].value.toString(),
-                            projectName = row[ProjectsTable.name],
-                            date = row[ExpensesTable.date].toString(),
-                            type = row[ExpensesTable.type],
-                            name = row[ExpensesTable.name],
-                            amount = row[ExpensesTable.amount],
-                            currency = row[ExpensesTable.currency],
-                            comment = row[ExpensesTable.comment],
-                            receiptSubmitted = row[ExpensesTable.receiptSubmitted],
-                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
-                            category = row[ExpensesTable.category],
-                            receiptCount = ExpenseReceiptsTable
-                                .selectAll()
-                                .where { ExpenseReceiptsTable.expenseId eq row[ExpensesTable.id].value }
-                                .count().toInt()
-                        )
-                    }
+            val session = call.checkSession() ?: return@get
+
+            if (
+                !PermissionMiddleware.canView(
+                    session.userId,
+                    Permission.EXPENSES_ALL
+                )
+            ) {
+                return@get call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Нет прав на просмотр расходов"
+                )
             }
+
+            val dateFrom = call.request.queryParameters["dateFrom"]
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@get call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Invalid dateFrom"
+                        )
+                }
+
+            val dateTo = call.request.queryParameters["dateTo"]
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@get call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Invalid dateTo"
+                        )
+                }
+
+            val list = transaction {
+                var condition: Op<Boolean> =
+                    ExpensesTable.deletedAt.isNull()
+
+                if (dateFrom != null) {
+                    condition = condition and
+                        (ExpensesTable.date greaterEq dateFrom)
+                }
+
+                if (dateTo != null) {
+                    condition = condition and
+                        (ExpensesTable.date lessEq dateTo)
+                }
+
+                if (session.role !in directorExpenseRoles) {
+                    condition = condition and
+                        (ExpensesTable.expenseScope eq "GENERAL")
+                }
+
+                (ExpensesTable innerJoin ProjectsTable)
+                    .selectAll()
+                    .where { condition }
+                    .orderBy(
+                        ExpensesTable.date to SortOrder.DESC,
+                        ExpensesTable.createdAt to SortOrder.DESC
+                    )
+                    .map(::mapRowToExpenseDto)
+            }
+
             call.respond(HttpStatusCode.OK, list)
         }
 
         get {
-            if (call.checkSession() == null) return@get
-            val userIdParam = call.request.queryParameters["userId"]
+            val session = call.checkSession() ?: return@get
+
+            val requestedUserId = call.request.queryParameters["userId"]
+                .toUuidOrNull()
+                ?: return@get call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Valid userId required"
+                )
+
+            if (
+                requestedUserId != session.userId &&
+                session.role !in directorExpenseRoles
+            ) {
+                return@get call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied"
+                )
+            }
+
             val dateFrom = call.request.queryParameters["dateFrom"]
-            val dateTo = call.request.queryParameters["dateTo"]
-            if (userIdParam.isNullOrBlank()) {
-                call.respond(HttpStatusCode.BadRequest, "userId required"); return@get
-            }
-            val list = transaction {
-                val conditions = mutableListOf<Op<Boolean>>()
-                conditions.add(ExpensesTable.userId eq UUID.fromString(userIdParam))
-                if (!dateFrom.isNullOrBlank()) {
-                    conditions.add(ExpensesTable.date greaterEq KtLocalDate.parse(dateFrom))
-                }
-                if (!dateTo.isNullOrBlank()) {
-                    conditions.add(ExpensesTable.date lessEq KtLocalDate.parse(dateTo))
-                }
-                val query = (ExpensesTable innerJoin ProjectsTable)
-                    .selectAll()
-                    .where { conditions.reduce { acc, op -> acc and op } }
-                    .orderBy(ExpensesTable.date to SortOrder.DESC)
-                query.map { row ->
-                        ExpenseDto(
-                            id = row[ExpensesTable.id].value.toString(),
-                            userId = row[ExpensesTable.userId].value.toString(),
-                            projectId = row[ExpensesTable.projectId].value.toString(),
-                            projectName = row[ProjectsTable.name],
-                            date = row[ExpensesTable.date].toString(),
-                            type = row[ExpensesTable.type],
-                            name = row[ExpensesTable.name],
-                            amount = row[ExpensesTable.amount],
-                            currency = row[ExpensesTable.currency],
-                            comment = row[ExpensesTable.comment],
-                            receiptSubmitted = row[ExpensesTable.receiptSubmitted],
-                            hasReceiptPhoto = row[ExpensesTable.hasReceiptPhoto],
-                            category = row[ExpensesTable.category],
-                            receiptCount = ExpenseReceiptsTable
-                                .selectAll()
-                                .where { ExpenseReceiptsTable.expenseId eq row[ExpensesTable.id].value }
-                                .count().toInt()
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@get call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Invalid dateFrom"
                         )
-                    }
+                }
+
+            val dateTo = call.request.queryParameters["dateTo"]
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@get call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Invalid dateTo"
+                        )
+                }
+
+            val list = transaction {
+                var condition: Op<Boolean> =
+                    (ExpensesTable.userId eq requestedUserId) and
+                        ExpensesTable.deletedAt.isNull()
+
+                if (dateFrom != null) {
+                    condition = condition and
+                        (ExpensesTable.date greaterEq dateFrom)
+                }
+
+                if (dateTo != null) {
+                    condition = condition and
+                        (ExpensesTable.date lessEq dateTo)
+                }
+
+                if (session.role !in directorExpenseRoles) {
+                    condition = condition and
+                        (ExpensesTable.expenseScope eq "GENERAL")
+                }
+
+                (ExpensesTable innerJoin ProjectsTable)
+                    .selectAll()
+                    .where { condition }
+                    .orderBy(
+                        ExpensesTable.date to SortOrder.DESC,
+                        ExpensesTable.createdAt to SortOrder.DESC
+                    )
+                    .map(::mapRowToExpenseDto)
             }
+
             call.respond(HttpStatusCode.OK, list)
         }
 
         post {
-            if (call.checkSession() == null) return@post
-            val exp = try { call.receive<ExpenseDto>() }
-            catch (e: Exception) { call.respond(HttpStatusCode.BadRequest, e.message ?: "Bad JSON"); return@post }
+            val session = call.checkSession() ?: return@post
 
-            val created = transaction {
-                val id = UUID.randomUUID()
-                ExpensesTable.insert {
-                    it[ExpensesTable.id] = id
-                    it[userId] = UUID.fromString(exp.userId)
-                    it[projectId] = UUID.fromString(exp.projectId)
-                    it[date] = KtLocalDate.parse(exp.date)
-                    it[type] = exp.type
-                    it[name] = exp.name
-                    it[amount] = exp.amount
-                    it[currency] = exp.currency
-                    it[comment] = exp.comment
-                    it[receiptSubmitted] = exp.receiptSubmitted
-                    it[hasReceiptPhoto] = exp.hasReceiptPhoto
-                    it[category] = exp.category
-                    it[createdAt] = System.currentTimeMillis()
-                }
-                exp.copy(id = id.toString())
+            val expense = try {
+                call.receive<ExpenseDto>()
+            } catch (e: Exception) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Bad JSON"
+                )
             }
-            val senderName = transaction { UsersTable.selectAll().where { UsersTable.id eq UUID.fromString(exp.userId) }.singleOrNull()?.get(UsersTable.name) ?: "Сотрудник" }
-            val financeRecipients = transaction {
-                UsersTable.selectAll().where { (UsersTable.role eq "superadmin") or (UsersTable.role eq "director") or (UsersTable.role eq "admin") }
-                    .map { it[UsersTable.id].value }.filter { it != UUID.fromString(exp.userId) }
+
+            val userId = expense.userId.toUuidOrNull()
+                ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid userId"
+                )
+
+            val projectId = expense.projectId.toUuidOrNull()
+                ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "projectId required"
+                )
+
+            val subprojectId = expense.subprojectId.toUuidOrNull()
+
+            val expenseDate = runCatching {
+                KtLocalDate.parse(expense.date)
+            }.getOrElse {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid date"
+                )
             }
-            NotificationService.notifyUsers(
-                financeRecipients, UUID.fromString(exp.userId), "EXPENSE_CREATED", "🧾 Новый расход",
-                "$senderName: ${exp.name} — ${"%.2f".format(exp.amount)} ${exp.currency}",
-                json.encodeToString(mapOf("expenseId" to created.id, "projectId" to exp.projectId)), "expenseCreated"
+
+            if (
+                userId != session.userId &&
+                session.role !in directorExpenseRoles
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied"
+                )
+            }
+
+            if (!expense.amount.isFinite() || expense.amount < 0.0) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Amount must be non-negative"
+                )
+            }
+
+            val category = normalizeReceiptCategory(expense.category)
+            val expenseScope = normalizeExpenseScope(
+                expense.expenseScope,
+                session.role
             )
+
+            val id = UUID.randomUUID()
+
+            val created = try {
+                transaction {
+                    if (
+                        !validateNullableSubprojectForProject(
+                            projectId,
+                            subprojectId
+                        )
+                    ) {
+                        throw IllegalArgumentException(
+                            "Подпроект не принадлежит проекту или архивирован"
+                        )
+                    }
+
+                    ExpensesTable.insert {
+                        it[ExpensesTable.id] = id
+                        it[ExpensesTable.userId] = userId
+                        it[ExpensesTable.projectId] = projectId
+                        it[ExpensesTable.subprojectId] = subprojectId
+                        it[date] = expenseDate
+                        it[type] = expense.type
+                        it[name] = expense.name
+                        it[amount] = expense.amount
+                        it[currency] = expense.currency
+                        it[comment] = expense.comment
+                        it[ExpensesTable.category] = category
+                        it[subcategory] = expense.subcategory
+                        it[receiptSubmitted] =
+                            if (category == "WITHOUT_RECEIPT") {
+                                true
+                            } else {
+                                expense.receiptSubmitted
+                            }
+                        it[hasReceiptPhoto] =
+                            if (category == "WITHOUT_RECEIPT") {
+                                false
+                            } else {
+                                expense.hasReceiptPhoto
+                            }
+                        it[ExpensesTable.expenseScope] = expenseScope
+                        it[creatorRole] = session.role
+                        it[createdAt] = System.currentTimeMillis()
+                        it[deletedAt] = null
+                        it[deletedBy] = null
+                    }
+
+                    (ExpensesTable innerJoin ProjectsTable)
+                        .selectAll()
+                        .where { ExpensesTable.id eq id }
+                        .single()
+                        .let(::mapRowToExpenseDto)
+                }
+            } catch (e: IllegalArgumentException) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Invalid subproject"
+                )
+            }
+
+            val senderName = transaction {
+                UsersTable
+                    .selectAll()
+                    .where { UsersTable.id eq userId }
+                    .singleOrNull()
+                    ?.get(UsersTable.name)
+                    ?: "Сотрудник"
+            }
+
+            val financeRecipients = transaction {
+                UsersTable
+                    .selectAll()
+                    .where {
+                        UsersTable.role inList
+                            directorExpenseRoles.toList()
+                    }
+                    .map { it[UsersTable.id].value }
+                    .filter { it != userId }
+            }
+
+            NotificationService.notifyUsers(
+                financeRecipients,
+                userId,
+                "EXPENSE_CREATED",
+                "Новый расход",
+                "$senderName: ${expense.name} — " +
+                    "${"%.2f".format(expense.amount)} " +
+                    expense.currency,
+                json.encodeToString(
+                    mapOf(
+                        "expenseId" to created.id,
+                        "projectId" to projectId.toString(),
+                        "expenseScope" to expenseScope
+                    )
+                ),
+                "expenseCreated"
+            )
+
             call.respond(HttpStatusCode.Created, created)
         }
 
         put {
-            if (call.checkSession() == null) return@put
-            val exp = try { call.receive<ExpenseDto>() }
-            catch (e: Exception) { call.respond(HttpStatusCode.BadRequest, e.message ?: "Bad JSON"); return@put }
+            val session = call.checkSession() ?: return@put
 
-            val expId = UUID.fromString(exp.id)
-            val updated = transaction {
-                ExpensesTable.update({ ExpensesTable.id eq expId }) {
-                    it[projectId] = UUID.fromString(exp.projectId)
-                    it[date] = KtLocalDate.parse(exp.date)
-                    it[type] = exp.type
-                    it[name] = exp.name
-                    it[amount] = exp.amount
-                    it[currency] = exp.currency
-                    it[comment] = exp.comment
-                    it[receiptSubmitted] = exp.receiptSubmitted
-                    it[hasReceiptPhoto] = exp.hasReceiptPhoto
-                    it[category] = exp.category
-                }
-                exp
+            val expense = try {
+                call.receive<ExpenseDto>()
+            } catch (e: Exception) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Bad JSON"
+                )
             }
+
+            val expenseId = expense.id.toUuidOrNull()
+                ?: return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid expenseId"
+                )
+
+            val projectId = expense.projectId.toUuidOrNull()
+                ?: return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "projectId required"
+                )
+
+            val subprojectId = expense.subprojectId.toUuidOrNull()
+
+            val expenseDate = runCatching {
+                KtLocalDate.parse(expense.date)
+            }.getOrElse {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid date"
+                )
+            }
+
+            if (!expense.amount.isFinite() || expense.amount < 0.0) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Amount must be non-negative"
+                )
+            }
+
+            val category = normalizeReceiptCategory(expense.category)
+
+            val updated = try {
+                transaction {
+                    val existing = ExpensesTable
+                        .selectAll()
+                        .where {
+                            (ExpensesTable.id eq expenseId) and
+                                ExpensesTable.deletedAt.isNull()
+                        }
+                        .singleOrNull()
+                        ?: return@transaction null
+
+                    val ownerId = existing[ExpensesTable.userId].value
+                    val currentScope =
+                        existing[ExpensesTable.expenseScope]
+
+                    if (
+                        ownerId != session.userId &&
+                        session.role !in directorExpenseRoles
+                    ) {
+                        throw SecurityException("Access denied")
+                    }
+
+                    if (
+                        currentScope == "DIRECTOR" &&
+                        session.role !in directorExpenseRoles
+                    ) {
+                        throw SecurityException("Access denied")
+                    }
+
+                    if (
+                        !validateNullableSubprojectForProject(
+                            projectId,
+                            subprojectId
+                        )
+                    ) {
+                        throw IllegalArgumentException(
+                            "Подпроект не принадлежит проекту или архивирован"
+                        )
+                    }
+
+                    if (category == "WITHOUT_RECEIPT") {
+                        ExpenseReceiptsTable.deleteWhere {
+                            ExpenseReceiptsTable.expenseId eq expenseId
+                        }
+                    }
+
+                    val requestedScope = if (
+                        existing[ExpensesTable.creatorRole] == "director"
+                    ) {
+                        normalizeExpenseScope(
+                            expense.expenseScope,
+                            "director"
+                        )
+                    } else {
+                        "GENERAL"
+                    }
+
+                    ExpensesTable.update(
+                        { ExpensesTable.id eq expenseId }
+                    ) {
+                        it[ExpensesTable.projectId] = projectId
+                        it[ExpensesTable.subprojectId] = subprojectId
+                        it[date] = expenseDate
+                        it[type] = expense.type
+                        it[name] = expense.name
+                        it[amount] = expense.amount
+                        it[currency] = expense.currency
+                        it[comment] = expense.comment
+                        it[ExpensesTable.category] = category
+                        it[subcategory] = expense.subcategory
+                        it[expenseScope] = requestedScope
+                        it[receiptSubmitted] =
+                            if (category == "WITHOUT_RECEIPT") {
+                                true
+                            } else {
+                                expense.receiptSubmitted
+                            }
+                        it[hasReceiptPhoto] =
+                            if (category == "WITHOUT_RECEIPT") {
+                                false
+                            } else {
+                                expense.hasReceiptPhoto
+                            }
+                    }
+
+                    (ExpensesTable innerJoin ProjectsTable)
+                        .selectAll()
+                        .where { ExpensesTable.id eq expenseId }
+                        .single()
+                        .let(::mapRowToExpenseDto)
+                }
+            } catch (e: SecurityException) {
+                return@put call.respond(
+                    HttpStatusCode.Forbidden,
+                    e.message ?: "Access denied"
+                )
+            } catch (e: IllegalArgumentException) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Invalid subproject"
+                )
+            }
+
+            if (updated == null) {
+                return@put call.respond(
+                    HttpStatusCode.NotFound,
+                    "Expense not found"
+                )
+            }
+
             call.respond(HttpStatusCode.OK, updated)
         }
 
         delete {
-            if (call.checkSession() == null) return@delete
-            val expId = call.request.queryParameters["expenseId"]
-            if (expId.isNullOrBlank()) { call.respond(HttpStatusCode.BadRequest, "expenseId required"); return@delete }
-            transaction { ExpensesTable.deleteWhere { ExpensesTable.id eq UUID.fromString(expId) } }
-            call.respond(HttpStatusCode.NoContent)
+            val session = call.checkSession() ?: return@delete
+
+            val expenseId = call.request.queryParameters["expenseId"]
+                .toUuidOrNull()
+                ?: return@delete call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Valid expenseId required"
+                )
+
+            val result = transaction {
+                val existing = ExpensesTable
+                    .selectAll()
+                    .where {
+                        (ExpensesTable.id eq expenseId) and
+                            ExpensesTable.deletedAt.isNull()
+                    }
+                    .singleOrNull()
+                    ?: return@transaction ExpenseDeleteResult.NOT_FOUND
+
+                val ownerId = existing[ExpensesTable.userId].value
+                val scope = existing[ExpensesTable.expenseScope]
+
+                if (
+                    ownerId != session.userId &&
+                    session.role !in directorExpenseRoles
+                ) {
+                    return@transaction ExpenseDeleteResult.FORBIDDEN
+                }
+
+                if (
+                    scope == "DIRECTOR" &&
+                    session.role !in directorExpenseRoles
+                ) {
+                    return@transaction ExpenseDeleteResult.FORBIDDEN
+                }
+
+                ExpensesTable.update(
+                    { ExpensesTable.id eq expenseId }
+                ) {
+                    it[deletedAt] = System.currentTimeMillis()
+                    it[deletedBy] = session.userId
+                }
+
+                ExpenseDeleteResult.DELETED
+            }
+
+            when (result) {
+                ExpenseDeleteResult.NOT_FOUND ->
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        "Expense not found"
+                    )
+
+                ExpenseDeleteResult.FORBIDDEN ->
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        "Access denied"
+                    )
+
+                ExpenseDeleteResult.DELETED ->
+                    call.respond(HttpStatusCode.NoContent)
+            }
         }
     }
 
     // ─────────────────────────────────────────────────────────────
-// 💵 INCOMES: Доходы (аналог расходов, без чеков)
-// ─────────────────────────────────────────────────────────────
+    // 💵 INCOMES: Доходы (аналог расходов, без чеков)
+    // ─────────────────────────────────────────────────────────────
     route("/api/v1/incomes") {
         get("/all") {
-            if (!call.checkPermission(Permission.EXPENSES_ALL, "view")) return@get
-            val dateFrom = call.request.queryParameters["dateFrom"]
-            val dateTo = call.request.queryParameters["dateTo"]
-            val list = transaction {
-                val query = (IncomesTable leftJoin ProjectsTable)
-                    .selectAll()
-                    .apply {
-                        if (!dateFrom.isNullOrBlank()) {
-                            where { IncomesTable.date greaterEq KtLocalDate.parse(dateFrom) }
-                        }
-                    }
-                    .apply {
-                        if (!dateTo.isNullOrBlank()) {
-                            where { IncomesTable.date lessEq KtLocalDate.parse(dateTo) }
-                        }
-                    }
-                    .orderBy(IncomesTable.date to SortOrder.DESC)
-                query.map { row ->
-                        IncomeDto(
-                            id = row[IncomesTable.id].value.toString(),
-                            userId = row[IncomesTable.userId].value.toString(),
-                            projectId = row[IncomesTable.projectId]?.value?.toString(),
-                            projectName = row.getOrNull(ProjectsTable.name) ?: "Без проекта",
-                            date = row[IncomesTable.date].toString(),
-                            type = row[IncomesTable.type],
-                            name = row[IncomesTable.name],
-                            amount = row[IncomesTable.amount],
-                            currency = row[IncomesTable.currency],
-                            category = row[IncomesTable.category],
-                            createdAt = row[IncomesTable.createdAt]
-                        )
-                    }
+            val session = call.checkSession() ?: return@get
+
+            if (
+                !PermissionMiddleware.canView(
+                    session.userId,
+                    Permission.EXPENSES_ALL
+                )
+            ) {
+                return@get call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Нет прав на просмотр доходов"
+                )
             }
-            call.respond(HttpStatusCode.OK, list)
+
+            val dateFromParam =
+                call.request.queryParameters["dateFrom"]
+            val dateToParam =
+                call.request.queryParameters["dateTo"]
+
+            val dateFrom = dateFromParam
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@get call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Invalid dateFrom"
+                        )
+                }
+
+            val dateTo = dateToParam
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@get call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Invalid dateTo"
+                        )
+                }
+
+            if (
+                dateFrom != null &&
+                dateTo != null &&
+                dateFrom > dateTo
+            ) {
+                return@get call.respond(
+                    HttpStatusCode.BadRequest,
+                    "dateFrom must not be later than dateTo"
+                )
+            }
+
+            val incomes = transaction {
+                var condition: Op<Boolean> = Op.TRUE
+
+                if (dateFrom != null) {
+                    condition = condition and
+                        (IncomesTable.date greaterEq dateFrom)
+                }
+
+                if (dateTo != null) {
+                    condition = condition and
+                        (IncomesTable.date lessEq dateTo)
+                }
+
+                IncomesTable
+                    .selectAll()
+                    .where { condition }
+                    .orderBy(
+                        IncomesTable.date to SortOrder.DESC,
+                        IncomesTable.createdAt to SortOrder.DESC
+                    )
+                    .map(::mapRowToIncomeDto)
+            }
+
+            call.respond(HttpStatusCode.OK, incomes)
         }
+
         get {
-            if (call.checkSession() == null) return@get
-            val userIdParam = call.request.queryParameters["userId"]
-            val dateFrom = call.request.queryParameters["dateFrom"]
-            val dateTo = call.request.queryParameters["dateTo"]
-            if (userIdParam.isNullOrBlank()) {
-                call.respond(HttpStatusCode.BadRequest, "userId required"); return@get
+            val session = call.checkSession() ?: return@get
+
+            val userId = call.request.queryParameters["userId"]
+                .toUuidOrNull()
+                ?: return@get call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Valid userId required"
+                )
+
+            if (
+                userId != session.userId &&
+                session.role !in setOf(
+                    "superadmin",
+                    "admin",
+                    "director"
+                )
+            ) {
+                return@get call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied"
+                )
             }
-            val list = transaction {
-                val conditions = mutableListOf<Op<Boolean>>()
-                conditions.add(IncomesTable.userId eq UUID.fromString(userIdParam))
-                if (!dateFrom.isNullOrBlank()) {
-                    conditions.add(IncomesTable.date greaterEq KtLocalDate.parse(dateFrom))
+
+            val dateFromParam =
+                call.request.queryParameters["dateFrom"]
+            val dateToParam =
+                call.request.queryParameters["dateTo"]
+
+            val dateFrom = dateFromParam
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@get call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Invalid dateFrom"
+                        )
                 }
-                if (!dateTo.isNullOrBlank()) {
-                    conditions.add(IncomesTable.date lessEq KtLocalDate.parse(dateTo))
+
+            val dateTo = dateToParam
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@get call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Invalid dateTo"
+                        )
                 }
-                val query = (IncomesTable leftJoin ProjectsTable)
+
+            if (
+                dateFrom != null &&
+                dateTo != null &&
+                dateFrom > dateTo
+            ) {
+                return@get call.respond(
+                    HttpStatusCode.BadRequest,
+                    "dateFrom must not be later than dateTo"
+                )
+            }
+
+            val incomes = transaction {
+                var condition: Op<Boolean> =
+                    IncomesTable.userId eq userId
+
+                if (dateFrom != null) {
+                    condition = condition and
+                        (IncomesTable.date greaterEq dateFrom)
+                }
+
+                if (dateTo != null) {
+                    condition = condition and
+                        (IncomesTable.date lessEq dateTo)
+                }
+
+                IncomesTable
                     .selectAll()
-                    .where { conditions.reduce { acc, op -> acc and op } }
-                    .orderBy(IncomesTable.date to SortOrder.DESC)
-                query.map { row ->
-                        IncomeDto(
-                            id = row[IncomesTable.id].value.toString(),
-                            userId = row[IncomesTable.userId].value.toString(),
-                            projectId = row[IncomesTable.projectId]?.value?.toString(),
-                            projectName = row.getOrNull(ProjectsTable.name) ?: "Без проекта",
-                            date = row[IncomesTable.date].toString(),
-                            type = row[IncomesTable.type],
-                            name = row[IncomesTable.name],
-                            amount = row[IncomesTable.amount],
-                            currency = row[IncomesTable.currency],
-                            category = row[IncomesTable.category],
-                            createdAt = row[IncomesTable.createdAt]
+                    .where { condition }
+                    .orderBy(
+                        IncomesTable.date to SortOrder.DESC,
+                        IncomesTable.createdAt to SortOrder.DESC
+                    )
+                    .map(::mapRowToIncomeDto)
+            }
+
+            call.respond(HttpStatusCode.OK, incomes)
+        }
+
+        post {
+            val session = call.checkSession() ?: return@post
+
+            val income = try {
+                call.receive<IncomeDto>()
+            } catch (e: Exception) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON: ${e.message}"
+                )
+            }
+
+            val userId = income.userId.toUuidOrNull()
+                ?: session.userId
+
+            if (
+                userId != session.userId &&
+                session.role !in setOf(
+                    "superadmin",
+                    "admin",
+                    "director"
+                )
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied"
+                )
+            }
+
+            val projectId = income.projectId.toUuidOrNull()
+            val subprojectId = income.subprojectId.toUuidOrNull()
+
+            if (income.projectId?.isNotBlank() == true &&
+                projectId == null
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid projectId"
+                )
+            }
+
+            if (income.subprojectId?.isNotBlank() == true &&
+                subprojectId == null
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid subprojectId"
+                )
+            }
+
+            if (projectId == null && subprojectId != null) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Нельзя выбрать подпроект без проекта"
+                )
+            }
+
+            val incomeDate = runCatching {
+                KtLocalDate.parse(income.date)
+            }.getOrElse {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid date"
+                )
+            }
+
+            if (
+                !income.amount.isFinite() ||
+                income.amount < 0.0
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Amount must be non-negative"
+                )
+            }
+
+            val id = income.id.toUuidOrNull() ?: UUID.randomUUID()
+
+            val created = try {
+                transaction {
+                    if (
+                        !validateNullableSubprojectForProject(
+                            projectId,
+                            subprojectId
+                        )
+                    ) {
+                        throw IllegalArgumentException(
+                            "Подпроект не принадлежит проекту " +
+                                "или архивирован"
                         )
                     }
-            }
-            call.respond(HttpStatusCode.OK, list)
-        }
-        post {
-            if (call.checkSession() == null) return@post
-            val income = try { call.receive<IncomeDto>() }
-            catch (e: Exception) { call.respond(HttpStatusCode.BadRequest, e.message ?: "Bad JSON"); return@post }
-            val created = transaction {
-                val id = UUID.randomUUID()
-                IncomesTable.insert {
-                    it[IncomesTable.id] = id
-                    it[userId] = UUID.fromString(income.userId)
-                    if (!income.projectId.isNullOrBlank()) it[projectId] = UUID.fromString(income.projectId)
-                    it[date] = KtLocalDate.parse(income.date)
-                    it[type] = income.type
-                    it[name] = income.name
-                    it[amount] = income.amount
-                    it[currency] = income.currency
-                    it[category] = income.category
-                    it[createdAt] = System.currentTimeMillis()
+
+                    if (
+                        projectId != null &&
+                        ProjectsTable
+                            .selectAll()
+                            .where { ProjectsTable.id eq projectId }
+                            .limit(1)
+                            .none()
+                    ) {
+                        throw IllegalArgumentException(
+                            "Проект не найден"
+                        )
+                    }
+
+                    IncomesTable.insert {
+                        it[IncomesTable.id] = id
+                        it[IncomesTable.userId] = userId
+                        it[IncomesTable.projectId] = projectId
+                        it[IncomesTable.subprojectId] = subprojectId
+                        it[date] = incomeDate
+                        it[type] = income.type.trim()
+                        it[name] = income.name.trim()
+                        it[amount] = income.amount
+                        it[currency] = income.currency
+                            .trim()
+                            .uppercase()
+                            .take(3)
+                            .ifBlank { "RUB" }
+                        it[category] = normalizeReceiptCategory(
+                            income.category
+                        )
+                        it[subcategory] = income.subcategory
+                            ?.trim()
+                            ?.takeIf(String::isNotBlank)
+                        it[createdAt] = System.currentTimeMillis()
+                    }
+
+                    IncomesTable
+                        .selectAll()
+                        .where { IncomesTable.id eq id }
+                        .single()
+                        .let(::mapRowToIncomeDto)
                 }
-                income.copy(id = id.toString(), createdAt = System.currentTimeMillis())
+            } catch (e: IllegalArgumentException) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Invalid income"
+                )
             }
+
             call.respond(HttpStatusCode.Created, created)
         }
+
         put {
-            if (call.checkSession() == null) return@put
-            val income = try { call.receive<IncomeDto>() }
-            catch (e: Exception) { call.respond(HttpStatusCode.BadRequest, e.message ?: "Bad JSON"); return@put }
-            val incomeId = UUID.fromString(income.id)
-            val updated = transaction {
-                IncomesTable.update({ IncomesTable.id eq incomeId }) {
-                    if (!income.projectId.isNullOrBlank()) it[projectId] = UUID.fromString(income.projectId)
-                    else it[projectId] = null
-                    it[date] = KtLocalDate.parse(income.date)
-                    it[type] = income.type
-                    it[name] = income.name
-                    it[amount] = income.amount
-                    it[currency] = income.currency
-                    it[category] = income.category
-                }
-                income
+            val session = call.checkSession() ?: return@put
+
+            val income = try {
+                call.receive<IncomeDto>()
+            } catch (e: Exception) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON: ${e.message}"
+                )
             }
-            call.respond(HttpStatusCode.OK, updated)
+
+            val incomeId = income.id.toUuidOrNull()
+                ?: return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid incomeId"
+                )
+
+            val projectId = income.projectId.toUuidOrNull()
+            val subprojectId = income.subprojectId.toUuidOrNull()
+
+            if (income.projectId?.isNotBlank() == true &&
+                projectId == null
+            ) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid projectId"
+                )
+            }
+
+            if (income.subprojectId?.isNotBlank() == true &&
+                subprojectId == null
+            ) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid subprojectId"
+                )
+            }
+
+            if (projectId == null && subprojectId != null) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Нельзя выбрать подпроект без проекта"
+                )
+            }
+
+            val incomeDate = runCatching {
+                KtLocalDate.parse(income.date)
+            }.getOrElse {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid date"
+                )
+            }
+
+            if (
+                !income.amount.isFinite() ||
+                income.amount < 0.0
+            ) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Amount must be non-negative"
+                )
+            }
+
+            val result = try {
+                transaction {
+                    val existing = IncomesTable
+                        .selectAll()
+                        .where { IncomesTable.id eq incomeId }
+                        .singleOrNull()
+                        ?: return@transaction null
+
+                    val ownerId = existing[
+                        IncomesTable.userId
+                    ].value
+
+                    if (
+                        ownerId != session.userId &&
+                        session.role !in setOf(
+                            "superadmin",
+                            "admin",
+                            "director"
+                        )
+                    ) {
+                        throw SecurityException("Access denied")
+                    }
+
+                    if (
+                        !validateNullableSubprojectForProject(
+                            projectId,
+                            subprojectId
+                        )
+                    ) {
+                        throw IllegalArgumentException(
+                            "Подпроект не принадлежит проекту " +
+                                "или архивирован"
+                        )
+                    }
+
+                    if (
+                        projectId != null &&
+                        ProjectsTable
+                            .selectAll()
+                            .where { ProjectsTable.id eq projectId }
+                            .limit(1)
+                            .none()
+                    ) {
+                        throw IllegalArgumentException(
+                            "Проект не найден"
+                        )
+                    }
+
+                    IncomesTable.update(
+                        { IncomesTable.id eq incomeId }
+                    ) {
+                        it[IncomesTable.projectId] = projectId
+                        it[IncomesTable.subprojectId] = subprojectId
+                        it[date] = incomeDate
+                        it[type] = income.type.trim()
+                        it[name] = income.name.trim()
+                        it[amount] = income.amount
+                        it[currency] = income.currency
+                            .trim()
+                            .uppercase()
+                            .take(3)
+                            .ifBlank { "RUB" }
+                        it[category] = normalizeReceiptCategory(
+                            income.category
+                        )
+                        it[subcategory] = income.subcategory
+                            ?.trim()
+                            ?.takeIf(String::isNotBlank)
+                    }
+
+                    IncomesTable
+                        .selectAll()
+                        .where { IncomesTable.id eq incomeId }
+                        .single()
+                        .let(::mapRowToIncomeDto)
+                }
+            } catch (e: SecurityException) {
+                return@put call.respond(
+                    HttpStatusCode.Forbidden,
+                    e.message ?: "Access denied"
+                )
+            } catch (e: IllegalArgumentException) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Invalid income"
+                )
+            }
+
+            if (result == null) {
+                return@put call.respond(
+                    HttpStatusCode.NotFound,
+                    "Income not found"
+                )
+            }
+
+            call.respond(HttpStatusCode.OK, result)
         }
+
         delete {
-            if (call.checkSession() == null) return@delete
+            val session = call.checkSession() ?: return@delete
+
             val incomeId = call.request.queryParameters["incomeId"]
-            if (incomeId.isNullOrBlank()) { call.respond(HttpStatusCode.BadRequest, "incomeId required"); return@delete }
-            transaction { IncomesTable.deleteWhere { IncomesTable.id eq UUID.fromString(incomeId) } }
-            call.respond(HttpStatusCode.NoContent)
+                .toUuidOrNull()
+                ?: return@delete call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Valid incomeId required"
+                )
+
+            val result = transaction {
+                val existing = IncomesTable
+                    .selectAll()
+                    .where { IncomesTable.id eq incomeId }
+                    .singleOrNull()
+                    ?: return@transaction CrudResult.NOT_FOUND
+
+                val ownerId = existing[IncomesTable.userId].value
+
+                if (
+                    ownerId != session.userId &&
+                    session.role !in setOf(
+                        "superadmin",
+                        "admin",
+                        "director"
+                    )
+                ) {
+                    return@transaction CrudResult.FORBIDDEN
+                }
+
+                IncomesTable.deleteWhere {
+                    IncomesTable.id eq incomeId
+                }
+
+                CrudResult.DELETED
+            }
+
+            when (result) {
+                CrudResult.NOT_FOUND ->
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        "Income not found"
+                    )
+
+                CrudResult.FORBIDDEN ->
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        "Access denied"
+                    )
+
+                CrudResult.DELETED ->
+                    call.respond(HttpStatusCode.NoContent)
+
+                CrudResult.UPDATED ->
+                    call.respond(HttpStatusCode.OK)
+            }
         }
     }
 
@@ -1340,6 +2705,7 @@ fun Route.dataRoutes() {
                     it[role] = user.role
                     it[position] = user.position
                     it[positionId] = user.positionId?.let(UUID::fromString)
+                    it[UsersTable.isRemote] = user.isRemote
                     it[defaultRateType] = user.defaultRateType
                     it[defaultRate] = user.defaultRate
                     it[defaultCurrency] = user.defaultCurrency
@@ -1394,6 +2760,7 @@ fun Route.dataRoutes() {
                     it[role] = user.role
                     it[position] = user.position
                     it[positionId] = user.positionId?.let(UUID::fromString)
+                    it[UsersTable.isRemote] = user.isRemote
                     it[defaultRateType] = user.defaultRateType
                     it[defaultRate] = user.defaultRate
                     it[defaultCurrency] = user.defaultCurrency
@@ -1731,343 +3098,579 @@ fun Route.dataRoutes() {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // ─────────────────────────────────────────────────────────────
     // 🚆 BUSINESS TRIPS
     // ─────────────────────────────────────────────────────────────
     route("/api/v1/business-trips") {
-        fun ResultRow.toTripDto(): BusinessTripDto {
-            val projectId = this[BusinessTripsTable.projectId]?.value
-            val projectName = projectId?.let { id ->
-                ProjectsTable.selectAll().where { ProjectsTable.id eq id }.singleOrNull()?.get(ProjectsTable.name)
-            }.orEmpty()
-            return BusinessTripDto(
-                id = this[BusinessTripsTable.id].value.toString(),
-                userId = this[BusinessTripsTable.userId].value.toString(),
-                projectId = projectId?.toString(),
-                projectName = projectName,
-                projectNumber = this[BusinessTripsTable.projectNumber],
-                companyName = this[BusinessTripsTable.companyName],
-                country = this[BusinessTripsTable.country],
-                type = this[BusinessTripsTable.type],
-                date = this[BusinessTripsTable.date].toString(),
-                completedDate = this[BusinessTripsTable.completedDate]?.toString(),
-                city = this[BusinessTripsTable.city],
-                waypoints = runCatching { json.decodeFromString<List<WaypointDto>>(this[BusinessTripsTable.waypoints]) }.getOrDefault(emptyList()),
-                transport = this[BusinessTripsTable.transport],
-                notes = this[BusinessTripsTable.notes],
-                participants = runCatching { json.decodeFromString<List<String>>(this[BusinessTripsTable.participants]) }.getOrDefault(emptyList()),
-                createdAt = this[BusinessTripsTable.createdAt],
-                perDiemRate = this[BusinessTripsTable.perDiemRate]
-            )
+        get("/all") {
+            val session = call.checkSession() ?: return@get
+
+            val canViewAll =
+                session.role in setOf(
+                    "superadmin",
+                    "admin",
+                    "director",
+                    "logist"
+                ) ||
+                    PermissionMiddleware.canView(
+                        session.userId,
+                        Permission.BUSINESS_TRIPS_ALL
+                    )
+
+            if (!canViewAll) {
+                return@get call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Нет прав на просмотр командировок"
+                )
+            }
+
+            val trips = transaction {
+                BusinessTripsTable
+                    .selectAll()
+                    .orderBy(
+                        BusinessTripsTable.startDate to SortOrder.DESC,
+                        BusinessTripsTable.createdAt to SortOrder.DESC
+                    )
+                    .map(::mapRowToBusinessTripDto)
+            }
+
+            call.respond(HttpStatusCode.OK, trips)
         }
 
         get {
             val session = call.checkSession() ?: return@get
-            val userIdParam = call.request.queryParameters["userId"]
-            val dateFrom = call.request.queryParameters["dateFrom"]
-            val dateTo = call.request.queryParameters["dateTo"]
-            val all = call.request.queryParameters["all"] == "true"
-            val canViewAll = PermissionMiddleware.canView(session.userId, Permission.BUSINESS_TRIPS_ALL)
-            if (all && !canViewAll) return@get call.respond(HttpStatusCode.Forbidden, "Access denied")
-            if (!canViewAll && !userIdParam.isNullOrBlank() && runCatching { UUID.fromString(userIdParam) }.getOrNull() != session.userId) {
-                return@get call.respond(HttpStatusCode.Forbidden, "Можно просматривать только свои командировки")
+
+            val requestedUserId =
+                call.request.queryParameters["userId"]
+                    .toUuidOrNull()
+                    ?: session.userId
+
+            if (
+                requestedUserId != session.userId &&
+                session.role !in setOf(
+                    "superadmin",
+                    "admin",
+                    "director",
+                    "logist"
+                )
+            ) {
+                return@get call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied"
+                )
             }
 
             val trips = transaction {
-                var query = BusinessTripsTable.selectAll()
-                val conditions = mutableListOf<Op<Boolean>>()
-                if (canViewAll && all) {
-                    // все записи
-                } else if (!userIdParam.isNullOrBlank()) {
-                    conditions += (BusinessTripsTable.userId eq UUID.fromString(userIdParam))
-                } else {
-                    val visibleUserIds = NotificationPreferencesTable.selectAll()
-                        .where { NotificationPreferencesTable.tripVisibleToAll eq true }
-                        .map { it[NotificationPreferencesTable.userId].value }
-                    conditions += ((BusinessTripsTable.userId eq session.userId) or
-                        (BusinessTripsTable.userId inList visibleUserIds))
-                }
-                if (!dateFrom.isNullOrBlank()) conditions += (BusinessTripsTable.date greaterEq KtLocalDate.parse(dateFrom))
-                if (!dateTo.isNullOrBlank()) conditions += (BusinessTripsTable.date lessEq KtLocalDate.parse(dateTo))
-                if (conditions.isNotEmpty()) {
-                    query = query.where { conditions.reduce { acc, op -> acc and op } }
-                }
-                query.orderBy(BusinessTripsTable.date to SortOrder.DESC).map { it.toTripDto() }
+                BusinessTripsTable
+                    .selectAll()
+                    .where {
+                        BusinessTripsTable.userId eq requestedUserId
+                    }
+                    .orderBy(
+                        BusinessTripsTable.startDate to SortOrder.DESC,
+                        BusinessTripsTable.createdAt to SortOrder.DESC
+                    )
+                    .map(::mapRowToBusinessTripDto)
             }
+
             call.respond(HttpStatusCode.OK, trips)
         }
 
         post {
             val session = call.checkSession() ?: return@post
-            val trip = try { call.receive<BusinessTripDto>() }
-            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, e.message ?: "Bad JSON") }
-            val requestedUserId = runCatching { UUID.fromString(trip.userId) }.getOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid userId")
-            val canCreateAll = PermissionMiddleware.canCreate(session.userId, Permission.BUSINESS_TRIPS_ALL)
-            val userId = if (canCreateAll) requestedUserId else session.userId
-            if (trip.projectId.isNullOrBlank() && trip.projectNumber.isBlank() && trip.companyName.isBlank()) {
-                return@post call.respond(HttpStatusCode.BadRequest, "Укажите проект, номер проекта или название фирмы")
-            }
-            val projectUuid = trip.projectId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-            if (!trip.projectId.isNullOrBlank() && projectUuid == null) return@post call.respond(HttpStatusCode.BadRequest, "Invalid projectId")
 
-            val resultTrip = transaction {
-                if (trip.type == "DEPARTURE") {
-                    val id = UUID.randomUUID()
+            val trip = try {
+                call.receive<BusinessTripDto>()
+            } catch (e: Exception) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON: ${e.message}"
+                )
+            }
+
+            val userId = trip.userId.toUuidOrNull()
+                ?: session.userId
+
+            if (
+                userId != session.userId &&
+                session.role !in setOf(
+                    "superadmin",
+                    "admin",
+                    "director",
+                    "logist"
+                )
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.Forbidden,
+                    "Access denied"
+                )
+            }
+
+            val projectId = trip.projectId.toUuidOrNull()
+            val subprojectId = trip.subprojectId.toUuidOrNull()
+
+            if (trip.projectId?.isNotBlank() == true &&
+                projectId == null
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid projectId"
+                )
+            }
+
+            if (trip.subprojectId?.isNotBlank() == true &&
+                subprojectId == null
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid subprojectId"
+                )
+            }
+
+            if (projectId == null && subprojectId != null) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Нельзя выбрать подпроект без проекта"
+                )
+            }
+
+            val startDateValue =
+                trip.startDate.ifBlank { trip.date }
+
+            val startDate = runCatching {
+                KtLocalDate.parse(startDateValue)
+            }.getOrElse {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid startDate"
+                )
+            }
+
+            val endDate = trip.endDate
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@post call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Invalid endDate"
+                        )
+                }
+
+            if (endDate != null && endDate < startDate) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Дата окончания раньше даты начала"
+                )
+            }
+
+            if (
+                !trip.perDiemRate.isFinite() ||
+                trip.perDiemRate < 0.0
+            ) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "perDiemRate must be non-negative"
+                )
+            }
+
+            val id = trip.id.toUuidOrNull() ?: UUID.randomUUID()
+            val normalizedStatus = when {
+                endDate != null -> "COMPLETED"
+                trip.status.uppercase() == "CANCELLED" -> "CANCELLED"
+                else -> "ACTIVE"
+            }
+
+            val created = try {
+                transaction {
+                    if (
+                        !validateNullableSubprojectForProject(
+                            projectId,
+                            subprojectId
+                        )
+                    ) {
+                        throw IllegalArgumentException(
+                            "Подпроект не принадлежит проекту " +
+                                "или архивирован"
+                        )
+                    }
+
+                    if (
+                        projectId != null &&
+                        ProjectsTable
+                            .selectAll()
+                            .where { ProjectsTable.id eq projectId }
+                            .limit(1)
+                            .none()
+                    ) {
+                        throw IllegalArgumentException(
+                            "Проект не найден"
+                        )
+                    }
+
                     BusinessTripsTable.insert {
                         it[BusinessTripsTable.id] = id
                         it[BusinessTripsTable.userId] = userId
-                        it[BusinessTripsTable.projectId] = projectUuid
-                        it[BusinessTripsTable.projectNumber] = trip.projectNumber
-                        it[BusinessTripsTable.companyName] = trip.companyName
-                        it[BusinessTripsTable.country] = trip.country.trim()
+                        it[BusinessTripsTable.projectId] = projectId
+                        it[BusinessTripsTable.subprojectId] =
+                            subprojectId
+                        it[projectNumber] = trip.projectNumber
+                        it[companyName] = trip.companyName
+                        it[country] = trip.country
                         it[type] = trip.type
-                        it[date] = KtLocalDate.parse(trip.date)
-                        it[completedDate] = trip.completedDate?.let(KtLocalDate::parse)
+                        it[date] = startDate
+                        it[completedDate] = endDate
+                        it[BusinessTripsTable.startDate] = startDate
+                        it[BusinessTripsTable.endDate] = endDate
+                        it[status] = normalizedStatus
                         it[city] = trip.city
-                        it[participants] = json.encodeToString(trip.participants)
+                        it[participants] =
+                            json.encodeToString(trip.participants)
                         it[transport] = trip.transport
                         it[notes] = trip.notes
-                        it[waypoints] = json.encodeToString(trip.waypoints)
+                        it[waypoints] =
+                            json.encodeToString(trip.waypoints)
                         it[perDiemRate] = trip.perDiemRate
                         it[createdAt] = System.currentTimeMillis()
                     }
-                    trip.copy(id = id.toString(), userId = userId.toString())
-                } else {
-                    val activeTrip = BusinessTripsTable.selectAll()
-                        .where { (BusinessTripsTable.userId eq userId) and (BusinessTripsTable.type neq "COMPLETION") }
-                        .orderBy(BusinessTripsTable.date to SortOrder.DESC)
-                        .firstOrNull()
-                        ?: return@transaction trip.copy(id = "", userId = userId.toString())
-                    val id = activeTrip[BusinessTripsTable.id].value
-                    BusinessTripsTable.update({ BusinessTripsTable.id eq id }) {
-                        if (projectUuid != null) it[BusinessTripsTable.projectId] = projectUuid
-                        it[BusinessTripsTable.projectNumber] = trip.projectNumber
-                        it[BusinessTripsTable.companyName] = trip.companyName
-                        if (trip.country.isNotBlank()) it[BusinessTripsTable.country] = trip.country
-                        it[date] = KtLocalDate.parse(trip.date)
-                        if (trip.city.isNotBlank()) it[city] = trip.city
-                        if (trip.transport.isNotBlank()) it[transport] = trip.transport
-                        if (trip.notes.isNotBlank()) it[notes] = trip.notes
-                        if (trip.waypoints.isNotEmpty()) it[waypoints] = json.encodeToString(trip.waypoints)
-                        if (trip.participants.isNotEmpty()) it[participants] = json.encodeToString(trip.participants)
-                        it[perDiemRate] = trip.perDiemRate
-                        it[type] = trip.type
-                    }
-                    trip.copy(id = id.toString(), userId = userId.toString())
+
+                    BusinessTripsTable
+                        .selectAll()
+                        .where { BusinessTripsTable.id eq id }
+                        .single()
+                        .let(::mapRowToBusinessTripDto)
                 }
+            } catch (e: IllegalArgumentException) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Invalid business trip"
+                )
             }
-            if (resultTrip.id.isBlank()) return@post call.respond(HttpStatusCode.NotFound, "Активная командировка не найдена")
 
-            val senderName = transaction { UsersTable.selectAll().where { UsersTable.id eq session.userId }.single()[UsersTable.name] }
-            val projectName = resultTrip.projectId?.let { pid -> transaction { ProjectsTable.selectAll().where { ProjectsTable.id eq UUID.fromString(pid) }.singleOrNull()?.get(ProjectsTable.name) } }.orEmpty()
-            val location = listOf(resultTrip.country, resultTrip.city).filter { it.isNotBlank() }.joinToString(", ")
-            val payload = json.encodeToString(mapOf("tripId" to resultTrip.id, "userId" to resultTrip.userId, "tripType" to resultTrip.type))
-            val message = buildString {
-                appendLine("👤 $senderName")
-                if (projectName.isNotBlank()) appendLine("📁 Проект: $projectName")
-                if (resultTrip.projectNumber.isNotBlank()) appendLine("🔢 Номер проекта: ${resultTrip.projectNumber}")
-                if (resultTrip.companyName.isNotBlank()) appendLine("🏢 Фирма: ${resultTrip.companyName}")
-                if (location.isNotBlank()) appendLine("📍 $location")
-                appendLine("📅 ${resultTrip.date}")
-            }.trim()
-
-            val adminsAndDirectors = transaction {
-                UsersTable.selectAll()
-                    .where { (UsersTable.role eq "admin") or (UsersTable.role eq "director") or (UsersTable.role eq "superadmin") }
-                    .map { it[UsersTable.id].value }
-            }
-            val participants = resultTrip.participants.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
-            NotificationService.notifyUsers(
-                targetUserIds = (adminsAndDirectors + participants).distinct(),
-                senderUserId = session.userId,
-                type = "TRIP",
-                title = "✈️ ${if (resultTrip.type == "DEPARTURE") "Новая командировка" else "Командировка обновлена"}",
-                message = message,
-                payload = payload,
-                preferenceKey = if (resultTrip.type == "DEPARTURE") "trip" else "tripChange"
-            )
-
-            val broadcastUsers = transaction {
-                (NotificationPreferencesTable innerJoin UsersTable)
-                    .selectAll()
-                    .where {
-                        (NotificationPreferencesTable.tripVisibleToAll eq true) and
-                        (NotificationPreferencesTable.tripTelegramBroadcast eq true)
-                    }
-                    .map { it[UsersTable.id].value }
-            }
-            NotificationService.notifyUsers(
-                targetUserIds = broadcastUsers,
-                senderUserId = session.userId,
-                type = "TRIP_PUBLIC",
-                title = "🌍 Командировка доступна всем",
-                message = message,
-                payload = payload,
-                preferenceKey = "tripBroadcast"
-            )
-            call.respond(HttpStatusCode.Created, resultTrip)
+            call.respond(HttpStatusCode.Created, created)
         }
 
         put {
             val session = call.checkSession() ?: return@put
-            val trip = try { call.receive<BusinessTripDto>() }
-            catch (e: Exception) { return@put call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}") }
-            val tripId = runCatching { UUID.fromString(trip.id) }.getOrNull() ?: return@put call.respond(HttpStatusCode.BadRequest, "Invalid tripId")
-            val existingUser = transaction { BusinessTripsTable.selectAll().where { BusinessTripsTable.id eq tripId }.singleOrNull()?.get(BusinessTripsTable.userId)?.value }
-                ?: return@put call.respond(HttpStatusCode.NotFound, "Командировка не найдена")
-            val allowed = existingUser == session.userId || PermissionMiddleware.canEdit(session.userId, Permission.BUSINESS_TRIPS_ALL)
-            if (!allowed) return@put call.respond(HttpStatusCode.Forbidden, "Нет права редактировать эту командировку")
-            val projectUuid = trip.projectId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-            transaction {
-                BusinessTripsTable.update({ BusinessTripsTable.id eq tripId }) {
-                    it[projectId] = projectUuid
-                    it[projectNumber] = trip.projectNumber
-                    it[companyName] = trip.companyName
-                    it[country] = trip.country.trim()
-                    it[type] = trip.type
-                    it[date] = KtLocalDate.parse(trip.date)
-                    it[completedDate] = trip.completedDate?.let(KtLocalDate::parse)
-                    it[city] = trip.city
-                    it[participants] = json.encodeToString(trip.participants)
-                    it[transport] = trip.transport
-                    it[notes] = trip.notes
-                    it[waypoints] = json.encodeToString(trip.waypoints)
-                    it[perDiemRate] = trip.perDiemRate
-                }
+
+            val trip = try {
+                call.receive<BusinessTripDto>()
+            } catch (e: Exception) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON: ${e.message}"
+                )
             }
-            call.respond(HttpStatusCode.OK, trip.copy(userId = existingUser.toString()))
+
+            val tripId = trip.id.toUuidOrNull()
+                ?: return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid tripId"
+                )
+
+            val projectId = trip.projectId.toUuidOrNull()
+            val subprojectId = trip.subprojectId.toUuidOrNull()
+
+            if (trip.projectId?.isNotBlank() == true &&
+                projectId == null
+            ) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid projectId"
+                )
+            }
+
+            if (trip.subprojectId?.isNotBlank() == true &&
+                subprojectId == null
+            ) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid subprojectId"
+                )
+            }
+
+            if (projectId == null && subprojectId != null) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Нельзя выбрать подпроект без проекта"
+                )
+            }
+
+            val startDate = runCatching {
+                KtLocalDate.parse(
+                    trip.startDate.ifBlank { trip.date }
+                )
+            }.getOrElse {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid startDate"
+                )
+            }
+
+            val endDate = trip.endDate
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@put call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Invalid endDate"
+                        )
+                }
+
+            if (endDate != null && endDate < startDate) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Дата окончания раньше даты начала"
+                )
+            }
+
+            val result = try {
+                transaction {
+                    val existing = BusinessTripsTable
+                        .selectAll()
+                        .where { BusinessTripsTable.id eq tripId }
+                        .singleOrNull()
+                        ?: return@transaction null
+
+                    val ownerId =
+                        existing[BusinessTripsTable.userId].value
+
+                    if (
+                        ownerId != session.userId &&
+                        session.role !in setOf(
+                            "superadmin",
+                            "admin",
+                            "director",
+                            "logist"
+                        )
+                    ) {
+                        throw SecurityException("Access denied")
+                    }
+
+                    if (
+                        !validateNullableSubprojectForProject(
+                            projectId,
+                            subprojectId
+                        )
+                    ) {
+                        throw IllegalArgumentException(
+                            "Подпроект не принадлежит проекту " +
+                                "или архивирован"
+                        )
+                    }
+
+                    val normalizedStatus = when {
+                        endDate != null -> "COMPLETED"
+                        trip.status.uppercase() == "CANCELLED" ->
+                            "CANCELLED"
+                        else -> "ACTIVE"
+                    }
+
+                    BusinessTripsTable.update(
+                        { BusinessTripsTable.id eq tripId }
+                    ) {
+                        it[BusinessTripsTable.projectId] = projectId
+                        it[BusinessTripsTable.subprojectId] =
+                            subprojectId
+                        it[projectNumber] = trip.projectNumber
+                        it[companyName] = trip.companyName
+                        it[country] = trip.country
+                        it[type] = trip.type
+                        it[date] = startDate
+                        it[completedDate] = endDate
+                        it[BusinessTripsTable.startDate] = startDate
+                        it[BusinessTripsTable.endDate] = endDate
+                        it[status] = normalizedStatus
+                        it[city] = trip.city
+                        it[participants] =
+                            json.encodeToString(trip.participants)
+                        it[transport] = trip.transport
+                        it[notes] = trip.notes
+                        it[waypoints] =
+                            json.encodeToString(trip.waypoints)
+                        it[perDiemRate] = trip.perDiemRate
+                    }
+
+                    BusinessTripsTable
+                        .selectAll()
+                        .where { BusinessTripsTable.id eq tripId }
+                        .single()
+                        .let(::mapRowToBusinessTripDto)
+                }
+            } catch (e: SecurityException) {
+                return@put call.respond(
+                    HttpStatusCode.Forbidden,
+                    e.message ?: "Access denied"
+                )
+            } catch (e: IllegalArgumentException) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Invalid business trip"
+                )
+            }
+
+            if (result == null) {
+                return@put call.respond(
+                    HttpStatusCode.NotFound,
+                    "Business trip not found"
+                )
+            }
+
+            call.respond(HttpStatusCode.OK, result)
         }
 
-        // Завершение текущей командировки пользователя.
-        post("/complete") {
+        post("/{tripId}/complete") {
             val session = call.checkSession() ?: return@post
-            val now = KtLocalDate.parse(JavaLocalDate.now().toString())
-            data class ActiveTrip(val row: ResultRow, val id: UUID)
-            val active = transaction {
-                BusinessTripsTable.selectAll()
-                    .where { (BusinessTripsTable.userId eq session.userId) and (BusinessTripsTable.type neq "COMPLETION") }
-                    .orderBy(BusinessTripsTable.date to SortOrder.DESC)
-                    .firstOrNull()
-                    ?.let { ActiveTrip(it, it[BusinessTripsTable.id].value) }
-            } ?: return@post call.respond(HttpStatusCode.NotFound, "Активная командировка не найдена")
-            val startDate = active.row[BusinessTripsTable.date]
-            if (now < startDate) return@post call.respond(HttpStatusCode.BadRequest, "Дата завершения раньше даты начала командировки")
-            transaction {
-                BusinessTripsTable.update({ BusinessTripsTable.id eq active.id }) {
-                    it[type] = "COMPLETION"
-                    it[completedDate] = now
-                }
-            }
-            val senderName = transaction { UsersTable.selectAll().where { UsersTable.id eq session.userId }.single()[UsersTable.name] }
-            val projectName = active.row[BusinessTripsTable.projectId]?.value?.let { projectId ->
-                transaction { ProjectsTable.selectAll().where { ProjectsTable.id eq projectId }.singleOrNull()?.get(ProjectsTable.name) }
-            }.orEmpty()
-            val location = listOf(active.row[BusinessTripsTable.country], active.row[BusinessTripsTable.city]).filter { it.isNotBlank() }.joinToString(", ")
-            val participants = runCatching { json.decodeFromString<List<String>>(active.row[BusinessTripsTable.participants]) }.getOrDefault(emptyList())
-            val message = buildString {
-                appendLine("✅ Командировка завершена")
-                appendLine("👤 Сотрудник: $senderName")
-                if (projectName.isNotBlank()) appendLine("📁 Проект: $projectName")
-                if (active.row[BusinessTripsTable.projectNumber].isNotBlank()) appendLine("🔢 Номер проекта: ${active.row[BusinessTripsTable.projectNumber]}")
-                if (active.row[BusinessTripsTable.companyName].isNotBlank()) appendLine("🏢 Фирма: ${active.row[BusinessTripsTable.companyName]}")
-                if (location.isNotBlank()) appendLine("📍 $location")
-                appendLine("📅 ${startDate} — ${now}")
-                if (active.row[BusinessTripsTable.transport].isNotBlank()) appendLine("🚗 ${active.row[BusinessTripsTable.transport]}")
-                if (participants.isNotEmpty()) appendLine("👥 ${participants.joinToString(", ")}")
-                if (active.row[BusinessTripsTable.notes].isNotBlank()) appendLine("📝 ${active.row[BusinessTripsTable.notes]}")
-            }.trim()
-            val payload = json.encodeToString(mapOf("tripId" to active.id.toString(), "tripType" to "COMPLETION", "dateFrom" to startDate.toString(), "dateTo" to now.toString()))
-            val notifyTargets = transaction {
-                UsersTable.selectAll().where {
-                    (UsersTable.role eq "admin") or (UsersTable.role eq "director") or (UsersTable.role eq "superadmin")
-                }.map { it[UsersTable.id].value }.filter { it != session.userId }
-            }
-            NotificationService.notifyUsers(notifyTargets, session.userId, "TRIP_UPDATE", "✅ Командировка завершена", message, payload, "tripChange")
-            NotificationService.notifyTelegramUser(session.userId, "✅ <b>Командировка завершена</b>\n\n${NotificationService.escapeTelegram(message)}", "tripChange")
-            call.respond(HttpStatusCode.OK, mapOf("tripId" to active.id.toString(), "dateFrom" to startDate.toString(), "dateTo" to now.toString()))
-        }
 
-        // Переезд: завершить старую командировку датой начала новой и создать новую активную.
-        post("/transfer") {
-            val session = call.checkSession() ?: return@post
-            val incoming = try { call.receive<BusinessTripDto>() }
-            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}") }
-            if (incoming.projectId.isNullOrBlank() && incoming.projectNumber.isBlank() && incoming.companyName.isBlank()) {
-                return@post call.respond(HttpStatusCode.BadRequest, "Укажите проект, номер проекта или название фирмы")
+            val tripId = call.parameters["tripId"].toUuidOrNull()
+                ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid tripId"
+                )
+
+            val request = try {
+                call.receive<CompleteBusinessTripRequest>()
+            } catch (e: Exception) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON: ${e.message}"
+                )
             }
-            val newDate = runCatching { KtLocalDate.parse(incoming.date) }.getOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid date")
-            data class TransferResult(val oldId: UUID, val newId: UUID)
+
+            val endDate = runCatching {
+                KtLocalDate.parse(request.endDate)
+            }.getOrElse {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid endDate"
+                )
+            }
+
             val result = transaction {
-                val active = BusinessTripsTable.selectAll()
-                    .where { (BusinessTripsTable.userId eq session.userId) and (BusinessTripsTable.type neq "COMPLETION") }
-                    .orderBy(BusinessTripsTable.date to SortOrder.DESC)
-                    .firstOrNull() ?: return@transaction null
-                val activeId = active[BusinessTripsTable.id].value
-                val activeStart = active[BusinessTripsTable.date]
-                if (newDate < activeStart) return@transaction null
-                val projectUuid = incoming.projectId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-                if (!incoming.projectId.isNullOrBlank() && projectUuid == null) return@transaction null
-                BusinessTripsTable.update({ BusinessTripsTable.id eq activeId }) {
-                    it[type] = "COMPLETION"
-                    it[completedDate] = newDate
+                val existing = BusinessTripsTable
+                    .selectAll()
+                    .where { BusinessTripsTable.id eq tripId }
+                    .singleOrNull()
+                    ?: return@transaction CrudResult.NOT_FOUND
+
+                val ownerId =
+                    existing[BusinessTripsTable.userId].value
+
+                if (
+                    ownerId != session.userId &&
+                    session.role !in setOf(
+                        "superadmin",
+                        "admin",
+                        "director",
+                        "logist"
+                    )
+                ) {
+                    return@transaction CrudResult.FORBIDDEN
                 }
-                val newId = UUID.randomUUID()
-                BusinessTripsTable.insert {
-                    it[id] = newId
-                    it[userId] = session.userId
-                    it[projectId] = projectUuid
-                    it[projectNumber] = incoming.projectNumber
-                    it[companyName] = incoming.companyName
-                    it[country] = incoming.country.trim()
-                    it[type] = "DEPARTURE"
-                    it[date] = newDate
-                    it[completedDate] = null
-                    it[city] = incoming.city
-                    it[participants] = json.encodeToString(incoming.participants)
-                    it[transport] = incoming.transport
-                    it[notes] = incoming.notes
-                    it[waypoints] = json.encodeToString(incoming.waypoints)
-                    it[perDiemRate] = incoming.perDiemRate
-                    it[createdAt] = System.currentTimeMillis()
+
+                val startDate = existing[BusinessTripsTable.startDate] ?: existing[BusinessTripsTable.date]
+
+                if (endDate < startDate) {
+                    throw IllegalArgumentException(
+                        "Дата окончания раньше даты начала"
+                    )
                 }
-                TransferResult(activeId, newId)
-            } ?: return@post call.respond(HttpStatusCode.BadRequest, "Не удалось выполнить переезд: проверьте дату и проект")
-            val senderName = transaction { UsersTable.selectAll().where { UsersTable.id eq session.userId }.single()[UsersTable.name] }
-            val location = listOf(incoming.country, incoming.city).filter { it.isNotBlank() }.joinToString(", ")
-            val message = buildString {
-                appendLine("🔄 Переезд между командировками")
-                appendLine("👤 Сотрудник: $senderName")
-                if (incoming.projectNumber.isNotBlank()) appendLine("🔢 Номер проекта: ${incoming.projectNumber}")
-                if (incoming.companyName.isNotBlank()) appendLine("🏢 Фирма: ${incoming.companyName}")
-                if (location.isNotBlank()) appendLine("📍 $location")
-                appendLine("📅 Новая точка с $newDate")
-                if (incoming.transport.isNotBlank()) appendLine("🚗 ${incoming.transport}")
-                if (incoming.participants.isNotEmpty()) appendLine("👥 ${incoming.participants.joinToString(", ")}")
-                if (incoming.notes.isNotBlank()) appendLine("📝 ${incoming.notes}")
-            }.trim()
-            val payload = json.encodeToString(mapOf("completedTripId" to result.oldId.toString(), "tripId" to result.newId.toString(), "tripType" to "TRANSFER", "date" to newDate.toString()))
-            val notifyTargets = transaction {
-                UsersTable.selectAll().where {
-                    (UsersTable.role eq "admin") or (UsersTable.role eq "director") or (UsersTable.role eq "superadmin")
-                }.map { it[UsersTable.id].value }.filter { it != session.userId }
+
+                BusinessTripsTable.update(
+                    { BusinessTripsTable.id eq tripId }
+                ) {
+                    it[BusinessTripsTable.endDate] = endDate
+                    it[completedDate] = endDate
+                    it[status] = "COMPLETED"
+                }
+
+                CrudResult.UPDATED
             }
-            NotificationService.notifyUsers(notifyTargets, session.userId, "TRIP_UPDATE", "🔄 Переезд", message, payload, "tripChange")
-            NotificationService.notifyTelegramUser(session.userId, "🔄 <b>Переезд</b>\n\n${NotificationService.escapeTelegram(message)}", "tripChange")
-            call.respond(HttpStatusCode.Created, incoming.copy(id = result.newId.toString(), userId = session.userId.toString(), type = "DEPARTURE", completedDate = null))
+
+            when (result) {
+                CrudResult.NOT_FOUND ->
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        "Business trip not found"
+                    )
+
+                CrudResult.FORBIDDEN ->
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        "Access denied"
+                    )
+
+                CrudResult.UPDATED ->
+                    call.respond(
+                        HttpStatusCode.OK,
+                        mapOf(
+                            "success" to true,
+                            "status" to "COMPLETED",
+                            "endDate" to endDate.toString()
+                        )
+                    )
+
+                CrudResult.DELETED ->
+                    call.respond(HttpStatusCode.NoContent)
+            }
         }
 
         delete {
             val session = call.checkSession() ?: return@delete
-            val tripId = call.request.queryParameters["tripId"]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-                ?: return@delete call.respond(HttpStatusCode.BadRequest, "tripId required")
-            val row = transaction { BusinessTripsTable.selectAll().where { BusinessTripsTable.id eq tripId }.singleOrNull() }
-                ?: return@delete call.respond(HttpStatusCode.NotFound, "Командировка не найдена")
-            val allowed = row[BusinessTripsTable.userId].value == session.userId || PermissionMiddleware.canDelete(session.userId, Permission.BUSINESS_TRIPS_ALL)
-            if (!allowed) return@delete call.respond(HttpStatusCode.Forbidden, "Нет права удалить эту командировку")
-            transaction { BusinessTripsTable.deleteWhere { BusinessTripsTable.id eq tripId } }
-            call.respond(HttpStatusCode.NoContent)
+
+            val tripId = call.request.queryParameters["tripId"]
+                .toUuidOrNull()
+                ?: return@delete call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Valid tripId required"
+                )
+
+            val result = transaction {
+                val existing = BusinessTripsTable
+                    .selectAll()
+                    .where { BusinessTripsTable.id eq tripId }
+                    .singleOrNull()
+                    ?: return@transaction CrudResult.NOT_FOUND
+
+                val ownerId =
+                    existing[BusinessTripsTable.userId].value
+
+                if (
+                    ownerId != session.userId &&
+                    session.role !in setOf(
+                        "superadmin",
+                        "admin",
+                        "director",
+                        "logist"
+                    )
+                ) {
+                    return@transaction CrudResult.FORBIDDEN
+                }
+
+                BusinessTripsTable.deleteWhere {
+                    BusinessTripsTable.id eq tripId
+                }
+
+                CrudResult.DELETED
+            }
+
+            when (result) {
+                CrudResult.NOT_FOUND ->
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        "Business trip not found"
+                    )
+
+                CrudResult.FORBIDDEN ->
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        "Access denied"
+                    )
+
+                CrudResult.DELETED ->
+                    call.respond(HttpStatusCode.NoContent)
+
+                CrudResult.UPDATED ->
+                    call.respond(HttpStatusCode.OK)
+            }
         }
     }
 

@@ -159,6 +159,12 @@ object ExpensesTable : UUIDTable("expenses") {
     val createdAt = long("created_at").default(0L)
     val expenseScope = varchar("expense_scope", 32).default("GENERAL").index()
     val creatorRole = varchar("creator_role", 20).default("")
+    val deletedAt = long("deleted_at").nullable().index()
+    val deletedBy = reference(
+        "deleted_by",
+        UsersTable,
+        onDelete = ReferenceOption.SET_NULL
+    ).nullable()
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -205,7 +211,7 @@ object BusinessTripsTable : UUIDTable("business_trips") {
     val type = varchar("type", 20).default("DEPARTURE")
     val date = date("date")
     val completedDate = date("completed_date").nullable()
-    val startDate = date("start_date")
+    val startDate = date("start_date").nullable()
     val endDate = date("end_date").nullable()
     val status = varchar("status", 20).default("ACTIVE").index()
     val city = varchar("city", 255).default("")
