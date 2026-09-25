@@ -3,6 +3,12 @@ import { createPortal } from 'react-dom';
 import api from '../api/client';
 import type { TimeEntryDto, ProjectDto, UserDto, DayOffDto } from '../types';
 import { generateUUID, dayOfWeekRu, isWeekend } from '../lib/utils';
+import {
+  EmptyState,
+  PageSection,
+  StatusBadge,
+} from '../components/ui';
+import { TimesheetSummary } from '../components/timesheet/TimesheetSummary';
 
 function getCalendarDays(year: number, month: number) {
   const firstDay = new Date(year, month, 1);
@@ -18,6 +24,21 @@ function getCalendarDays(year: number, month: number) {
   }
   return days;
 }
+
+const periodEntries = filteredEntries;
+
+const totalHours = periodEntries.reduce(
+  (sum, entry) => sum + Number(entry.hours || 0),
+  0,
+);
+
+const activeDays = new Set(
+  periodEntries.map((entry) => entry.date),
+).size;
+
+const activeProjects = new Set(
+  periodEntries.map((entry) => entry.projectId),
+).size;
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
@@ -187,21 +208,26 @@ function StandardTimesheetPage() {
       </div>
 
       {/* Месячная статистика */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="card p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-100 dark:border-blue-900">
-          <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Всего часов</div>
-          <div className="text-2xl font-black text-blue-900 dark:text-blue-100 mt-1">{formatHours(monthTotalHours)}</div>
-        </div>
-        <div className="card p-4 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 border-emerald-100 dark:border-emerald-900">
-          <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase">Рабочих дней</div>
-          <div className="text-2xl font-black text-emerald-900 dark:text-emerald-100 mt-1">{monthWorkDays}</div>
-        </div>
-        <div className="card p-4 bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/30 dark:to-red-950/30 border-rose-100 dark:border-rose-900">
-          <div className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase">Выходных</div>
-          <div className="text-2xl font-black text-rose-900 dark:text-rose-100 mt-1">{monthDayOffs}</div>
-        </div>
-      </div>
-
+//       <div className="grid grid-cols-3 gap-3">
+//         <div className="card p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-100 dark:border-blue-900">
+//           <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">Всего часов</div>
+//           <div className="text-2xl font-black text-blue-900 dark:text-blue-100 mt-1">{formatHours(monthTotalHours)}</div>
+//         </div>
+//         <div className="card p-4 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 border-emerald-100 dark:border-emerald-900">
+//           <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase">Рабочих дней</div>
+//           <div className="text-2xl font-black text-emerald-900 dark:text-emerald-100 mt-1">{monthWorkDays}</div>
+//         </div>
+//         <div className="card p-4 bg-gradient-to-br from-rose-50 to-red-50 dark:from-rose-950/30 dark:to-red-950/30 border-rose-100 dark:border-rose-900">
+//           <div className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase">Выходных</div>
+//           <div className="text-2xl font-black text-rose-900 dark:text-rose-100 mt-1">{monthDayOffs}</div>
+//         </div>
+//       </div>
+      <TimesheetSummary
+        totalHours={totalHours}
+        plannedHours={plannedHours}
+        workDays={activeDays}
+        projectCount={activeProjects}
+      />
       {/* 🔥 ДВУХКОЛОНОЧНЫЙ LAYOUT: Календарь + Записи */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 📅 Календарь (левая колонка на ПК, полная ширина на мобильном) */}
@@ -327,38 +353,71 @@ function StandardTimesheetPage() {
         </div>
 
         {/* 📝 Записи за день (правая колонка на ПК, снизу на мобильном) */}
-        <div className="lg:col-span-1">
-          {dayEntries.length > 0 ? (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <span className="w-1 h-4 bg-indigo-500 rounded-full"></span>
-                Записи за {new Date(selectedDate).toLocaleDateString('ru-RU')}
-              </h3>
-              {dayEntries.map(entry => (
-                <div key={entry.id} className="card p-4 group hover:shadow-md transition-all animate-fade-in flex items-center gap-3">
-                  <div className={`w-3 h-10 rounded-full flex-shrink-0 ${getProjectColor(entry.projectId)}`} />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-bold text-slate-900 dark:text-slate-100 truncate text-sm">{entry.projectName || 'Без проекта'}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1">
-                      <span>{COUNTRIES.find(c => c.code === entry.country)?.label || entry.country}</span>
-                      {entry.synced && <span className="text-green-600 dark:text-green-400">✓</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 rounded-lg tabular-nums">{formatHours(entry.hours)}</span>
-                    <button onClick={() => handleDeleteEntry(entry.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all opacity-0 group-hover:opacity-100">🗑</button>
-                  </div>
-                </div>
-              ))}
-            </div>
+        <PageSection
+          title="Записи рабочего времени"
+          description="Распределение часов по дням и проектам"
+          action={
+            <StatusBadge
+              tone={totalHours >= plannedHours ? 'success' : 'warning'}
+              dot
+            >
+              {totalHours >= plannedHours ? 'План выполнен' : 'Период не заполнен'}
+            </StatusBadge>
+          }
+          noPadding
+        >
+          {periodEntries.length === 0 ? (
+            <EmptyState
+              title="Нет записей за выбранный период"
+              description="Добавьте рабочие часы, чтобы они появились в табеле."
+              action={
+                <button
+                  type="button"
+                  onClick={handleAddEntry}
+                  className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+                >
+                  Добавить часы
+                </button>
+              }
+            />
           ) : (
-            <div className="card p-8 text-center border-dashed border-2 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
-              <div className="text-4xl mb-3 opacity-50">📭</div>
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Нет записей</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Выберите день и добавьте часы</p>
-            </div>
+            <>
+              {/* Существующую таблицу или календарную сетку перенести сюда */}
+            </>
           )}
-        </div>
+        </PageSection>
+//         <div className="lg:col-span-1">
+//           {dayEntries.length > 0 ? (
+//             <div className="space-y-3">
+//               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+//                 <span className="w-1 h-4 bg-indigo-500 rounded-full"></span>
+//                 Записи за {new Date(selectedDate).toLocaleDateString('ru-RU')}
+//               </h3>
+//               {dayEntries.map(entry => (
+//                 <div key={entry.id} className="card p-4 group hover:shadow-md transition-all animate-fade-in flex items-center gap-3">
+//                   <div className={`w-3 h-10 rounded-full flex-shrink-0 ${getProjectColor(entry.projectId)}`} />
+//                   <div className="min-w-0 flex-1">
+//                     <div className="font-bold text-slate-900 dark:text-slate-100 truncate text-sm">{entry.projectName || 'Без проекта'}</div>
+//                     <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-1">
+//                       <span>{COUNTRIES.find(c => c.code === entry.country)?.label || entry.country}</span>
+//                       {entry.synced && <span className="text-green-600 dark:text-green-400">✓</span>}
+//                     </div>
+//                   </div>
+//                   <div className="flex items-center gap-2 flex-shrink-0">
+//                     <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 rounded-lg tabular-nums">{formatHours(entry.hours)}</span>
+//                     <button onClick={() => handleDeleteEntry(entry.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all opacity-0 group-hover:opacity-100">🗑</button>
+//                   </div>
+//                 </div>
+//               ))}
+//             </div>
+//           ) : (
+//             <div className="card p-8 text-center border-dashed border-2 border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
+//               <div className="text-4xl mb-3 opacity-50">📭</div>
+//               <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Нет записей</h3>
+//               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Выберите день и добавьте часы</p>
+//             </div>
+//           )}
+//         </div>
       </div>
 
       {/* 🌲 PROLES MODAL: Добавить часы */}
