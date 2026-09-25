@@ -2,7 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
-import type { IncomeDto, ExpenseDto, ProjectDto, UserDto } from '../types';
+import type {
+  ExpenseDto,
+  ExpenseReceiptDto,
+  IncomeDto,
+  ProjectDto,
+  SubprojectDto,
+  UserDto,
+} from '../types';
+import { CurrencySummary } from '../components/ui';
 import { generateUUID, formatDate, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import { ScopeTabs } from '../components/ScopeTabs';
@@ -62,14 +70,6 @@ interface CombinedEntry {
   comment: string;
   hasReceipt?: boolean;
   entryCategory: 'WORK' | 'PERSONAL';  // 🆕 Надкатегория
-}
-
-interface ExpenseReceipt {
-  id: string;
-  expenseId: string;
-  url: string;
-  fileName: string;
-  uploadedAt: number;
 }
 
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
@@ -165,22 +165,31 @@ export function ExpensesPage() {
 
   const [form, setForm] = useState({
     projectId: '',
+    subprojectId: '',
     type: 'ROAD',
     amount: '',
     currency: 'RUB',
     date: new Date().toISOString().slice(0, 10),
     comment: '',
     name: '',
+    category: 'WITH_RECEIPT',
+    expenseScope: 'GENERAL',
   });
   const [saving, setSaving] = useState(false);
   const [pendingReceiptFiles, setPendingReceiptFiles] = useState<File[]>([]);
   const [receiptViewerExpenseId, setReceiptViewerExpenseId] = useState<string | null>(null);
-  const [receiptViewerItems, setReceiptViewerItems] = useState<ExpenseReceipt[]>([]);
+  const [receiptViewerItems, setReceiptViewerItems] =
+    useState<ExpenseReceiptDto[]>([]);
+  const [subprojects, setSubprojects] =
+    useState<SubprojectDto[]>([]);
   const [receiptLoading, setReceiptLoading] = useState(false);
   const loadReceipts = useCallback(async (expenseId: string) => {
     setReceiptLoading(true);
     try {
-      const res = await api.get<ExpenseReceipt[]>('/expenses/receipts', { params: { expenseId } });
+      const res = await api.get<ExpenseReceiptDto[]>(
+        '/expenses/receipts',
+        { params: { expenseId } },
+      );
       setReceiptViewerItems(res.data);
       setReceiptViewerExpenseId(expenseId);
     } catch {
@@ -235,6 +244,36 @@ export function ExpensesPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    if (!form.projectId) {
+      setSubprojects([]);
+      setForm((current) => ({
+        ...current,
+        subprojectId: '',
+      }));
+      return;
+    }
+
+    let active = true;
+
+    api
+      .get<SubprojectDto[]>(
+        `/projects/${form.projectId}/subprojects`,
+      )
+      .then(({ data }) => {
+        if (active) {
+          setSubprojects(data.filter((item) => item.isActive));
+        }
+      })
+      .catch(() => {
+        if (active) setSubprojects([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [form.projectId]);
+
   const incomes = effectiveScope === 'all' ? allIncomes : myIncomes;
   const expenses = effectiveScope === 'all' ? allExpenses : myExpenses;
   const myCount = myIncomes.length + myExpenses.length;
@@ -246,7 +285,7 @@ export function ExpensesPage() {
       id: i.id,
       type: 'INCOME' as const,
       userId: i.userId,
-      projectId: i.projectId,
+      projectId: string | null,
       projectName: i.projectName,
       date: i.date,
       name: findIncomeType(i.name)?.label || i.name,
@@ -254,14 +293,14 @@ export function ExpensesPage() {
       subcategory: i.type,   // 🆕 Тип дохода как подкатегория для фильтрации
       amount: i.amount,
       currency: i.currency,
-      comment: i.comment || '',
+      comment: '',
       entryCategory: i.category as 'WORK' | 'PERSONAL',  // 🆕 Надкатегория
     })),
     ...expenses.map(e => ({
       id: e.id,
       type: 'EXPENSE' as const,
       userId: e.userId,
-      projectId: e.projectId,
+      projectId: string | null,
       projectName: e.projectName,
       date: e.date,
       name: e.name || findExpenseType(e.type)?.label || e.type,
@@ -305,6 +344,29 @@ export function ExpensesPage() {
       return 0;
     });
 
+  const incomeTotals = filtered.reduce<Record<string, number>>(
+    (result, entry) => {
+      if (entry.type === 'INCOME') {
+        const currency = entry.currency.toUpperCase();
+        result[currency] =
+          (result[currency] ?? 0) + entry.amount;
+      }
+      return result;
+    },
+    {},
+  );
+
+  const expenseTotals = filtered.reduce<Record<string, number>>(
+    (result, entry) => {
+      if (entry.type === 'EXPENSE') {
+        const currency = entry.currency.toUpperCase();
+        result[currency] =
+          (result[currency] ?? 0) + entry.amount;
+      }
+      return result;
+    },
+    {},
+  );
 
   // Расчет сальдо: доходы минус расходы (в валютах)
   const saldoByCurrency = filtered.reduce((acc, entry) => {
@@ -326,28 +388,74 @@ export function ExpensesPage() {
           id: generateUUID(),
           userId: user.id,
           projectId: form.projectId || null,
-          projectName: projects.find(p => p.id === form.projectId)?.name || '',
-          date: form.date,
-          name: form.type,
-          amount: parseFloat(form.amount),
-          currency: form.currency,
-          comment: form.comment,
-        });
-      } else {
-        const expenseResponse = await api.post<ExpenseDto>('/expenses', {
-          id: generateUUID(),
-          userId: user.id,
-          projectId: form.projectId || null,
-          projectName: projects.find(p => p.id === form.projectId)?.name || '',
+          subprojectId: form.subprojectId || null,
+          subprojectName:
+            subprojects.find((item) => item.id === form.subprojectId)
+              ?.name || '',
+          projectName:
+            projects.find((item) => item.id === form.projectId)?.name || '',
           date: form.date,
           type: form.type,
-          name: form.type === 'ROAD' ? 'Дорога' : form.name,
-          amount: parseFloat(form.amount),
+          name:
+            findIncomeType(form.type)?.label ||
+            form.name ||
+            form.type,
+          amount: Number(form.amount),
           currency: form.currency,
-          comment: form.comment,
+          category: form.category,
+          subcategory: form.type,
+          createdAt: Date.now(),
         });
-        if (pendingReceiptFiles.length) {
-          await uploadFilesToExpense(expenseResponse.data.id, pendingReceiptFiles);
+      } else {
+        if (!form.projectId) {
+          alert('Для расхода необходимо выбрать проект.');
+          return;
+        }
+
+        const expenseResponse = await api.post<ExpenseDto>(
+          '/expenses',
+          {
+            id: generateUUID(),
+            userId: user.id,
+            projectId: form.projectId,
+            subprojectId: form.subprojectId || null,
+            subprojectName:
+              subprojects.find(
+                (item) => item.id === form.subprojectId,
+              )?.name || '',
+            projectName:
+              projects.find(
+                (item) => item.id === form.projectId,
+              )?.name || '',
+            date: form.date,
+            type: form.type,
+            name:
+              form.type === 'ROAD'
+                ? 'Дорога'
+                : form.name ||
+                  findExpenseType(form.type)?.label ||
+                  form.type,
+            amount: Number(form.amount),
+            currency: form.currency,
+            comment: form.comment.trim(),
+            receiptSubmitted:
+              form.category === 'WITHOUT_RECEIPT',
+            hasReceiptPhoto: false,
+            category: form.category,
+            subcategory: form.type,
+            receiptCount: 0,
+            expenseScope: form.expenseScope,
+            creatorRole: user.role,
+            createdAt: Date.now(),
+          },
+        );
+        if (form.category === 'WITH_RECEIPT' &&
+          pendingReceiptFiles.length > 0
+        ) {
+          await uploadFilesToExpense(
+            expenseResponse.data.id,
+            pendingReceiptFiles,
+          );
         }
       }
       setShowForm(false);
@@ -501,6 +609,19 @@ export function ExpensesPage() {
       {/* Сальдо по валютам */}
       <div className="card p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border-indigo-200 dark:border-indigo-800">
         <div className="flex items-center gap-2 mb-2">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <CurrencySummary
+              title="Доходы за период"
+              values={incomeTotals}
+              tone="emerald"
+            />
+
+            <CurrencySummary
+              title="Расходы за период"
+              values={expenseTotals}
+              tone="rose"
+            />
+          </div>
           <span className="text-lg font-bold text-indigo-700 dark:text-indigo-300">💰 Сальдо</span>
           <span className="text-xs text-indigo-500 dark:text-indigo-400">(Доходы − Расходы)</span>
         </div>
@@ -553,8 +674,37 @@ export function ExpensesPage() {
                   <div className="proles-input-group" style={{ gridColumn: 'span 2' }}>
                     <label>Проект (опционально)</label>
                     <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input bg-white dark:bg-slate-900">
-                      <option value="">Без проекта</option>
+                      <option value="">
+                        {formType === 'EXPENSE'
+                          ? 'Выберите проект'
+                          : 'Без проекта'}
+                      </option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="proles-input-group">
+                    <label>Подпроект</label>
+
+                    <select
+                      value={form.subprojectId}
+                      onChange={(event) =>
+                        setForm({
+                          ...form,
+                          subprojectId: event.target.value,
+                        })
+                      }
+                      disabled={!form.projectId}
+                      className="input bg-white dark:bg-slate-900"
+                    >
+                      <option value="">Без подпроекта</option>
+
+                      {subprojects.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.code
+                            ? `${item.code} — ${item.name}`
+                            : item.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   {formType === 'EXPENSE' && form.type === 'OTHER' && (
@@ -568,6 +718,63 @@ export function ExpensesPage() {
               <div className="proles-modal-section">
                 <div className="proles-modal-section-title">{formType === 'INCOME' ? 'Сумма поступления' : 'Сумма расхода'}</div>
                 <div className="proles-modal-grid">
+                  {formType === 'EXPENSE' && (
+                    {formType === 'EXPENSE' && (
+                      <>
+                        <div className="proles-input-group">
+                          <label>Подтверждение</label>
+
+                          <select
+                            value={form.category}
+                            onChange={(event) => {
+                              const category = event.target.value;
+
+                              setForm({
+                                ...form,
+                                category,
+                              });
+
+                              if (category === 'WITHOUT_RECEIPT') {
+                                setPendingReceiptFiles([]);
+                              }
+                            }}
+                            className="input bg-white dark:bg-slate-900"
+                          >
+                            <option value="WITH_RECEIPT">
+                              С чеком
+                            </option>
+                            <option value="WITHOUT_RECEIPT">
+                              Без чека
+                            </option>
+                          </select>
+                        </div>
+
+                        {user?.role?.trim().toLowerCase() ===
+                          'director' && (
+                          <div className="proles-input-group">
+                            <label>Область расхода</label>
+
+                            <select
+                              value={form.expenseScope}
+                              onChange={(event) =>
+                                setForm({
+                                  ...form,
+                                  expenseScope: event.target.value,
+                                })
+                              }
+                              className="input bg-white dark:bg-slate-900"
+                            >
+                              <option value="GENERAL">
+                                Общий
+                              </option>
+                              <option value="DIRECTOR">
+                                Директорский
+                              </option>
+                            </select>
+                          </div>
+                        )}
+                      </>
+                    )}
                   <div className="proles-input-group">
                     <label>Сумма *</label>
                     <input type="number" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="input" />
@@ -581,7 +788,48 @@ export function ExpensesPage() {
                 </div>
               </div>
             </div>
+
             {formType === 'EXPENSE' && (
+              <>
+                <div className="proles-input-group">
+                  <label>Подтверждение</label>
+                  <select
+                    value={form.category}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        category: event.target.value,
+                      })
+                    }
+                    className="input bg-white dark:bg-slate-900"
+                  >
+                    <option value="WITH_RECEIPT">С чеком</option>
+                    <option value="WITHOUT_RECEIPT">Без чека</option>
+                  </select>
+                </div>
+
+                {user?.role === 'director' && (
+                  <div className="proles-input-group">
+                    <label>Область расхода</label>
+                    <select
+                      value={form.expenseScope}
+                      onChange={(event) =>
+                        setForm({
+                          ...form,
+                          expenseScope: event.target.value,
+                        })
+                      }
+                      className="input bg-white dark:bg-slate-900"
+                    >
+                      <option value="GENERAL">Общий</option>
+                      <option value="DIRECTOR">Директорский</option>
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
+
+            {formType === 'EXPENSE' && form.category === 'WITH_RECEIPT' && (
               <div className="proles-modal-section w-full">
                 <div className="proles-modal-section-title proles-receipts-section-title">Чеки и подтверждающие документы</div>
                 <div className="proles-receipts-content w-full flex flex-wrap items-center gap-2">
