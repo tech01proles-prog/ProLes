@@ -83,6 +83,51 @@ private suspend fun ApplicationCall.checkTicketSession():
     return session
 }
 
+
+private const val MAX_TICKET_FILE_BYTES = 100 * 1024 * 1024
+private const val MAX_TICKET_RECEIPT_BYTES = 25 * 1024 * 1024
+
+private fun sanitizeTicketFileName(value: String): String =
+    value
+        .substringAfterLast('/')
+        .substringAfterLast('\\')
+        .replace(Regex("[\\u0000-\\u001F<>:\"/\\\\|?*]"), "_")
+        .trim()
+        .take(180)
+        .ifBlank { "file" }
+
+private fun escapeHtml(value: String): String = buildString {
+    value.forEach { character ->
+        append(
+            when (character) {
+                '&' -> "&amp;"
+                '<' -> "&lt;"
+                '>' -> "&gt;"
+                '"' -> "&quot;"
+                '\'' -> "&#39;"
+                else -> character
+            }
+        )
+    }
+}
+
+private fun decodeBase64OrNull(
+    value: String,
+    maximumBytes: Int
+): ByteArray? {
+    val maximumEncodedLength =
+        ((maximumBytes.toLong() + 2L) / 3L * 4L) + 16L
+
+    if (value.length.toLong() > maximumEncodedLength) {
+        return null
+    }
+
+    return runCatching {
+        Base64.getDecoder().decode(value)
+    }.getOrNull()?.takeIf { it.size <= maximumBytes }
+}
+
+
 internal fun Route.ticketRoutes() {
     route("/api/v1/tickets") {
         delete("/{ticketId}") {
@@ -120,30 +165,130 @@ internal fun Route.ticketRoutes() {
             val file = java.io.File("." + filePath)
             if (file.exists()) {
                 file.delete()
-                println("🗑️ Deleted ticket file: $filePath")
             }
 
-            println("✅ Ticket $ticketId deleted by ${session.userId}")
             call.respond(HttpStatusCode.NoContent)
         }
 
         // Загрузка билета
         post("/upload") {
-            if (!call.checkPermission(Permission.TICKETS, "create")) return@post
+            if (!call.checkPermission(Permission.TICKETS, "create")) {
+                return@post
+            }
+
+            val session = call.checkTicketSession() ?: return@post
+
             val request = try {
                 call.receive<TicketUploadRequest>()
-            } catch (e: Exception) {
-                return@post call.respond(HttpStatusCode.BadRequest, "Invalid JSON")
+            } catch (_: Exception) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON"
+                )
             }
-            if (request.projectId.isBlank() || request.fileBase64.isBlank()) {
-                return@post call.respond(HttpStatusCode.BadRequest, "projectId and fileBase64 required")
+
+            val projectId = runCatching {
+                projectId
+            }.getOrNull() ?: return@post call.respond(
+                HttpStatusCode.BadRequest,
+                "Invalid projectId"
+            )
+
+            if (request.fileBase64.isBlank()) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "fileBase64 required"
+                )
             }
-            val fileBytes = try { java.util.Base64.getDecoder().decode(request.fileBase64) }
-            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest, "Invalid Base64 data") }
-            val session = call.checkTicketSession() ?: return@post
+
+            if (!request.amount.isFinite() || request.amount < 0.0) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid amount"
+                )
+            }
+
+            val allowedCurrencies = setOf("RUB", "BYN", "USD", "EUR")
+            val currency = currency.trim().uppercase()
+
+            if (currency !in allowedCurrencies) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Unsupported currency"
+                )
+            }
+
+            val fileBytes = decodeBase64OrNull(
+                request.fileBase64,
+                MAX_TICKET_FILE_BYTES
+            ) ?: return@post call.respond(
+                HttpStatusCode.PayloadTooLarge,
+                "Invalid Base64 or ticket exceeds 100 MB"
+            )
+
+            val receiptBytes = request.receiptBase64
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    decodeBase64OrNull(
+                        it,
+                        MAX_TICKET_RECEIPT_BYTES
+                    ) ?: return@post call.respond(
+                        HttpStatusCode.PayloadTooLarge,
+                        "Invalid Base64 or receipt exceeds 25 MB"
+                    )
+                }
+
+            val recipientIds = request.recipientIds
+                .mapNotNull { raw ->
+                    runCatching { UUID.fromString(raw) }.getOrNull()
+                }
+                .distinct()
+
+            if (recipientIds.size != request.recipientIds.distinct().size) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid recipientIds"
+                )
+            }
+
+            val projectExists = transaction {
+                ProjectsTable
+                    .selectAll()
+                    .where { ProjectsTable.id eq projectId }
+                    .limit(1)
+                    .any()
+            }
+
+            if (!projectExists) {
+                return@post call.respond(
+                    HttpStatusCode.NotFound,
+                    "Project not found"
+                )
+            }
+
+            val knownRecipientIds = transaction {
+                UsersTable
+                    .selectAll()
+                    .where { UsersTable.id inList recipientIds }
+                    .map { it[UsersTable.id].value }
+                    .toSet()
+            }
+
+            if (knownRecipientIds.size != recipientIds.size) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Unknown recipientId"
+                )
+            }
+
             val ticketId = UUID.randomUUID()
-            val uniqueFileName = "${ticketId}_${request.fileName}"
-            val uploadDir = java.io.File("uploads/tickets").apply { mkdirs() }
+            val originalFileName =
+                sanitizeTicketFileName(request.fileName)
+            val uniqueFileName = "${ticketId}_$originalFileName"
+            val uploadDir = java.io.File("uploads/tickets").apply {
+                mkdirs()
+            }
+            val ticketFile = java.io.File(uploadDir, uniqueFileName)
             java.io.File(uploadDir, uniqueFileName).writeBytes(fileBytes)
 
             // 🆕 Обработка чека если предоставлен
@@ -184,7 +329,7 @@ internal fun Route.ticketRoutes() {
                 TicketsTable.insert {
                     it[TicketsTable.id] = ticketId
                     it[uploadedBy] = session.userId
-                    it[TicketsTable.projectId] = UUID.fromString(request.projectId)
+                    it[TicketsTable.projectId] = projectId
                     it[TicketsTable.fileName] = uniqueFileName
                     it[TicketsTable.originalName] = request.fileName
                     it[filePath] = "/uploads/tickets/$uniqueFileName"
@@ -193,7 +338,7 @@ internal fun Route.ticketRoutes() {
                     it[TicketsTable.sendToAccountant] = request.sendToAccountant
                     it[TicketsTable.accountantEmail] = request.accountantEmail
                     it[TicketsTable.amount] = request.amount            //
-                    it[TicketsTable.currency] = request.currency        //
+                    it[TicketsTable.currency] = currency        //
                     it[TicketsTable.description] = request.description
                     it[uploadedAt] = System.currentTimeMillis()
                     // 🆕 Сохраняем данные чека
@@ -205,36 +350,39 @@ internal fun Route.ticketRoutes() {
                 if (request.amount > 0.0) {
                     val expenseUserId = companyUserId ?: session.userId
                     val hasReceipt = receiptFilePath != null
-                    transaction {
-                        // ✅ Используем java.time вместо kotlinx.datetime (проще и всегда доступно)
-                        val todayJava = java.time.LocalDate.now()
-                        val todayKt = kotlinx.datetime.LocalDate(todayJava.year, todayJava.monthValue, todayJava.dayOfMonth)
+                    val todayJava = java.time.LocalDate.now()
+                    val todayKt = kotlinx.datetime.LocalDate(
+                        todayJava.year,
+                        todayJava.monthValue,
+                        todayJava.dayOfMonth
+                    )
+                    val expenseId = UUID.randomUUID()
 
-                        val expenseId = UUID.randomUUID()
-                        ExpensesTable.insert {
-                            it[ExpensesTable.id] = expenseId
-                            it[userId] = expenseUserId
-                            it[projectId] = UUID.fromString(request.projectId)
-                            it[date] = todayKt
-                            it[type] = "OTHER"
-                            it[name] = "🎫 Билет: ${request.fileName.take(50)}"
-                            it[amount] = request.amount
-                            it[currency] = request.currency
-                            it[comment] = "Автоматически создан при загрузке билета. ${request.description.takeIf { it.isNotBlank() } ?: ""}"
-                            it[receiptSubmitted] = hasReceipt
-                            it[hasReceiptPhoto] = hasReceipt
-                            it[createdAt] = System.currentTimeMillis()
-                        }
-                        if (hasReceipt && receiptFilePath != null) {
-                            ExpenseReceiptsTable.insert {
-                                it[id] = UUID.randomUUID()
-                                it[ExpenseReceiptsTable.expenseId] = expenseId
-                                it[imageUrl] = receiptFilePath!!
-                                it[uploadedAt] = System.currentTimeMillis()
-                            }
+                    ExpensesTable.insert {
+                        it[ExpensesTable.id] = expenseId
+                        it[userId] = expenseUserId
+                        it[ExpensesTable.projectId] = projectId
+                        it[date] = todayKt
+                        it[type] = "OTHER"
+                        it[name] = "Билет: ${originalFileName.take(50)}"
+                        it[amount] = request.amount
+                        it[ExpensesTable.currency] = currency
+                        it[comment] =
+                            "Автоматически создан при загрузке билета. " +
+                                request.description.take(500)
+                        it[receiptSubmitted] = hasReceipt
+                        it[hasReceiptPhoto] = hasReceipt
+                        it[createdAt] = System.currentTimeMillis()
+                    }
+
+                    if (hasReceipt) {
+                        ExpenseReceiptsTable.insert {
+                            it[id] = UUID.randomUUID()
+                            it[ExpenseReceiptsTable.expenseId] = expenseId
+                            it[imageUrl] = requireNotNull(receiptFilePath)
+                            it[uploadedAt] = System.currentTimeMillis()
                         }
                     }
-                    println("✅ Auto-expense created: ${request.amount} ${request.currency} for ticket $uniqueFileName (userId=$expenseUserId, hasReceipt=$hasReceipt)")
                 }
 
                 request.recipientIds.forEach { recipientId ->
@@ -248,7 +396,7 @@ internal fun Route.ticketRoutes() {
                 }
             }
             val projectName = transaction {
-                ProjectsTable.selectAll().where { ProjectsTable.id eq UUID.fromString(request.projectId) }
+                ProjectsTable.selectAll().where { ProjectsTable.id eq projectId }
                     .single()[ProjectsTable.name]
             }
             val senderName = transaction {
@@ -294,6 +442,13 @@ internal fun Route.ticketRoutes() {
                         val fileBytes = if (ticketFile.exists()) ticketFile.readBytes() else fileBytes
 
                         val subject = "🎫 Новый билет по проекту «$projectName»"
+                        val safeSenderName = escapeHtml(senderName)
+                        val safeProjectName = escapeHtml(projectName)
+                        val safeDescription = escapeHtml(
+                            request.description.take(2000)
+                        )
+                        val safeCurrency = escapeHtml(currency)
+
                         val htmlBody = """
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #2E7D32;">🎫 Новый билет загружен</h2>
@@ -305,7 +460,7 @@ internal fun Route.ticketRoutes() {
                                 ${if (request.amount > 0.0) """
                                 <tr><td style="padding: 8px; background: #FFF3E0; font-weight: bold; color: #E65100;">💰 Стоимость:</td>
                                     <td style="padding: 8px; background: #FFF3E0; font-weight: bold; color: #E65100;">
-                                        ${"%.2f".format(request.amount)} ${request.currency}
+                                        ${"%.2f".format(request.amount)} ${currency}
                                     </td></tr>
                                 """ else ""}
                                 ${if (request.description.isNotBlank()) """
@@ -319,10 +474,13 @@ internal fun Route.ticketRoutes() {
                         </div>
                     """.trimIndent()
 
-                        val attachment = com.proles.server.config.EmailAttachment(
-                            fileName = request.fileName,
+                        val attachment = EmailAttachment(
+                            fileName = originalFileName,
                             bytes = fileBytes,
                             mimeType = request.fileType
+                                .trim()
+                                .take(100)
+                                .ifBlank { "application/octet-stream" }
                         )
 
                         com.proles.server.config.EmailService.sendHtmlEmail(
@@ -348,7 +506,7 @@ internal fun Route.ticketRoutes() {
                 }
                 NotificationService.notifyUsers(
                     financeRecipients, session.userId, "TICKET_RECEIPT", "🧷 Чек билета сохранён",
-                    "Расход на Proles Company: ${"%.2f".format(request.amount)} ${request.currency}",
+                    "Расход на Proles Company: ${"%.2f".format(request.amount)} ${currency}",
                     ticketJson.encodeToString(mapOf("ticketId" to ticketId.toString(), "receiptPath" to (receiptFilePath ?: ""))),
                     "ticketReceipt"
                 )

@@ -56,11 +56,6 @@ data class CalculateSalaryRequest(
     val month: Int
 )
 
-private val payrollJson = Json {
-    ignoreUnknownKeys = true
-    encodeDefaults = true
-}
-
 private suspend fun ApplicationCall.checkPayrollSession(
     vararg allowedRoles: String
 ): SessionManager.Session? {
@@ -80,15 +75,24 @@ private suspend fun ApplicationCall.checkPayrollSession(
     return session
 }
 
-private fun payrollTaxInclusiveCost(
-    earnedAmount: Double,
-    isRemote: Boolean
-): Double =
-    if (isRemote) {
-        earnedAmount / 0.87
-    } else {
-        earnedAmount * 1.37
-    }
+private val payrollStatuses =
+    setOf("draft", "approved", "paid")
+
+private fun validPayrollPeriod(
+    year: Int,
+    month: Int
+): Boolean =
+    year in 2000..2100 && month in 1..12
+
+private fun parsePayrollDate(
+    value: String?
+): KtLocalDate? =
+    value
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
+        ?.let {
+            runCatching { KtLocalDate.parse(it) }.getOrNull()
+        }
 
 internal fun Route.payrollRoutes() {
     route("/api/v1/payroll") {
@@ -190,15 +194,34 @@ internal fun Route.payrollRoutes() {
                 ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid userId")
 
             val projectId = body.projectId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-            val effectiveFrom = runCatching {
-                kotlinx.datetime.LocalDate.parse(body.effectiveFrom)  // ✅ Прямой доступ к полю DTO
-            }.getOrNull() ?: run {
-                // 🔥 Fallback: берём текущую дату через java.time (всегда работает на JVM)
-                val today = java.time.LocalDate.now()
-                kotlinx.datetime.LocalDate(today.year, today.monthValue, today.dayOfMonth)
+            val effectiveFrom = parsePayrollDate(body.effectiveFrom)
+                ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid effectiveFrom"
+                )
+
+            val effectiveTo = if (body.effectiveTo.isNullOrBlank()) {
+                null
+            } else {
+                parsePayrollDate(body.effectiveTo)
+                    ?: return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        "Invalid effectiveTo"
+                    )
             }
-            val effectiveTo = body.effectiveTo?.let {  // ✅ Прямой доступ к полю DTO
-                runCatching { kotlinx.datetime.LocalDate.parse(it) }.getOrNull()
+
+            if (effectiveTo != null && effectiveTo < effectiveFrom) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "effectiveTo precedes effectiveFrom"
+                )
+            }
+
+            if (!body.amount.isFinite() || body.amount < 0.0) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid amount"
+                )
             }
 
             val componentId = UUID.randomUUID()
@@ -228,7 +251,6 @@ internal fun Route.payrollRoutes() {
             }.getOrNull() ?: return@delete call.respond(HttpStatusCode.BadRequest, "Invalid componentId")
 
             // Проверяем, что компонент принадлежит пользователю (или текущий пользователь — админ)
-            val session = call.checkPayrollSession() ?: return@delete
             val componentOwner = transaction {
                 SalaryComponentsTable.selectAll()
                     .where { SalaryComponentsTable.id eq componentId }
@@ -262,8 +284,6 @@ internal fun Route.payrollRoutes() {
                 return@put call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}")
             }
 
-            val session = call.checkPayrollSession() ?: return@put
-
             // Проверяем, что компонент принадлежит пользователю (или текущий пользователь — админ)
             val componentOwner = transaction {
                 SalaryComponentsTable.selectAll()
@@ -282,14 +302,34 @@ internal fun Route.payrollRoutes() {
                 ?: return@put call.respond(HttpStatusCode.BadRequest, "Invalid userId")
 
             val projectId = body.projectId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-            val effectiveFrom = runCatching {
-                kotlinx.datetime.LocalDate.parse(body.effectiveFrom)
-            }.getOrNull() ?: run {
-                val today = java.time.LocalDate.now()
-                kotlinx.datetime.LocalDate(today.year, today.monthValue, today.dayOfMonth)
+            val effectiveFrom = parsePayrollDate(body.effectiveFrom)
+                ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid effectiveFrom"
+                )
+
+            val effectiveTo = if (body.effectiveTo.isNullOrBlank()) {
+                null
+            } else {
+                parsePayrollDate(body.effectiveTo)
+                    ?: return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        "Invalid effectiveTo"
+                    )
             }
-            val effectiveTo = body.effectiveTo?.let {
-                runCatching { kotlinx.datetime.LocalDate.parse(it) }.getOrNull()
+
+            if (effectiveTo != null && effectiveTo < effectiveFrom) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "effectiveTo precedes effectiveFrom"
+                )
+            }
+
+            if (!body.amount.isFinite() || body.amount < 0.0) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid amount"
+                )
             }
 
             transaction {
@@ -321,6 +361,12 @@ internal fun Route.payrollRoutes() {
             val body = try { call.receive<CalculateSalaryRequest>() }
             catch (e: Exception) {
                 return@post call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}")
+            }
+            if (!validPayrollPeriod(body.year, body.month)) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid payroll period"
+                )
             }
 
 
@@ -402,6 +448,12 @@ internal fun Route.payrollRoutes() {
             val year = yearParam?.toIntOrNull() ?: java.time.LocalDate.now().year
             val month = monthParam?.toIntOrNull() ?: java.time.LocalDate.now().monthValue
 
+            if (!validPayrollPeriod(year, month)) {
+                return@get call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid payroll period"
+                )
+            }
 
             val startDate = kotlinx.datetime.LocalDate(year, month, 1)
             val daysInMonth = java.time.YearMonth.of(year, month).lengthOfMonth()
@@ -490,7 +542,42 @@ internal fun Route.payrollRoutes() {
             val body = try { call.receive<Map<String, String>>() }
             catch (e: Exception) { return@put call.respond(HttpStatusCode.BadRequest) }
 
-            val status = body["status"] ?: return@put call.respond(HttpStatusCode.BadRequest)
+            val status = body["status"]
+                ?.trim()
+                ?.lowercase()
+                ?: return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "status required"
+                )
+
+            if (status !in payrollStatuses) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Unsupported status"
+                )
+            }
+
+            val affected = transaction {
+                SalaryRecordsTable.update({
+                    SalaryRecordsTable.id eq recordId
+                }) {
+                    it[SalaryRecordsTable.status] = status
+                    it[paidAt] = if (status == "paid") {
+                        System.currentTimeMillis()
+                    } else {
+                        null
+                    }
+                }
+            }
+
+            if (affected == 0) {
+                call.respond(
+                    HttpStatusCode.NotFound,
+                    "Salary record not found"
+                )
+            } else {
+                call.respond(HttpStatusCode.OK)
+            }
 
             transaction {
                 SalaryRecordsTable.update({ SalaryRecordsTable.id eq recordId }) {
