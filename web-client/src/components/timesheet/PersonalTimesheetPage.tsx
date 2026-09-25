@@ -1,4 +1,183 @@
-function PersonalTimesheetPage() {
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import api from '../../api/client';
+import { generateUUID } from '../../lib/utils';
+
+interface PersonalTask {
+  id: string;
+  name: string;
+  description: string;
+  hours: number;
+  category: string;
+  status: PersonalTaskStatus;
+  isMonthTask?: boolean;
+  sortOrder: number;
+}
+
+interface PersonalCategoryOption {
+  id: string;
+  name: string;
+}
+
+type PersonalTaskStatus =
+  | 'Not started'
+  | 'In progress'
+  | 'Completed'
+  | 'Blocked';
+
+interface DropdownOption {
+  value: string;
+  label: string;
+}
+
+interface StyledDropdownProps {
+  value: string;
+  options: DropdownOption[];
+  placeholder: string;
+  activeClassName?: string;
+  onChange: (value: string) => void;
+  renderOptionSuffix?: (option: DropdownOption) => ReactNode;
+}
+
+const PERSONAL_STATUS_OPTIONS: DropdownOption[] = [
+  { value: 'Not started', label: 'Не начато' },
+  { value: 'In progress', label: 'В работе' },
+  { value: 'Completed', label: 'Выполнено' },
+  { value: 'Blocked', label: 'Заблокировано' },
+];
+
+const PERSONAL_STATUS_LABELS: Record<string, string> = {
+  'Not started': 'Не начато',
+  'In progress': 'В работе',
+  Completed: 'Выполнено',
+  Blocked: 'Заблокировано',
+};
+
+function getMonthBounds(year: number, month: number) {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const lastDay = new Date(year, month, 0).getDate();
+
+  return {
+    start: `${year}-${pad(month)}-01`,
+    end: `${year}-${pad(month)}-${pad(lastDay)}`,
+  };
+}
+
+function StyledDropdown({
+  value,
+  options,
+  placeholder,
+  activeClassName = '',
+  onChange,
+  renderOptionSuffix,
+}: StyledDropdownProps) {
+  if (!renderOptionSuffix) {
+    return (
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={[
+          'h-11 w-full rounded-2xl border border-slate-200 bg-white px-3',
+          'text-sm font-semibold text-slate-700 outline-none transition',
+          'focus:border-[#dc78a2] focus:ring-4 focus:ring-[#f8dce7]',
+          activeClassName,
+        ].join(' ')}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <div
+      className={[
+        'rounded-2xl border border-slate-200 bg-white p-1',
+        activeClassName,
+      ].join(' ')}
+    >
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 w-full rounded-xl border-0 bg-transparent px-2 text-sm font-semibold text-slate-700 outline-none"
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+
+      {value && (
+        <div className="flex justify-end border-t border-slate-100 pt-1">
+          {renderOptionSuffix(
+            options.find((option) => option.value === value) ?? {
+              value,
+              label: value,
+            },
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PinkStatusChart({
+  tasks,
+}: {
+  tasks: PersonalTask[];
+}) {
+  const rows = PERSONAL_STATUS_OPTIONS.map((status) => ({
+    ...status,
+    count: tasks.filter((task) => task.status === status.value).length,
+  }));
+
+  const maximum = Math.max(...rows.map((row) => row.count), 1);
+
+  return (
+    <section className="rounded-3xl border border-[#f0d7e2] bg-[#fffafd] p-5 shadow-[0_6px_20px_rgba(15,23,42,0.05)]">
+      <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">
+        Состояние задач
+      </div>
+
+      <div className="mt-5 space-y-4">
+        {rows.map((row) => (
+          <div key={row.value}>
+            <div className="mb-1.5 flex items-center justify-between gap-3">
+              <span className="text-sm font-bold text-slate-700">
+                {row.label}
+              </span>
+              <span className="text-sm font-black text-[#a54873]">
+                {row.count}
+              </span>
+            </div>
+
+            <div className="h-2.5 overflow-hidden rounded-full bg-[#f4e5ec]">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#d96f9b] to-[#edb3c7] transition-[width]"
+                style={{
+                  width: `${(row.count / maximum) * 100}%`,
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function PersonalTimesheetPage() {
   const current = new Date();
   const [year, setYear] = useState(current.getFullYear());
   const [month, setMonth] = useState(current.getMonth() + 1);
