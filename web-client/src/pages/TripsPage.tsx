@@ -89,7 +89,7 @@ export function TripsPage() {
     try {
       // 🔐 Выбор эндпоинта по правам
       const tripsUrl = isAdmin
-        ? '/business-trips?all=true'
+        ? '/business-trips/all'
         : '/business-trips';
 
       const [tripsRes, projRes, usersRes] = await Promise.allSettled([
@@ -120,7 +120,13 @@ export function TripsPage() {
       return a.type.localeCompare(b.type) * dir;
     });
 
-  const activeTrip = trips.find(t => t.userId === user?.id && t.type !== 'COMPLETION') || null;
+  const activeTrip =
+    trips.find(
+      trip =>
+        trip.userId === user?.id &&
+        trip.status === 'ACTIVE' &&
+        !trip.endDate,
+    ) || null;
 
   const resetTripForm = () => {
     setForm({ ...form, projectId: '', projectNumber: '', companyName: '', country: 'РФ', type: 'DEPARTURE', date: new Date().toISOString().slice(0, 10), city: '', waypoints: [], participants: [], transport: '', notes: '' });
@@ -134,6 +140,10 @@ export function TripsPage() {
     if (mode === 'transfer' && activeTrip) {
       setForm({
         projectId: activeTrip.projectId || '',
+        subprojectId: '',
+        startDate: new Date().toISOString().slice(0, 10),
+        endDate: '',
+        status: 'ACTIVE' as const,
         projectNumber: activeTrip.projectNumber || '',
         companyName: activeTrip.companyName || '',
         country: ['РБ','РФ','Казахстан','Китай'].includes(activeTrip.country) ? activeTrip.country as any : 'Другое',
@@ -156,10 +166,17 @@ export function TripsPage() {
     if (!activeTrip) return;
     if (!confirm('Завершить текущую командировку?')) return;
     try {
-      await api.post('/business-trips/complete');
+      const endDate = new Date().toISOString().slice(0, 10);
+      await api.post(
+        `/business-trips/${activeTrip.id}/complete`,
+        { endDate },
+      );
       await loadData();
     } catch (err) {
-      alert((err as any)?.response?.data || 'Ошибка завершения командировки');
+      alert(
+        (err as any)?.response?.data ||
+          'Ошибка завершения командировки',
+      );
       console.error(err);
     }
   };
@@ -182,6 +199,13 @@ export function TripsPage() {
         country: form.country === 'Другое' ? customCountry.trim() : form.country,
         type: form.type,
         date: form.date,
+        startDate: form.date,
+        endDate: editingTripId
+          ? selectedTrip?.endDate || null
+          : null,
+        status: editingTripId
+          ? selectedTrip?.status || 'ACTIVE'
+          : 'ACTIVE',
         city: form.city,
         waypoints: form.waypoints,
         participants: form.participants,
