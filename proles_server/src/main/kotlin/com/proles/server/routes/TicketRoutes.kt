@@ -162,18 +162,15 @@ internal fun Route.ticketRoutes() {
                 TicketsTable.deleteWhere { TicketsTable.id eq ticketId }
             }
 
-            // Удаляем файл с диска
-            val ticketFilePath = ticket[TicketsTable.filePath]
+                        // Удаляем билет и связанный чек с диска.
             val ticketFilePath = ticket[TicketsTable.filePath]
             val receiptPath = ticket[TicketsTable.receiptPath]
-            val file = java.io.File("." + ticketFilePath)
-            if (file.exists()) {
-                file.delete()
-            }
 
             listOfNotNull(ticketFilePath, receiptPath).forEach { path ->
                 runCatching {
-                    java.io.File("." + path).takeIf { it.isFile }?.delete()
+                    java.io.File("." + path)
+                        .takeIf { it.isFile }
+                        ?.delete()
                 }
             }
 
@@ -308,87 +305,143 @@ internal fun Route.ticketRoutes() {
             }
             val ticketFile = java.io.File(uploadDir, uniqueFileName)
 
-            // 🆕 Обработка чека если предоставлен
-            var receiptFile: java.io.File? = null
-            var receiptFilePath: String? = null
-            var receiptOriginalName: String? = null
-            var receiptFileType: String? = null
-
-            transaction {
-                // Находим UUID пользователя COMPANY для расходов компании
-                val companyUser = UsersTable.selectAll()
-                    .where { (UsersTable.name eq "Proles Company") or (UsersTable.login eq "proles_company") }
-                    .singleOrNull()
-                val companyUserId = companyUser?.let { it[UsersTable.id].value }
-
-                // Загрузка билета
-                TicketsTable.insert {
-                    it[TicketsTable.id] = ticketId
-                    it[uploadedBy] = session.userId
-                    it[TicketsTable.projectId] = projectId
-                    it[TicketsTable.fileName] = uniqueFileName
-                    it[TicketsTable.originalName] = request.fileName
-                    it[filePath] = "/uploads/tickets/$uniqueFileName"
-                    it[TicketsTable.fileType] = request.fileType
-                    it[fileSize] = fileBytes.size.toLong()
-                    it[TicketsTable.sendToAccountant] = request.sendToAccountant
-                    it[TicketsTable.accountantEmail] = request.accountantEmail
-                    it[TicketsTable.amount] = request.amount            //
-                    it[TicketsTable.currency] = currency        //
-                    it[TicketsTable.description] = request.description
-                    it[uploadedAt] = System.currentTimeMillis()
-                    // 🆕 Сохраняем данные чека
-                    it[TicketsTable.receiptPath] = receiptFilePath
-                    it[TicketsTable.receiptOriginalName] = receiptOriginalName
-                    it[TicketsTable.receiptFileType] = receiptFileType
+                        // Подготавливаем и сохраняем файлы до создания записей в БД.
+            val receiptFile = receiptBytes?.let { bytes ->
+                val receiptName = sanitizeTicketFileName(
+                    request.receiptFileName.orEmpty()
+                )
+                java.io.File(
+                    uploadDir,
+                    "${ticketId}_receipt_$receiptName"
+                ).also { file ->
+                    file.writeBytes(bytes)
                 }
-                //  Автоматически создаём расход "Билет" от имени COMPANY (если есть сумма)
-                if (request.amount > 0.0) {
-                    val expenseUserId = companyUserId ?: session.userId
-                    val hasReceipt = receiptFilePath != null
-                    val todayJava = java.time.LocalDate.now()
-                    val todayKt = kotlinx.datetime.LocalDate(
-                        todayJava.year,
-                        todayJava.monthValue,
-                        todayJava.dayOfMonth
-                    )
-                    val expenseId = UUID.randomUUID()
+            }
 
-                    ExpensesTable.insert {
-                        it[ExpensesTable.id] = expenseId
-                        it[userId] = expenseUserId
-                        it[ExpensesTable.projectId] = projectId
-                        it[date] = todayKt
-                        it[type] = "OTHER"
-                        it[name] = "Билет: ${originalFileName.take(50)}"
-                        it[amount] = request.amount
-                        it[ExpensesTable.currency] = currency
-                        it[comment] =
-                            "Автоматически создан при загрузке билета. " +
-                                request.description.take(500)
-                        it[receiptSubmitted] = hasReceipt
-                        it[hasReceiptPhoto] = hasReceipt
-                        it[createdAt] = System.currentTimeMillis()
+            val receiptFilePath = receiptFile?.let {
+                "/uploads/tickets/${it.name}"
+            }
+            val receiptOriginalName = receiptFile?.let {
+                sanitizeTicketFileName(
+                    request.receiptFileName.orEmpty()
+                )
+            }
+            val receiptFileType = receiptFile?.let {
+                request.receiptFileType
+                    ?.trim()
+                    ?.take(100)
+                    ?.ifBlank { "application/octet-stream" }
+                    ?: "application/octet-stream"
+            }
+
+            try {
+                ticketFile.writeBytes(fileBytes)
+
+                transaction {
+                    val companyUser = UsersTable
+                        .selectAll()
+                        .where {
+                            (UsersTable.name eq "Proles Company") or
+                                (UsersTable.login eq "proles_company")
+                        }
+                        .singleOrNull()
+
+                    val companyUserId =
+                        companyUser?.get(UsersTable.id)?.value
+
+                    TicketsTable.insert {
+                        it[TicketsTable.id] = ticketId
+                        it[uploadedBy] = session.userId
+                        it[TicketsTable.projectId] = projectId
+                        it[TicketsTable.fileName] = uniqueFileName
+                        it[TicketsTable.originalName] = originalFileName
+                        it[filePath] = "/uploads/tickets/$uniqueFileName"
+                        it[TicketsTable.fileType] = request.fileType
+                            .trim()
+                            .take(100)
+                            .ifBlank { "application/octet-stream" }
+                        it[fileSize] = fileBytes.size.toLong()
+                        it[TicketsTable.sendToAccountant] =
+                            request.sendToAccountant
+                        it[TicketsTable.accountantEmail] =
+                            request.accountantEmail.trim()
+                        it[TicketsTable.amount] = request.amount
+                        it[TicketsTable.currency] = currency
+                        it[TicketsTable.description] =
+                            request.description.trim().take(2000)
+                        it[uploadedAt] = System.currentTimeMillis()
+                        it[TicketsTable.receiptPath] = receiptFilePath
+                        it[TicketsTable.receiptOriginalName] =
+                            receiptOriginalName
+                        it[TicketsTable.receiptFileType] =
+                            receiptFileType
                     }
 
-                    if (hasReceipt) {
-                        ExpenseReceiptsTable.insert {
-                            it[id] = UUID.randomUUID()
-                            it[ExpenseReceiptsTable.expenseId] = expenseId
-                            it[imageUrl] = requireNotNull(receiptFilePath)
-                            it[uploadedAt] = System.currentTimeMillis()
+                    if (request.amount > 0.0) {
+                        val expenseUserId =
+                            companyUserId ?: session.userId
+                        val hasReceipt = receiptFilePath != null
+                        val todayJava = java.time.LocalDate.now()
+                        val todayKt = kotlinx.datetime.LocalDate(
+                            todayJava.year,
+                            todayJava.monthValue,
+                            todayJava.dayOfMonth
+                        )
+                        val expenseId = UUID.randomUUID()
+
+                        ExpensesTable.insert {
+                            it[ExpensesTable.id] = expenseId
+                            it[userId] = expenseUserId
+                            it[ExpensesTable.projectId] = projectId
+                            it[date] = todayKt
+                            it[type] = "OTHER"
+                            it[name] =
+                                "Билет: ${originalFileName.take(50)}"
+                            it[amount] = request.amount
+                            it[ExpensesTable.currency] = currency
+                            it[comment] =
+                                "Автоматически создан при загрузке " +
+                                    "билета. " +
+                                    request.description.take(500)
+                            it[receiptSubmitted] = hasReceipt
+                            it[hasReceiptPhoto] = hasReceipt
+                            it[createdAt] = System.currentTimeMillis()
+                        }
+
+                        if (hasReceipt) {
+                            ExpenseReceiptsTable.insert {
+                                it[id] = UUID.randomUUID()
+                                it[ExpenseReceiptsTable.expenseId] =
+                                    expenseId
+                                it[imageUrl] =
+                                    requireNotNull(receiptFilePath)
+                                it[uploadedAt] =
+                                    System.currentTimeMillis()
+                            }
+                        }
+                    }
+
+                    recipientIds.forEach { recipientId ->
+                        TicketRecipientsTable.insert {
+                            it[TicketRecipientsTable.id] =
+                                UUID.randomUUID()
+                            it[TicketRecipientsTable.ticketId] =
+                                ticketId
+                            it[TicketRecipientsTable.userId] =
+                                recipientId
                         }
                     }
                 }
-
-                request.recipientIds.forEach { recipientId ->
-                    TicketRecipientsTable.insert {
-                        it[TicketRecipientsTable.id] = UUID.randomUUID()
-                        it[TicketRecipientsTable.ticketId] = ticketId
-                        it[TicketRecipientsTable.userId] = UUID.fromString(recipientId)
-                    }
+            } catch (error: Exception) {
+                runCatching {
+                    ticketFile.takeIf { it.isFile }?.delete()
                 }
+                runCatching {
+                    receiptFile?.takeIf { it.isFile }?.delete()
+                }
+                throw error
             }
+
             val projectName = transaction {
                 ProjectsTable.selectAll().where { ProjectsTable.id eq projectId }
                     .single()[ProjectsTable.name]
