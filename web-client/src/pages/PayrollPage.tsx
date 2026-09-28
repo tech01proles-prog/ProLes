@@ -19,6 +19,9 @@ const COMPONENT_TYPES = {
   MARGIN_PERCENT: { label: '% от маржи', color: 'bg-purple-100 text-purple-700 border-purple-200' },
 };
 
+type EmployeeBalanceTransaction = { id: string; transactionType: string; amount: number; comment: string; createdByName: string; createdAt: number };
+type EmployeeBalance = { userId: string; balance: number; transactions: EmployeeBalanceTransaction[] };
+
 export function PayrollPage() {
   const [user, setUser] = useState<UserDto | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -44,6 +47,10 @@ export function PayrollPage() {
   const [employeeBreakdown, setEmployeeBreakdown] = useState<SalaryBreakdownResponse | null>(null);
   const [employeeEntries, setEmployeeEntries] = useState<TimeEntryDto[]>([]);
   const [employeeHoursLoading, setEmployeeHoursLoading] = useState(false);
+  const [employeeBalance, setEmployeeBalance] = useState<EmployeeBalance | null>(null);
+  const [withholdingAmount, setWithholdingAmount] = useState('');
+  const [repaymentAmount, setRepaymentAmount] = useState('');
+  const [adjustmentComment, setAdjustmentComment] = useState('');
   const [employeeLoading, setEmployeeLoading] = useState(false);
   const [exportPeriod, setExportPeriod] = useState(() => {
     const d = new Date();
@@ -113,6 +120,17 @@ export function PayrollPage() {
     }
   }, [addToast]);
 
+  const loadEmployeeBalance = useCallback(async (employeeId: string) => {
+    if (!employeeId) { setEmployeeBalance(null); return; }
+    try {
+      const { data } = await api.get<EmployeeBalance>(`/payroll/balance/${employeeId}`);
+      setEmployeeBalance(data);
+    } catch (err) {
+      console.error(err);
+      setEmployeeBalance(null);
+    }
+  }, []);
+
   const handleCalculateEmployee = async () => {
     if (!selectedEmployeeId) return;
     setCalculating(true);
@@ -121,9 +139,15 @@ export function PayrollPage() {
         userId: selectedEmployeeId,
         year: exportPeriod.year,
         month: exportPeriod.month,
+        withholdingAmount: Number(withholdingAmount) || 0,
+        withholdingRepaymentAmount: Number(repaymentAmount) || 0,
+        comment: adjustmentComment.trim(),
       });
       setEmployeeBreakdown(data);
-      await Promise.all([loadAdminData(), loadMyData()]);
+      await Promise.all([loadAdminData(), loadMyData(), loadEmployeeBalance(selectedEmployeeId)]);
+      setWithholdingAmount('');
+      setRepaymentAmount('');
+      setAdjustmentComment('');
       addToast(`Зарплата сотрудника рассчитана за ${monthName(exportPeriod.month)} ${exportPeriod.year}`, 'success');
     } catch (err) {
       console.error(err);
@@ -624,7 +648,7 @@ export function PayrollPage() {
                     <div>
                       <div className="font-bold text-slate-900">{monthName(r.month)} {r.year}</div>
                       <div className="text-xs text-slate-500">
-                        Фикс: {formatMoney(r.fixed)} • Часы: {formatMoney(r.hourly)} • Сдельная: {formatMoney(r.piece)} • Бонус: {formatMoney(r.bonus)}
+                        Фикс: {formatMoney(r.fixed)} • Часы: {formatMoney(r.hourly)} • Сдельная: {formatMoney(r.piece)} • Бонус: {formatMoney(r.bonus)} • Штраф: −{formatMoney(r.penalty || 0)} • Удержано: −{formatMoney(r.withholding || 0)} • Погашено: +{formatMoney(r.withholdingRepayment || 0)}
                       </div>
                     </div>
                     <div className="text-right">
@@ -658,7 +682,15 @@ export function PayrollPage() {
                     <label className="text-xs font-medium text-slate-600">Сотрудник</label>
                     <select
                       value={selectedEmployeeId}
-                      onChange={(e) => { setSelectedEmployeeId(e.target.value); loadEmployeeComponents(e.target.value); loadEmployeeHours(e.target.value); }}
+                      onChange={(e) => {
+                        const employeeId = e.target.value;
+                        setSelectedEmployeeId(employeeId);
+                        setEmployeeBreakdown(null);
+                        setWithholdingAmount('');
+                        setRepaymentAmount('');
+                        setAdjustmentComment('');
+                        void Promise.all([loadEmployeeComponents(employeeId), loadEmployeeHours(employeeId), loadEmployeeBalance(employeeId)]);
+                      }}
                       className="input w-full bg-white dark:bg-slate-900"
                     >
                       <option value="">Выберите сотрудника...</option>
@@ -723,6 +755,42 @@ export function PayrollPage() {
                       </div>
                     )}
 
+                    <div className="mt-4 grid grid-cols-1 lg:grid-cols-4 gap-3">
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                        <div className="text-xs font-bold uppercase text-amber-700">Баланс удержаний</div>
+                        <div className="mt-1 text-2xl font-black text-amber-900">{formatMoney(employeeBalance?.balance || 0)}</div>
+                      </div>
+                      <div className="proles-input-group">
+                        <label>Удержать в баланс</label>
+                        <input type="number" min="0" step="0.01" value={withholdingAmount} onChange={(e) => setWithholdingAmount(e.target.value)} className="input" placeholder="0.00" />
+                      </div>
+                      <div className="proles-input-group">
+                        <label>Погасить из баланса</label>
+                        <input type="number" min="0" step="0.01" max={employeeBalance?.balance || 0} value={repaymentAmount} onChange={(e) => setRepaymentAmount(e.target.value)} className="input" placeholder="0.00" />
+                      </div>
+                      <div className="proles-input-group">
+                        <label>Комментарий</label>
+                        <input type="text" value={adjustmentComment} onChange={(e) => setAdjustmentComment(e.target.value)} className="input" placeholder="Причина удержания" />
+                      </div>
+                    </div>
+
+                    {employeeBalance && employeeBalance.transactions.length > 0 && (
+                      <details className="mt-3 rounded-xl border border-slate-200 bg-white">
+                        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">История баланса — {employeeBalance.transactions.length}</summary>
+                        <div className="border-t border-slate-200 divide-y divide-slate-100">
+                          {employeeBalance.transactions.map((tx) => (
+                            <div key={tx.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                              <div>
+                                <div className="font-semibold">{tx.transactionType === 'WITHHOLDING' ? 'Удержание' : 'Погашение'}</div>
+                                <div className="text-xs text-slate-500">{tx.comment || 'Без комментария'} · {new Date(tx.createdAt).toLocaleString('ru-RU')}</div>
+                              </div>
+                              <div className={`font-black ${tx.amount >= 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{tx.amount >= 0 ? '+' : ''}{formatMoney(tx.amount)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+
                     {/* 🕒 Подробные часы выбранного сотрудника за период */}
                     {selectedEmployeeId && (
                       <EmployeeHoursDetails
@@ -740,9 +808,14 @@ export function PayrollPage() {
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div>
                             <div className="font-bold text-emerald-900">Расчёт за {monthName(exportPeriod.month)} {exportPeriod.year}</div>
-                            <div className="text-xs text-emerald-700 mt-1">Фикс {formatMoney(employeeBreakdown.fixed)} · Часы {formatMoney(employeeBreakdown.hourly)} · Сдельная {formatMoney(employeeBreakdown.piece)} · Бонус {formatMoney(employeeBreakdown.bonus)}{employeeBreakdown.penalty ? ` · Штраф −${formatMoney(employeeBreakdown.penalty)}` : ''}</div>
+                            <div className="text-xs text-emerald-700 mt-1">
+                              Фикс {formatMoney(employeeBreakdown.fixed)} · Часы {formatMoney(employeeBreakdown.hourly)} · Сдельная {formatMoney(employeeBreakdown.piece)} · Бонус {formatMoney(employeeBreakdown.bonus)} · Штраф −{formatMoney(employeeBreakdown.penalty || 0)} · Удержано −{formatMoney(employeeBreakdown.withholding || 0)} · Погашено +{formatMoney(employeeBreakdown.withholdingRepayment || 0)}
+                            </div>
                           </div>
-                          <div className="text-2xl font-black text-emerald-700">{formatMoney(employeeBreakdown.total)}</div>
+                          <div className="text-right">
+                            <div className="text-2xl font-black text-emerald-700">{formatMoney(employeeBreakdown.total)}</div>
+                            <div className="text-xs text-amber-700">Баланс: {formatMoney(employeeBreakdown.balance || 0)}</div>
+                          </div>
                         </div>
                       </div>
                     )}
