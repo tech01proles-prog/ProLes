@@ -53,8 +53,30 @@ data class PayrollExportResponse(
 data class CalculateSalaryRequest(
     val userId: String,
     val year: Int,
-    val month: Int
+    val month: Int,
+    val withholdingAmount: Double = 0.0,
+    val withholdingRepaymentAmount: Double = 0.0,
+    val comment: String = "",
+    val idempotencyKey: String? = null
 )
+
+@Serializable
+data class PayrollBalanceSummaryDto(
+  val userId: String,
+  val balance: Double,
+  val transactions: List<EmployeeBalanceTransactionDto> = emptyList()
+)
+
+@Serializable
+data class PayrollAdjustmentBody(
+  val userId: String,
+  val year: Int,
+  val month: Int,
+  val withholdingAmount: Double = 0.0,
+  val withholdingRepaymentAmount: Double = 0.0,
+  val comment: String = ""
+)
+
 
 private suspend fun ApplicationCall.checkPayrollSession(
     vararg allowedRoles: String
@@ -78,6 +100,8 @@ private suspend fun ApplicationCall.checkPayrollSession(
 private val payrollStatuses =
     setOf("draft", "approved", "paid")
 
+private val payrollStatusTransitions = mapOf("draft" to setOf("approved"), "approved" to setOf("draft", "paid"), "paid" to emptySet())
+
 private fun validPayrollPeriod(
     year: Int,
     month: Int
@@ -93,6 +117,25 @@ private fun parsePayrollDate(
         ?.let {
             runCatching { KtLocalDate.parse(it) }.getOrNull()
         }
+
+private fun currentEmployeeBalance(userId: UUID): Double = EmployeeBalanceTransactionsTable.selectAll().where { EmployeeBalanceTransactionsTable.userId eq userId }.sumOf { it[EmployeeBalanceTransactionsTable.amount].toDouble() }
+
+private fun balanceTransactionDto(row: ResultRow): EmployeeBalanceTransactionDto {
+    val creatorId = row[EmployeeBalanceTransactionsTable.createdBy].value
+    val creatorName = UsersTable.selectAll().where { UsersTable.id eq creatorId }.limit(1).singleOrNull()?.get(UsersTable.name).orEmpty()
+    return EmployeeBalanceTransactionDto(
+        id = row[EmployeeBalanceTransactionsTable.id].value.toString(),
+        userId = row[EmployeeBalanceTransactionsTable.userId].value.toString(),
+        salaryRecordId = row[EmployeeBalanceTransactionsTable.salaryRecordId]?.value?.toString(),
+        transactionType = row[EmployeeBalanceTransactionsTable.transactionType],
+        amount = row[EmployeeBalanceTransactionsTable.amount].toDouble(),
+        comment = row[EmployeeBalanceTransactionsTable.comment],
+        createdBy = creatorId.toString(),
+        createdByName = creatorName,
+        createdAt = row[EmployeeBalanceTransactionsTable.createdAt],
+        reversedTransactionId = row[EmployeeBalanceTransactionsTable.reversedTransactionId]?.toString()
+    )
+}
 
 internal fun Route.payrollRoutes() {
     route("/api/v1/payroll") {
@@ -124,6 +167,16 @@ internal fun Route.payrollRoutes() {
                     }
             }
             call.respond(HttpStatusCode.OK, users)
+        }
+
+        get("/balance/{userId}") {
+            if (!call.checkPermission(Permission.PAYROLL, "view")) return@get
+            val userId = runCatching { UUID.fromString(call.parameters["userId"]) }.getOrNull() ?: return@get call.respond(HttpStatusCode.BadRequest, "Invalid userId")
+            val result = transaction {
+                val transactions = EmployeeBalanceTransactionsTable.selectAll().where { EmployeeBalanceTransactionsTable.userId eq userId }.orderBy(EmployeeBalanceTransactionsTable.createdAt to SortOrder.DESC).map(::balanceTransactionDto)
+                PayrollBalanceSummaryDto(userId.toString(), transactions.sumOf { it.amount }, transactions)
+            }
+            call.respond(HttpStatusCode.OK, result)
         }
 
         // Получить все компоненты зарплаты (для CostCalculationPage)
@@ -357,61 +410,91 @@ internal fun Route.payrollRoutes() {
         // Рассчитать зарплату за период
         post("/calculate") {
             if (!call.checkPermission(Permission.PAYROLL, "create")) return@post
+            val session = call.checkPayrollSession() ?: return@post
+            val body = runCatching { call.receive<CalculateSalaryRequest>() }.getOrElse { return@post call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${it.message}") }
+            if (!validPayrollPeriod(body.year, body.month)) return@post call.respond(HttpStatusCode.BadRequest, "Invalid payroll period")
+            if (!body.withholdingAmount.isFinite() || body.withholdingAmount < 0.0 || !body.withholdingRepaymentAmount.isFinite() || body.withholdingRepaymentAmount < 0.0) return@post call.respond(HttpStatusCode.BadRequest, "Invalid withholding amount")
 
-            val body = try { call.receive<CalculateSalaryRequest>() }
-            catch (e: Exception) {
-                return@post call.respond(HttpStatusCode.BadRequest, "Invalid JSON: ${e.message}")
-            }
-            if (!validPayrollPeriod(body.year, body.month)) {
-                return@post call.respond(
-                    HttpStatusCode.BadRequest,
-                    "Invalid payroll period"
-                )
-            }
-
-
-            val userId = runCatching { UUID.fromString(body.userId) }.getOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid userId")
-            val year = body.year
-            val month = body.month
-
-            val breakdown = com.proles.server.services.SalaryCalculator.calculate(userId, year, month)
-
-            // Сохраняем расчёт
+            val userId = runCatching { UUID.fromString(body.userId) }.getOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid userId")
+            val creatorId = runCatching { UUID.fromString(session.userId) }.getOrNull() ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid session")
+            val breakdown = com.proles.server.services.SalaryCalculator.calculate(userId, body.year, body.month)
+            val gross = breakdown.fixed + breakdown.piece + breakdown.hourly + breakdown.bonus
+            val availableBalance = transaction { currentEmployeeBalance(userId) }
+            val repayment = body.withholdingRepaymentAmount.coerceAtMost(availableBalance.coerceAtLeast(0.0))
+            val total = (gross - breakdown.penalty - body.withholdingAmount + repayment).coerceAtLeast(0.0)
             val recordId = UUID.randomUUID()
-            transaction {
-                // Удаляем старый расчёт если есть
-                SalaryRecordsTable.deleteWhere {
-                    (SalaryRecordsTable.userId eq userId) and
-                            (SalaryRecordsTable.periodYear eq year) and
-                            (SalaryRecordsTable.periodMonth eq month)
+
+            val response = transaction {
+                val oldRecord = SalaryRecordsTable.selectAll().where {
+                    (SalaryRecordsTable.userId eq userId) and (SalaryRecordsTable.periodYear eq body.year) and (SalaryRecordsTable.periodMonth eq body.month)
+                }.limit(1).singleOrNull()
+                val oldRecordId = oldRecord?.get(SalaryRecordsTable.id)?.value
+
+                if (oldRecordId != null) {
+                    EmployeeBalanceTransactionsTable.deleteWhere { EmployeeBalanceTransactionsTable.salaryRecordId eq oldRecordId }
+                    SalaryRecordsTable.deleteWhere { SalaryRecordsTable.id eq oldRecordId }
                 }
+
                 SalaryRecordsTable.insert {
-                    it[SalaryRecordsTable.id] = recordId
+                    it[id] = recordId
                     it[SalaryRecordsTable.userId] = userId
-                    it[periodYear] = year
-                    it[periodMonth] = month
+                    it[periodYear] = body.year
+                    it[periodMonth] = body.month
                     it[fixedAmount] = breakdown.fixed
                     it[pieceAmount] = breakdown.piece
                     it[hourlyAmount] = breakdown.hourly
                     it[bonusAmount] = breakdown.bonus
-                    it[totalAmount] = breakdown.total
+                    it[penaltyAmount] = breakdown.penalty
+                    it[withholdingAmount] = body.withholdingAmount
+                    it[withholdingRepaymentAmount] = repayment
+                    it[grossAmount] = gross
+                    it[totalAmount] = total
                     it[status] = "draft"
                     it[calculatedAt] = System.currentTimeMillis()
+                    it[notes] = body.comment.trim()
                 }
+
+                val now = System.currentTimeMillis()
+                if (body.withholdingAmount > 0.0) EmployeeBalanceTransactionsTable.insert {
+                    it[id] = UUID.randomUUID()
+                    it[EmployeeBalanceTransactionsTable.userId] = userId
+                    it[salaryRecordId] = recordId
+                    it[transactionType] = "WITHHOLDING"
+                    it[amount] = body.withholdingAmount.toBigDecimal()
+                    it[comment] = body.comment.trim().ifBlank { "Удержание за ${body.month}.${body.year}" }
+                    it[createdBy] = creatorId
+                    it[createdAt] = now
+                    it[idempotencyKey] = "salary:${userId}:${body.year}:${body.month}:withholding"
+                }
+                if (repayment > 0.0) EmployeeBalanceTransactionsTable.insert {
+                    it[id] = UUID.randomUUID()
+                    it[EmployeeBalanceTransactionsTable.userId] = userId
+                    it[salaryRecordId] = recordId
+                    it[transactionType] = "REPAYMENT"
+                    it[amount] = repayment.toBigDecimal().negate()
+                    it[comment] = body.comment.trim().ifBlank { "Погашение удержания за ${body.month}.${body.year}" }
+                    it[createdBy] = creatorId
+                    it[createdAt] = now + 1
+                    it[idempotencyKey] = "salary:${userId}:${body.year}:${body.month}:repayment"
+                }
+
+                val balance = currentEmployeeBalance(userId)
+                SalaryBreakdownResponse(
+                    id = recordId.toString(),
+                    fixed = breakdown.fixed,
+                    piece = breakdown.piece,
+                    hourly = breakdown.hourly,
+                    bonus = breakdown.bonus,
+                    penalty = breakdown.penalty,
+                    withholding = body.withholdingAmount,
+                    withholdingRepayment = repayment,
+                    gross = gross,
+                    total = total,
+                    balance = balance
+                )
             }
 
-
-            // ✅ ПРАВИЛЬНО: Возвращаем data class
-            call.respond(HttpStatusCode.Created, SalaryBreakdownResponse(
-                id = recordId.toString(),
-                fixed = breakdown.fixed,
-                piece = breakdown.piece,
-                hourly = breakdown.hourly,
-                bonus = breakdown.bonus,
-                penalty = breakdown.penalty,
-                total = breakdown.total
-            ))
+            call.respond(HttpStatusCode.Created, response)
         }
 
         // Получить все расчёты зарплат
@@ -432,7 +515,12 @@ internal fun Route.payrollRoutes() {
                             "piece" to row[SalaryRecordsTable.pieceAmount],
                             "hourly" to row[SalaryRecordsTable.hourlyAmount],
                             "bonus" to row[SalaryRecordsTable.bonusAmount],
+                            "penalty" to row[SalaryRecordsTable.penaltyAmount],
+                            "withholding" to row[SalaryRecordsTable.withholdingAmount],
+                            "withholdingRepayment" to row[SalaryRecordsTable.withholdingRepaymentAmount],
+                            "gross" to row[SalaryRecordsTable.grossAmount],
                             "total" to row[SalaryRecordsTable.totalAmount],
+                            "taxInclusiveCost" to row[SalaryRecordsTable.taxInclusiveCost],
                             "status" to row[SalaryRecordsTable.status]
                         )
                     }
@@ -556,12 +644,6 @@ internal fun Route.payrollRoutes() {
                     "Unsupported status"
                 )
             }
-
-            private val payrollStatusTransitions = mapOf(
-                "draft" to setOf("approved"),
-                "approved" to setOf("draft", "paid"),
-                "paid" to emptySet()
-            )
 
             val currentStatus = transaction {
                 SalaryRecordsTable

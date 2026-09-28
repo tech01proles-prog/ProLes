@@ -144,7 +144,7 @@ object TimeEntriesTable : UUIDTable("time_entries") {
 
 object ExpensesTable : UUIDTable("expenses") {
     val userId = reference("user_id", UsersTable, onDelete = ReferenceOption.CASCADE).index()
-    val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.CASCADE)
+    val projectId = reference("project_id", ProjectsTable, onDelete = ReferenceOption.SET_NULL).nullable()
     val subprojectId = reference("subproject_id", SubprojectsTable, onDelete = ReferenceOption.SET_NULL).nullable().index()
     val date = date("date").index()
     val type = varchar("type", 50)
