@@ -146,6 +146,14 @@ export interface ExpenseDto {
   createdAt: number;
 }
 
+export interface ExpenseReceiptDto {
+  id: string;
+  expenseId: string;
+  url: string;
+  fileName: string;
+  uploadedAt: number;
+}
+
 export interface WaypointDto {
   order: number;
   country?: string;
@@ -153,24 +161,39 @@ export interface WaypointDto {
   address: string;
 }
 
+export type BusinessTripStatus =
+  | 'ACTIVE'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
 export interface BusinessTripDto {
   id: string;
   userId: string;
+  userName?: string;
   projectId: string | null;
   projectName: string;
+  subprojectId: string | null;
+  subprojectName: string;
   projectNumber: string;
   companyName: string;
   country: string;
   type: 'DEPARTURE' | 'TRANSFER' | 'COMPLETION';
   date: string;
   completedDate?: string | null;
+  startDate: string;
+  endDate: string | null;
+  status: BusinessTripStatus;
   city: string;
   waypoints: WaypointDto[];
   participants: string[];
   transport: string;
   notes: string;
   createdAt: number;
-  perDiemRate: number;  // 🆕 Размер суточных
+  perDiemRate: number;
+}
+
+export interface CompleteBusinessTripRequest {
+  endDate: string;
 }
 
 export interface NotificationDto {

@@ -6,3 +6,4 @@ export {
   StatusBadge,
   type StatusBadgeTone,
 } from './StatusBadge';
+export { CurrencySummary } from './CurrencySummary';

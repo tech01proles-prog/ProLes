@@ -12,6 +12,46 @@ const TRIP_TYPES = {
   COMPLETION: { label: '✅ Завершение', color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900' },
 };
 
+type TripFormState = {
+  projectId: string;
+  subprojectId: string;
+  projectNumber: string;
+  companyName: string;
+  country: string;
+  type: keyof typeof TRIP_TYPES;
+  date: string;
+  startDate: string;
+  endDate: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  city: string;
+  waypoints: WaypointDto[];
+  participants: string[];
+  transport: string;
+  notes: string;
+};
+
+const createEmptyTripForm = (): TripFormState => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  return {
+    projectId: '',
+    subprojectId: '',
+    projectNumber: '',
+    companyName: '',
+    country: 'РФ',
+    type: 'DEPARTURE',
+    date: today,
+    startDate: today,
+    endDate: '',
+    status: 'ACTIVE',
+    city: '',
+    waypoints: [],
+    participants: [],
+    transport: '',
+    notes: '',
+  };
+};
+
 export function TripsPage() {
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState<UserDto | null>(null);
@@ -46,19 +86,9 @@ export function TripsPage() {
   }, [searchParams, isAdmin]);
 
   // Форма
-  const [form, setForm] = useState({
-    projectId: '',
-    projectNumber: '',
-    companyName: '',
-    country: 'РФ',
-    type: 'DEPARTURE' as keyof typeof TRIP_TYPES,
-    date: new Date().toISOString().slice(0, 10),
-    city: '',
-    waypoints: [] as WaypointDto[],
-    participants: [] as string[],
-    transport: '',
-    notes: '',
-  });
+  const [form, setForm] = useState<TripFormState>(
+    createEmptyTripForm,
+  );
   const [saving, setSaving] = useState(false);
   const [customCountry, setCustomCountry] = useState('');
   const [tripAction, setTripAction] = useState<'create' | 'edit' | 'transfer'>('create');
@@ -129,7 +159,7 @@ export function TripsPage() {
     ) || null;
 
   const resetTripForm = () => {
-    setForm({ ...form, projectId: '', projectNumber: '', companyName: '', country: 'РФ', type: 'DEPARTURE', date: new Date().toISOString().slice(0, 10), city: '', waypoints: [], participants: [], transport: '', notes: '' });
+    setForm(createEmptyTripForm());
     setCustomCountry('');
   };
 
@@ -138,17 +168,27 @@ export function TripsPage() {
     setSelectedTrip(null);
     setTripAction(mode);
     if (mode === 'transfer' && activeTrip) {
+      const today = new Date().toISOString().slice(0, 10);
+      const isStandardCountry = [
+        'РБ',
+        'РФ',
+        'Казахстан',
+        'Китай',
+      ].includes(activeTrip.country);
+
       setForm({
         projectId: activeTrip.projectId || '',
-        subprojectId: '',
-        startDate: new Date().toISOString().slice(0, 10),
-        endDate: '',
-        status: 'ACTIVE' as const,
+        subprojectId: activeTrip.subprojectId || '',
         projectNumber: activeTrip.projectNumber || '',
         companyName: activeTrip.companyName || '',
-        country: ['РБ','РФ','Казахстан','Китай'].includes(activeTrip.country) ? activeTrip.country as any : 'Другое',
-        type: 'DEPARTURE',
-        date: new Date().toISOString().slice(0, 10),
+        country: isStandardCountry
+          ? activeTrip.country
+          : 'Другое',
+        type: 'TRANSFER',
+        date: today,
+        startDate: today,
+        endDate: '',
+        status: 'ACTIVE',
         city: '',
         waypoints: [],
         participants: activeTrip.participants || [],
@@ -197,15 +237,13 @@ export function TripsPage() {
         projectNumber: form.projectNumber,
         companyName: form.companyName,
         country: form.country === 'Другое' ? customCountry.trim() : form.country,
+                subprojectId: form.subprojectId || null,
+        subprojectName: selectedTrip?.subprojectName || '',
         type: form.type,
-        date: form.date,
-        startDate: form.date,
-        endDate: editingTripId
-          ? selectedTrip?.endDate || null
-          : null,
-        status: editingTripId
-          ? selectedTrip?.status || 'ACTIVE'
-          : 'ACTIVE',
+        date: form.startDate,
+        startDate: form.startDate,
+        endDate: form.endDate || null,
+        status: form.status,
         city: form.city,
         waypoints: form.waypoints,
         participants: form.participants,
@@ -248,10 +286,22 @@ export function TripsPage() {
     setTripAction('edit');
     const standardCountry = ['РБ','РФ','Казахстан','Китай'].includes(trip.country);
     setCustomCountry(standardCountry ? '' : trip.country || '');
-    setForm({
-      projectId: trip.projectId || '', projectNumber: trip.projectNumber || '', companyName: trip.companyName || '',
-      country: standardCountry ? trip.country : 'Другое', type: trip.type, date: trip.date, city: trip.city || '',
-      waypoints: trip.waypoints || [], participants: trip.participants || [], transport: trip.transport || '', notes: trip.notes || '',
+        setForm({
+      projectId: trip.projectId || '',
+      subprojectId: trip.subprojectId || '',
+      projectNumber: trip.projectNumber || '',
+      companyName: trip.companyName || '',
+      country: standardCountry ? trip.country : 'Другое',
+      type: trip.type,
+      date: trip.startDate || trip.date,
+      startDate: trip.startDate || trip.date,
+      endDate: trip.endDate || '',
+      status: trip.status,
+      city: trip.city || '',
+      waypoints: trip.waypoints || [],
+      participants: trip.participants || [],
+      transport: trip.transport || '',
+      notes: trip.notes || '',
     });
     setShowTripDetail(false);
     setShowForm(true);
@@ -403,20 +453,22 @@ export function TripsPage() {
 
   // 🆕 Вычислить количество дней в командировке
   const calculateTripDays = (trip: BusinessTripDto): number => {
-    const now = new Date();
-    const tripDate = new Date(trip.date);
-    
-    // Если командировка завершена (COMPLETION), считаем дни от даты начала до даты завершения
-    if (trip.type === 'COMPLETION') {
-      const diffTime = Math.abs(tripDate.getTime() - new Date(trip.createdAt).getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return Math.max(1, diffDays);
-    }
-    
-    // Для активных командировок (DEPARTURE, TRANSFER) считаем дни от даты начала до сегодня
-    const diffTime = Math.abs(now.getTime() - tripDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return Math.max(1, diffDays);
+    const start = new Date(
+      `${trip.startDate || trip.date}T00:00:00`,
+    );
+    const endValue =
+      trip.endDate ||
+      trip.completedDate ||
+      new Date().toISOString().slice(0, 10);
+    const end = new Date(`${endValue}T00:00:00`);
+
+    const millisecondsPerDay = 24 * 60 * 60 * 1000;
+    const difference = end.getTime() - start.getTime();
+
+    return Math.max(
+      1,
+      Math.floor(difference / millisecondsPerDay) + 1,
+    );
   };
 
   const toggleParticipant = (uid: string) => {
@@ -554,7 +606,18 @@ export function TripsPage() {
                   </div>
                   <div className="proles-input-group">
                     <label>Дата</label>
-                    <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="input" />
+                    <input
+                      type="date"
+                      value={form.startDate}
+                      onChange={(event) =>
+                        setForm(current => ({
+                          ...current,
+                          date: event.target.value,
+                          startDate: event.target.value,
+                        }))
+                      }
+                      className="input"
+                    />
                   </div>
                 </div>
               </div>
