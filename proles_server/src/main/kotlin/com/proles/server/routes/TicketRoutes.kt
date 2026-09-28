@@ -21,10 +21,15 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.Base64
 import java.util.UUID
+import io.ktor.http.ContentDisposition
+import io.ktor.http.HttpHeaders
+import io.ktor.server.response.header
+import io.ktor.server.response.respondFile
 
 @Serializable
 data class TicketUploadRequest(
     val projectId: String,
+    val subprojectId: String? = null,
     val description: String,
     val sendToAccountant: Boolean,
     val accountantEmail: String,
@@ -50,6 +55,8 @@ data class TicketDto(
     val id: String,
     val projectId: String,
     val projectName: String,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val fileName: String,
     val fileType: String,
     val fileSize: Long,
@@ -62,6 +69,7 @@ data class TicketDto(
     val amount: Double = 0.0,
     val currency: String = "RUB",
     val hasReceipt: Boolean = false,
+    val receiptDownloadUrl: String? = null,
     val recipients: List<TicketRecipientDto> = emptyList()
 )
 
@@ -201,6 +209,8 @@ internal fun Route.ticketRoutes() {
                 "Invalid projectId"
             )
 
+            val subprojectId = request.subprojectId?.takeIf(String::isNotBlank)?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: request.subprojectId?.takeIf(String::isNotBlank)?.let { return@post call.respond(HttpStatusCode.BadRequest, "Invalid subprojectId") }
+
 
             if (request.fileBase64.isBlank()) {
                 return@post call.respond(
@@ -275,6 +285,8 @@ internal fun Route.ticketRoutes() {
                     "Project not found"
                 )
             }
+
+            if (subprojectId != null && transaction { SubprojectsTable.selectAll().where { (SubprojectsTable.id eq subprojectId) and (SubprojectsTable.projectId eq projectId) }.limit(1).none() }) return@post call.respond(HttpStatusCode.BadRequest, "Subproject does not belong to project")
 
             val knownRecipientIds =
                 if (recipientIds.isEmpty()) {
@@ -353,6 +365,7 @@ internal fun Route.ticketRoutes() {
                         it[TicketsTable.id] = ticketId
                         it[uploadedBy] = session.userId
                         it[TicketsTable.projectId] = projectId
+                        if (subprojectId != null) it[TicketsTable.subprojectId] = subprojectId
                         it[TicketsTable.fileName] = uniqueFileName
                         it[TicketsTable.originalName] = originalFileName
                         it[filePath] = "/uploads/tickets/$uniqueFileName"
@@ -393,6 +406,7 @@ internal fun Route.ticketRoutes() {
                             it[ExpensesTable.id] = expenseId
                             it[userId] = expenseUserId
                             it[ExpensesTable.projectId] = projectId
+                            if (subprojectId != null) it[ExpensesTable.subprojectId] = subprojectId
                             it[date] = todayKt
                             it[type] = "OTHER"
                             it[name] =
@@ -585,6 +599,8 @@ internal fun Route.ticketRoutes() {
                             id = ticketId.toString(),
                             projectId = projectId.toString(),
                             projectName = projectName,
+                            subprojectId = row[TicketsTable.subprojectId]?.value?.toString(),
+                            subprojectName = row[TicketsTable.subprojectId]?.value?.let { id -> SubprojectsTable.selectAll().where { SubprojectsTable.id eq id }.limit(1).singleOrNull()?.get(SubprojectsTable.name) }.orEmpty(),
                             fileName = row[TicketsTable.originalName],
                             fileType = row[TicketsTable.fileType],
                             fileSize = row[TicketsTable.fileSize],
@@ -597,6 +613,7 @@ internal fun Route.ticketRoutes() {
                             amount = row[TicketsTable.amount],          //
                             currency = row[TicketsTable.currency],      //
                             hasReceipt = row[TicketsTable.receiptPath] != null,  // 🆕 Флаг наличия чека
+                            receiptDownloadUrl = row[TicketsTable.receiptPath]?.let { "/api/v1/tickets/$ticketId/receipt" },
                             recipients = emptyList()
                         )
                     }
@@ -626,6 +643,8 @@ internal fun Route.ticketRoutes() {
                             id = ticketId.toString(),
                             projectId = row[TicketsTable.projectId].value.toString(),
                             projectName = row[ProjectsTable.name],
+                            subprojectId = row[TicketsTable.subprojectId]?.value?.toString(),
+                            subprojectName = row[TicketsTable.subprojectId]?.value?.let { id -> SubprojectsTable.selectAll().where { SubprojectsTable.id eq id }.limit(1).singleOrNull()?.get(SubprojectsTable.name) }.orEmpty(),
                             fileName = row[TicketsTable.originalName],
                             fileType = row[TicketsTable.fileType],
                             fileSize = row[TicketsTable.fileSize],
@@ -636,12 +655,28 @@ internal fun Route.ticketRoutes() {
                             currency = row[TicketsTable.currency],      //
                             uploadedAt = row[TicketsTable.uploadedAt],
                             hasReceipt = row[TicketsTable.receiptPath] != null,  // 🆕 Флаг наличия чека
+                            receiptDownloadUrl = row[TicketsTable.receiptPath]?.let { "/api/v1/tickets/$ticketId/receipt" },
                             recipients = recipients,
                             downloadUrl = row[TicketsTable.filePath]
                         )
                     }
             }
             call.respond(HttpStatusCode.OK, tickets)
+        }
+
+        get("/{ticketId}/receipt") {
+            if (!call.checkPermission(Permission.TICKETS, "view")) return@get
+            val session = call.checkTicketSession() ?: return@get
+            val ticketId = runCatching { UUID.fromString(call.parameters["ticketId"]) }.getOrNull() ?: return@get call.respond(HttpStatusCode.BadRequest, "Invalid ticketId")
+            val ticket = transaction { TicketsTable.selectAll().where { TicketsTable.id eq ticketId }.limit(1).singleOrNull() } ?: return@get call.respond(HttpStatusCode.NotFound, "Ticket not found")
+            val allowed = session.role in listOf("admin", "superadmin", "director") || ticket[TicketsTable.uploadedBy].value == session.userId || transaction { TicketRecipientsTable.selectAll().where { (TicketRecipientsTable.ticketId eq ticketId) and (TicketRecipientsTable.userId eq session.userId) }.limit(1).any() }
+            if (!allowed) return@get call.respond(HttpStatusCode.Forbidden, "Access denied")
+            val storedPath = ticket[TicketsTable.receiptPath] ?: return@get call.respond(HttpStatusCode.NotFound, "Receipt not found")
+            val file = java.io.File("." + storedPath)
+            if (!file.isFile) return@get call.respond(HttpStatusCode.NotFound, "Receipt file not found")
+            val fileName = ticket[TicketsTable.receiptOriginalName] ?: "receipt"
+            call.response.header(HttpHeaders.ContentDisposition, ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, fileName).toString())
+            call.respondFile(file)
         }
 
         // 👁 Отметить как просмотренный

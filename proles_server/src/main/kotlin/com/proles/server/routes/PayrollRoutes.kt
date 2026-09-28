@@ -192,6 +192,8 @@ internal fun Route.payrollRoutes() {
                             type = row[SalaryComponentsTable.type],
                             amount = row[SalaryComponentsTable.amount],
                             projectId = row[SalaryComponentsTable.projectId]?.value?.toString(),
+                            subprojectId = row[SalaryComponentsTable.subprojectId]?.value?.toString(),
+                            subprojectName = row[SalaryComponentsTable.subprojectId]?.value?.let { subprojectId -> SubprojectsTable.selectAll().where { SubprojectsTable.id eq subprojectId }.limit(1).singleOrNull()?.get(SubprojectsTable.name) }.orEmpty(),
                             ratePerHour = row[SalaryComponentsTable.ratePerHour],
                             ratePerUnit = row[SalaryComponentsTable.ratePerUnit],
                             description = row[SalaryComponentsTable.description],
@@ -221,6 +223,8 @@ internal fun Route.payrollRoutes() {
                             type = row[SalaryComponentsTable.type],
                             amount = row[SalaryComponentsTable.amount],
                             projectId = row[SalaryComponentsTable.projectId]?.value?.toString(),
+                            subprojectId = row[SalaryComponentsTable.subprojectId]?.value?.toString(),
+                            subprojectName = row[SalaryComponentsTable.subprojectId]?.value?.let { subprojectId -> SubprojectsTable.selectAll().where { SubprojectsTable.id eq subprojectId }.limit(1).singleOrNull()?.get(SubprojectsTable.name) }.orEmpty(),
                             ratePerHour = row[SalaryComponentsTable.ratePerHour],
                             ratePerUnit = row[SalaryComponentsTable.ratePerUnit],
                             description = row[SalaryComponentsTable.description],
@@ -247,6 +251,7 @@ internal fun Route.payrollRoutes() {
                 ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid userId")
 
             val projectId = body.projectId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            val subprojectId = body.subprojectId?.takeIf(String::isNotBlank)?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: body.subprojectId?.takeIf(String::isNotBlank)?.let { return@post call.respond(HttpStatusCode.BadRequest, "Invalid subprojectId") }
             val effectiveFrom = parsePayrollDate(body.effectiveFrom)
                 ?: return@post call.respond(
                     HttpStatusCode.BadRequest,
@@ -277,6 +282,9 @@ internal fun Route.payrollRoutes() {
                 )
             }
 
+            if (subprojectId != null && projectId == null) return@post call.respond(HttpStatusCode.BadRequest, "Project is required for subproject")
+            if (subprojectId != null && transaction { SubprojectsTable.selectAll().where { (SubprojectsTable.id eq subprojectId) and (SubprojectsTable.projectId eq requireNotNull(projectId)) }.limit(1).none() }) return@post call.respond(HttpStatusCode.BadRequest, "Subproject does not belong to project")
+
             val componentId = UUID.randomUUID()
             transaction {
                 SalaryComponentsTable.insert {
@@ -285,6 +293,7 @@ internal fun Route.payrollRoutes() {
                     it[SalaryComponentsTable.type] = body.type
                     it[SalaryComponentsTable.amount] = body.amount
                     if (projectId != null) it[SalaryComponentsTable.projectId] = projectId
+                    if (subprojectId != null) it[SalaryComponentsTable.subprojectId] = subprojectId
                     if (body.ratePerHour != null) it[SalaryComponentsTable.ratePerHour] = body.ratePerHour
                     if (body.ratePerUnit != null) it[SalaryComponentsTable.ratePerUnit] = body.ratePerUnit
                     it[SalaryComponentsTable.description] = body.description
@@ -355,6 +364,7 @@ internal fun Route.payrollRoutes() {
                 ?: return@put call.respond(HttpStatusCode.BadRequest, "Invalid userId")
 
             val projectId = body.projectId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            val subprojectId = body.subprojectId?.takeIf(String::isNotBlank)?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: body.subprojectId?.takeIf(String::isNotBlank)?.let { return@put call.respond(HttpStatusCode.BadRequest, "Invalid subprojectId") }
             val effectiveFrom = parsePayrollDate(body.effectiveFrom)
                 ?: return@put call.respond(
                     HttpStatusCode.BadRequest,
@@ -385,6 +395,10 @@ internal fun Route.payrollRoutes() {
                 )
             }
 
+            if (subprojectId != null && projectId == null) return@put call.respond(HttpStatusCode.BadRequest, "Project is required for subproject")
+
+            if (subprojectId != null && transaction { SubprojectsTable.selectAll().where { (SubprojectsTable.id eq subprojectId) and (SubprojectsTable.projectId eq requireNotNull(projectId)) }.limit(1).none() }) return@put call.respond(HttpStatusCode.BadRequest, "Subproject does not belong to project")
+
             transaction {
                 SalaryComponentsTable.update({ SalaryComponentsTable.id eq componentId }) {
                     it[SalaryComponentsTable.userId] = userId
@@ -392,6 +406,8 @@ internal fun Route.payrollRoutes() {
                     it[SalaryComponentsTable.amount] = body.amount
                     if (projectId != null) it[SalaryComponentsTable.projectId] = projectId
                     else it[SalaryComponentsTable.projectId] = null
+                    if (subprojectId != null) it[SalaryComponentsTable.subprojectId] = subprojectId
+                    else it[SalaryComponentsTable.subprojectId] = null
                     if (body.ratePerHour != null) it[SalaryComponentsTable.ratePerHour] = body.ratePerHour
                     else it[SalaryComponentsTable.ratePerHour] = null
                     if (body.ratePerUnit != null) it[SalaryComponentsTable.ratePerUnit] = body.ratePerUnit
