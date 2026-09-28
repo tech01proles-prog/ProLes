@@ -59,17 +59,17 @@ interface CombinedEntry {
   type: 'INCOME' | 'EXPENSE';
   userId: string;
   userName?: string;
-  projectId: string;
+  projectId: string | null;
   projectName: string;
   date: string;
   name: string;
   category: string;
-  subcategory?: string;       // 🆕 Подкатегория типа расхода
+  subcategory?: string;
   amount: number;
   currency: string;
   comment: string;
   hasReceipt?: boolean;
-  entryCategory: 'WORK' | 'PERSONAL';  // 🆕 Надкатегория
+  entryCategory: 'WITH_RECEIPT' | 'WITHOUT_RECEIPT';
 }
 
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
@@ -139,7 +139,7 @@ export function ExpensesPage() {
   const [filterEntryType, setFilterEntryType] = useState<'all' | 'INCOME' | 'EXPENSE'>('all');
   const [hidePerDiem, setHidePerDiem] = useState(false);
   const [filterReceipt, setFilterReceipt] = useState<'all' | 'with' | 'without'>('all');
-  const [filterCategory, setFilterCategory] = useState<'all' | 'WORK' | 'PERSONAL'>('all');  // 🆕 Фильтр по надкатегории
+  const [filterCategory, setFilterCategory] = useState<'all' | 'WITH_RECEIPT' | 'WITHOUT_RECEIPT'>('all');
   const [filterSubcategory, setFilterSubcategory] = useState('all');  // 🆕 Фильтр по подкатегории (типу расхода)
   const [reportPreset, setReportPreset] = useState<ReportPreset | null>(null);
   
@@ -281,36 +281,47 @@ export function ExpensesPage() {
 
   // Объединяем доходы и расходы в одну таблицу
   const combinedEntries: CombinedEntry[] = [
-    ...incomes.map(i => ({
-      id: i.id,
-      type: 'INCOME' as const,
-      userId: i.userId,
-      projectId: string | null,
-      projectName: i.projectName,
-      date: i.date,
-      name: findIncomeType(i.name)?.label || i.name,
-      category: i.category,  // 🆕 Используем надкатегорию из DTO
-      subcategory: i.type,   // 🆕 Тип дохода как подкатегория для фильтрации
-      amount: i.amount,
-      currency: i.currency,
+    ...incomes.map((income): CombinedEntry => ({
+      id: income.id,
+      type: 'INCOME',
+      userId: income.userId,
+      projectId: income.projectId || null,
+      projectName: income.projectName || '',
+      date: income.date,
+      name: findIncomeType(income.name)?.label || income.name,
+      category: income.category || 'WITH_RECEIPT',
+      subcategory: income.type,
+      amount: income.amount,
+      currency: income.currency,
       comment: '',
-      entryCategory: i.category as 'WORK' | 'PERSONAL',  // 🆕 Надкатегория
+      entryCategory:
+        income.category === 'WITHOUT_RECEIPT'
+          ? 'WITHOUT_RECEIPT'
+          : 'WITH_RECEIPT',
     })),
-    ...expenses.map(e => ({
-      id: e.id,
-      type: 'EXPENSE' as const,
-      userId: e.userId,
-      projectId: string | null,
-      projectName: e.projectName,
-      date: e.date,
-      name: e.name || findExpenseType(e.type)?.label || e.type,
-      category: e.category,  // 🆕 Надкатегория из DTO
-      subcategory: e.type,   // 🆕 Тип расхода как подкатегория для фильтрации
-      amount: e.amount,
-      currency: e.currency,
-      comment: e.comment || '',
-      hasReceipt: e.receiptSubmitted || e.hasReceiptPhoto,
-      entryCategory: e.category as 'WORK' | 'PERSONAL',  // 🆕 Надкатегория
+    ...expenses.map((expense): CombinedEntry => ({
+      id: expense.id,
+      type: 'EXPENSE',
+      userId: expense.userId,
+      projectId: expense.projectId || null,
+      projectName: expense.projectName || '',
+      date: expense.date,
+      name:
+        expense.name ||
+        findExpenseType(expense.type)?.label ||
+        expense.type,
+      category: expense.category || 'WITH_RECEIPT',
+      subcategory: expense.type,
+      amount: expense.amount,
+      currency: expense.currency,
+      comment: expense.comment || '',
+      hasReceipt:
+        expense.category === 'WITHOUT_RECEIPT' ||
+        Boolean(expense.receiptSubmitted || expense.hasReceiptPhoto),
+      entryCategory:
+        expense.category === 'WITHOUT_RECEIPT'
+          ? 'WITHOUT_RECEIPT'
+          : 'WITH_RECEIPT',
     })),
   ];
 
@@ -407,17 +418,12 @@ export function ExpensesPage() {
           createdAt: Date.now(),
         });
       } else {
-        if (!form.projectId) {
-          alert('Для расхода необходимо выбрать проект.');
-          return;
-        }
-
         const expenseResponse = await api.post<ExpenseDto>(
           '/expenses',
           {
             id: generateUUID(),
             userId: user.id,
-            projectId: form.projectId,
+            projectId: form.projectId || null,
             subprojectId: form.subprojectId || null,
             subprojectName:
               subprojects.find(
@@ -460,7 +466,15 @@ export function ExpensesPage() {
       }
       setShowForm(false);
       setPendingReceiptFiles([]);
-      setForm({ ...form, projectId: '', amount: '', comment: '', name: '' });
+      setForm(current => ({
+        ...current,
+        projectId: '',
+        subprojectId: '',
+        amount: '',
+        comment: '',
+        name: '',
+        category: 'WITH_RECEIPT',
+      }));
       await loadData();
     } catch {
       alert(`Ошибка создания ${formType === 'INCOME' ? 'дохода' : 'расхода'} или загрузки чеков`);
@@ -577,6 +591,55 @@ export function ExpensesPage() {
     else { setSortField(field); setSortDir('desc'); }
   };
 
+  const openReceiptInNewTab = useCallback(
+    async (receipt: ExpenseReceiptDto) => {
+      if (!receipt.id) {
+        alert('Не удалось определить файл чека');
+        return;
+      }
+
+      // Открываем вкладку сразу во время пользовательского клика,
+      // иначе браузер может заблокировать её как всплывающее окно.
+      const previewWindow = window.open('', '_blank');
+
+      try {
+        const response = await api.get(
+          `/expenses/${receipt.expenseId}/receipts/${receipt.id}`,
+          {
+            responseType: 'blob',
+          },
+        );
+
+        const contentType =
+          response.headers['content-type'] ||
+          receipt.mimeType ||
+          'application/octet-stream';
+
+        const blobUrl = URL.createObjectURL(
+          new Blob([response.data], {
+            type: contentType,
+          }),
+        );
+
+        if (previewWindow) {
+          previewWindow.opener = null;
+          previewWindow.location.href = blobUrl;
+        } else {
+          window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        }
+
+        window.setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+        }, 60_000);
+      } catch (error) {
+        previewWindow?.close();
+        console.error('Failed to open receipt:', error);
+        alert('Не удалось открыть чек');
+      }
+    },
+    [],
+  );
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Заголовок и Сальдо */}
@@ -674,11 +737,7 @@ export function ExpensesPage() {
                   <div className="proles-input-group" style={{ gridColumn: 'span 2' }}>
                     <label>Проект (опционально)</label>
                     <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input bg-white dark:bg-slate-900">
-                      <option value="">
-                        {formType === 'EXPENSE'
-                          ? 'Выберите проект'
-                          : 'Без проекта'}
-                      </option>
+                      <option value="">Без проекта</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
@@ -716,119 +775,122 @@ export function ExpensesPage() {
                 </div>
               </div>
               <div className="proles-modal-section">
-                <div className="proles-modal-section-title">{formType === 'INCOME' ? 'Сумма поступления' : 'Сумма расхода'}</div>
+                <div className="proles-modal-section-title">
+                  {formType === 'INCOME'
+                    ? 'Сумма поступления'
+                    : 'Сумма расхода'}
+                </div>
+
                 <div className="proles-modal-grid">
                   {formType === 'EXPENSE' && (
-                    {formType === 'EXPENSE' && (
-                      <>
-                        <div className="proles-input-group">
-                          <label>Подтверждение</label>
+                    <div className="proles-input-group">
+                      <label>Подтверждение</label>
 
-                          <select
-                            value={form.category}
-                            onChange={(event) => {
-                              const category = event.target.value;
+                      <select
+                        value={form.category}
+                        onChange={event => {
+                          const category = event.target.value;
 
-                              setForm({
-                                ...form,
-                                category,
-                              });
+                          setForm(current => ({
+                            ...current,
+                            category,
+                          }));
 
-                              if (category === 'WITHOUT_RECEIPT') {
-                                setPendingReceiptFiles([]);
-                              }
-                            }}
-                            className="input bg-white dark:bg-slate-900"
-                          >
-                            <option value="WITH_RECEIPT">
-                              С чеком
-                            </option>
-                            <option value="WITHOUT_RECEIPT">
-                              Без чека
-                            </option>
-                          </select>
-                        </div>
+                          if (category === 'WITHOUT_RECEIPT') {
+                            setPendingReceiptFiles([]);
+                          }
+                        }}
+                        className="input bg-white dark:bg-slate-900"
+                      >
+                        <option value="WITH_RECEIPT">С чеком</option>
+                        <option value="WITHOUT_RECEIPT">Без чека</option>
+                      </select>
+                    </div>
+                  )}
 
-                        {user?.role?.trim().toLowerCase() ===
-                          'director' && (
-                          <div className="proles-input-group">
-                            <label>Область расхода</label>
+                  {formType === 'EXPENSE' &&
+                    user?.role?.trim().toLowerCase() === 'director' && (
+                      <div className="proles-input-group">
+                        <label>Область расхода</label>
 
-                            <select
-                              value={form.expenseScope}
-                              onChange={(event) =>
-                                setForm({
-                                  ...form,
-                                  expenseScope: event.target.value,
-                                })
-                              }
-                              className="input bg-white dark:bg-slate-900"
-                            >
-                              <option value="GENERAL">
-                                Общий
-                              </option>
-                              <option value="DIRECTOR">
-                                Директорский
-                              </option>
-                            </select>
-                          </div>
-                        )}
-                      </>
+                        <select
+                          value={form.expenseScope}
+                          onChange={event =>
+                            setForm(current => ({
+                              ...current,
+                              expenseScope: event.target.value,
+                            }))
+                          }
+                          className="input bg-white dark:bg-slate-900"
+                        >
+                          <option value="GENERAL">Общий</option>
+                          <option value="DIRECTOR">Директорский</option>
+                        </select>
+                      </div>
                     )}
+
                   <div className="proles-input-group">
                     <label>Сумма *</label>
-                    <input type="number" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="input" />
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={form.amount}
+                      onChange={event =>
+                        setForm(current => ({
+                          ...current,
+                          amount: event.target.value,
+                        }))
+                      }
+                      className="input"
+                    />
                   </div>
+
                   <div className="proles-input-group">
                     <label>Валюта</label>
-                    <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} className="input bg-white dark:bg-slate-900">
-                      <option>RUB</option><option>USD</option><option>EUR</option><option>BYN</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {formType === 'EXPENSE' && (
-              <>
-                <div className="proles-input-group">
-                  <label>Подтверждение</label>
-                  <select
-                    value={form.category}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        category: event.target.value,
-                      })
-                    }
-                    className="input bg-white dark:bg-slate-900"
-                  >
-                    <option value="WITH_RECEIPT">С чеком</option>
-                    <option value="WITHOUT_RECEIPT">Без чека</option>
-                  </select>
-                </div>
-
-                {user?.role === 'director' && (
-                  <div className="proles-input-group">
-                    <label>Область расхода</label>
                     <select
-                      value={form.expenseScope}
-                      onChange={(event) =>
-                        setForm({
-                          ...form,
-                          expenseScope: event.target.value,
-                        })
+                      value={form.currency}
+                      onChange={event =>
+                        setForm(current => ({
+                          ...current,
+                          currency: event.target.value,
+                        }))
                       }
                       className="input bg-white dark:bg-slate-900"
                     >
-                      <option value="GENERAL">Общий</option>
-                      <option value="DIRECTOR">Директорский</option>
+                      <option value="RUB">RUB</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="BYN">BYN</option>
                     </select>
                   </div>
-                )}
-              </>
-            )}
 
+                  {formType === 'EXPENSE' && (
+                    <div
+                      className="proles-input-group"
+                      style={{ gridColumn: 'span 2' }}
+                    >
+                      <label>Комментарий</label>
+
+                      <textarea
+                        value={form.comment}
+                        onChange={event =>
+                          setForm(current => ({
+                            ...current,
+                            comment: event.target.value,
+                          }))
+                        }
+                        className="input min-h-[80px]"
+                        placeholder="Комментарий к расходу"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
             {formType === 'EXPENSE' && form.category === 'WITH_RECEIPT' && (
               <div className="proles-modal-section w-full">
                 <div className="proles-modal-section-title proles-receipts-section-title">Чеки и подтверждающие документы</div>
@@ -977,19 +1039,21 @@ export function ExpensesPage() {
               <option value="INCOME">📈 Доходы</option>
               <option value="EXPENSE">📉 Расходы</option>
             </select>
-            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value as 'all' | 'WORK' | 'PERSONAL')} className="input bg-white dark:bg-slate-900">
-              <option value="all">Все надкатегории</option>
-              <option value="WORK">💼 Рабочие</option>
-              <option value="PERSONAL">🏠 Иные</option>
-            </select>
-            <select value={filterSubcategory} onChange={(e) => setFilterSubcategory(e.target.value)} className="input bg-white dark:bg-slate-900">
-              <option value="all">Все типы</option>
-              {[...INCOME_TYPES, ...EXPENSE_TYPES].map(t => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
-            </select>
-            <select value={filterReceipt} onChange={(e) => setFilterReceipt(e.target.value as 'all' | 'with' | 'without')} className="input bg-white dark:bg-slate-900">
-              <option value="all">Все чеки</option>
-              <option value="with">✓ С чеком</option>
-              <option value="without">✕ Без чека</option>
+            <select
+              value={filterCategory}
+              onChange={event =>
+                setFilterCategory(
+                  event.target.value as
+                    | 'all'
+                    | 'WITH_RECEIPT'
+                    | 'WITHOUT_RECEIPT',
+                )
+              }
+              className="input bg-white dark:bg-slate-900"
+            >
+              <option value="all">Все подтверждения</option>
+              <option value="WITH_RECEIPT">С чеком</option>
+              <option value="WITHOUT_RECEIPT">Без чека</option>
             </select>
           </div>
         )}
@@ -1054,10 +1118,18 @@ export function ExpensesPage() {
                   const userName = effectiveScope === 'all' ? users.find(u => u.id === entry.userId)?.name : null;
                   // Цвет фона: доходы - белый, расходы с чеком - зеленоватый, без чека - красноватый
                   let rowBgClass = 'bg-white dark:bg-slate-900';
+
                   if (entry.type === 'EXPENSE') {
-                    rowBgClass = entry.hasReceipt 
-                      ? 'bg-emerald-50 dark:bg-emerald-950/20' 
-                      : 'bg-red-50 dark:bg-red-950/20';
+                    if (entry.entryCategory === 'WITHOUT_RECEIPT') {
+                      rowBgClass =
+                        'bg-emerald-50 dark:bg-emerald-950/20';
+                    } else if (entry.hasReceipt) {
+                      rowBgClass =
+                        'bg-emerald-50 dark:bg-emerald-950/20';
+                    } else {
+                      rowBgClass =
+                        'bg-red-50 dark:bg-red-950/20';
+                    }
                   }
                   return (
                     <tr key={entry.id} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${rowBgClass}`}>
@@ -1078,28 +1150,35 @@ export function ExpensesPage() {
                         {entry.comment || '—'}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {entry.type === 'EXPENSE' ? (
-                          entry.hasReceipt ? (
-                            <button
-                              type="button"
-                              onClick={() => void loadReceipts(entry.id)}
-                              className="text-emerald-500 text-lg hover:scale-110 transition-transform"
-                              title="Открыть чеки"
-                            ><ReceiptIcon className="w-5 h-5" /></button>
-                          ) : (
-                            effectiveScope === 'my' && entry.userId === user?.id ? (
-                              <button
-                                type="button"
-                                onClick={() => void loadReceipts(entry.id)}
-                                className="text-red-500 text-lg hover:scale-110 transition-transform"
-                                title="Добавить чек"
-                              ><ReceiptIcon className="w-5 h-5" /></button>
-                            ) : (
-                              <span className="text-red-500" title="Чека нет"><ReceiptIcon className="w-5 h-5" /></span>
-                            )
-                          )
+                        {entry.type !== 'EXPENSE' ? (
+                          <span className="text-slate-300">—</span>
+                        ) : entry.entryCategory === 'WITHOUT_RECEIPT' ? (
+                          <span
+                            title="Расход оформлен без чека"
+                            className="relative inline-flex text-emerald-600 dark:text-emerald-400"
+                          >
+                            <ReceiptIcon className="w-5 h-5" />
+                            <span className="absolute inset-0 flex items-center justify-center">
+                              <span className="block w-6 h-0.5 bg-current -rotate-45" />
+                            </span>
+                          </span>
+                        ) : entry.hasReceipt ? (
+                          <button
+                            type="button"
+                            onClick={() => loadReceipts(entry.id)}
+                            disabled={receiptLoading}
+                            title="Просмотреть чек"
+                            className="inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:scale-110 transition-transform"
+                          >
+                            <ReceiptIcon className="w-5 h-5" />
+                          </button>
                         ) : (
-                          <span className="text-slate-300 dark:text-slate-600">—</span>
+                          <span
+                            title="Чек ещё не прикреплён"
+                            className="inline-flex text-red-500"
+                          >
+                            <ReceiptIcon className="w-5 h-5" />
+                          </span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -1147,6 +1226,11 @@ export function ExpensesPage() {
                       <div className="p-3 flex items-center justify-between gap-2">
                         <span className="truncate text-sm">{receipt.fileName}</span>
                         <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => openReceiptInNewTab(receipt)}
+                            className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">Просмотреть
+                          </button>
                           <label className="text-indigo-600 hover:text-indigo-800 text-sm cursor-pointer" title="Заменить файл">
                             Заменить
                             <input

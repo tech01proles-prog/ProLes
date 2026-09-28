@@ -12,6 +12,13 @@ const TRIP_TYPES = {
   COMPLETION: { label: '✅ Завершение', color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900' },
 };
 
+type SubprojectOption = {
+  id: string;
+  projectId: string;
+  name: string;
+  isActive?: boolean;
+};
+
 type TripFormState = {
   projectId: string;
   subprojectId: string;
@@ -61,10 +68,21 @@ export function TripsPage() {
 
   const [trips, setTrips] = useState<BusinessTripDto[]>([]);
   const [projects, setProjects] = useState<ProjectDto[]>([]);
+  const [subprojects, setSubprojects] = useState<SubprojectOption[]>([]);
   const [allUsers, setAllUsers] = useState<UserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingTripId, setEditingTripId] = useState<string | null>(null);
+
+  const [showCompleteDialog, setShowCompleteDialog] =
+  useState(false);
+
+  const [completionDate, setCompletionDate] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
+
+  const [completingTrip, setCompletingTrip] =
+    useState(false);
 
   // Сортировка
   const [sortField, setSortField] = useState<'date' | 'type'>('date');
@@ -140,6 +158,48 @@ export function TripsPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSubprojects = async () => {
+      if (!form.projectId) {
+        setSubprojects([]);
+
+        setForm(current =>
+          current.subprojectId
+            ? { ...current, subprojectId: '' }
+            : current,
+        );
+
+        return;
+      }
+
+      try {
+        const response = await api.get<SubprojectOption[]>(
+          `/projects/${form.projectId}/subprojects`,
+        );
+
+        if (!cancelled) {
+          setSubprojects(
+            response.data.filter(item => item.isActive !== false),
+          );
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки подпроектов:', error);
+
+        if (!cancelled) {
+          setSubprojects([]);
+        }
+      }
+    };
+
+    void loadSubprojects();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.projectId]);
+
   // Фильтрация + сортировка
   const filtered = trips
     .filter(t => !isAdmin || filterUser === 'all' || t.userId === filterUser)
@@ -202,31 +262,61 @@ export function TripsPage() {
     setShowForm(true);
   };
 
-  const handleCompleteTrip = async () => {
+  const openCompleteTripDialog = () => {
     if (!activeTrip) return;
-    if (!confirm('Завершить текущую командировку?')) return;
+
+    setCompletionDate(
+      new Date().toISOString().slice(0, 10),
+    );
+
+    setShowCompleteDialog(true);
+  };
+
+  const handleCompleteTrip = async () => {
+    if (!activeTrip || !completionDate) return;
+
+    const tripStartDate =
+      activeTrip.startDate || activeTrip.date;
+
+    if (completionDate < tripStartDate) {
+      alert('Дата окончания не может быть раньше даты начала');
+      return;
+    }
+
+    setCompletingTrip(true);
+
     try {
-      const endDate = new Date().toISOString().slice(0, 10);
       await api.post(
         `/business-trips/${activeTrip.id}/complete`,
-        { endDate },
+        { endDate: completionDate },
       );
+
+      setShowCompleteDialog(false);
       await loadData();
-    } catch (err) {
+    } catch (error) {
       alert(
-        (err as any)?.response?.data ||
+        (error as any)?.response?.data ||
           'Ошибка завершения командировки',
       );
-      console.error(err);
+
+      console.error(error);
+    } finally {
+      setCompletingTrip(false);
     }
   };
 
   const handleSaveTrip = async () => {
     if (!user) return;
-    if (!form.projectId && !form.projectNumber && !form.companyName) {
-      alert('Укажите проект, номер проекта или название фирмы');
+    if (!form.startDate) {
+      alert('Укажите дату начала командировки');
       return;
     }
+
+    if (form.endDate && form.endDate < form.startDate) {
+      alert('Дата окончания не может быть раньше даты начала');
+      return;
+    }
+
     setSaving(true);
     try {
       const payload: BusinessTripDto = {
@@ -238,7 +328,10 @@ export function TripsPage() {
         companyName: form.companyName,
         country: form.country === 'Другое' ? customCountry.trim() : form.country,
                 subprojectId: form.subprojectId || null,
-        subprojectName: selectedTrip?.subprojectName || '',
+        subprojectName:
+          subprojects.find(item => item.id === form.subprojectId)?.name ||
+          selectedTrip?.subprojectName ||
+          '',
         type: form.type,
         date: form.startDate,
         startDate: form.startDate,
@@ -259,7 +352,7 @@ export function TripsPage() {
       setEditingTripId(null);
       setSelectedTrip(null);
       setTripAction('create');
-      setForm({ ...form, projectId: '', projectNumber: '', companyName: '', country: 'РФ', city: '', waypoints: [], participants: [], transport: '', notes: '' }); setCustomCountry('');
+      resetTripForm();
       await loadData();
     } catch (err) {
       alert(editingTripId ? 'Ошибка редактирования командировки' : tripAction === 'transfer' ? 'Ошибка переезда' : 'Ошибка создания командировки');
@@ -405,7 +498,7 @@ export function TripsPage() {
           comment: `Автоматическое начисление суточных за командировку (${selectedTrip.type}) от ${selectedTrip.date}`,
           receiptSubmitted: false,
           hasReceiptPhoto: false,
-          category: 'WORK',
+          category: 'WITHOUT_RECEIPT',
         };
 
         if (extraRate <= 0) return [baseExpense];
@@ -545,7 +638,7 @@ export function TripsPage() {
             >✕ Закрыть</button>
           ) : activeTrip ? (
             <>
-              <button onClick={handleCompleteTrip} className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-md">🛑 Завершить командировку</button>
+              <button onClick={openCompleteTripDialog} className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-md">🛑 Завершить командировку</button>
               <button onClick={() => openNewTrip('transfer')} className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-orange-500 hover:bg-orange-600 shadow-md">🔄 Переезд</button>
             </>
           ) : (
@@ -556,6 +649,93 @@ export function TripsPage() {
           )}
         </div>
       </div>
+
+      {showCompleteDialog &&
+        activeTrip &&
+        createPortal(
+          <div
+            className="proles-modal-backdrop"
+            onClick={() =>
+              !completingTrip && setShowCompleteDialog(false)
+            }
+          >
+            <div
+              className="proles-modal"
+              onClick={event => event.stopPropagation()}
+            >
+              <div className="proles-modal-header">
+                <div className="proles-modal-title">
+                  <div className="proles-modal-icon">✓</div>
+
+                  <div>
+                    <div>Завершить командировку</div>
+
+                    <div
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        opacity: 0.85,
+                        marginTop: 2,
+                      }}
+                    >
+                      Укажите фактическую дату окончания
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCompleteDialog(false)}
+                  disabled={completingTrip}
+                  className="proles-modal-close"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="proles-modal-body">
+                <div className="proles-modal-section">
+                  <div className="proles-input-group">
+                    <label>Дата окончания *</label>
+
+                    <input
+                      type="date"
+                      min={activeTrip.startDate || activeTrip.date}
+                      value={completionDate}
+                      onChange={event =>
+                        setCompletionDate(event.target.value)
+                      }
+                      className="input"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="proles-modal-footer">
+                <button
+                  type="button"
+                  onClick={() => setShowCompleteDialog(false)}
+                  disabled={completingTrip}
+                  className="proles-btn-cancel"
+                >
+                  Отмена
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCompleteTrip}
+                  disabled={completingTrip || !completionDate}
+                  className="proles-btn-save"
+                >
+                  {completingTrip
+                    ? 'Завершение...'
+                    : 'Завершить'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {/* 🌲 PROLES MODAL: Новая командировка */}
       {showForm && createPortal(
@@ -579,9 +759,43 @@ export function TripsPage() {
                 <div className="proles-modal-grid">
                   <div className="proles-input-group" style={{ gridColumn: 'span 2' }}>
                     <label>Проект</label>
-                    <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input bg-white dark:bg-slate-900">
+                    <select value={form.projectId} onChange={event =>
+                      setForm(current => ({ ...current, projectId: event.target.value, subprojectId: ''}))
+                      } className="input bg-white dark:bg-slate-900">
                       <option value="">Без привязки к проекту</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div
+                    className="proles-input-group"
+                    style={{ gridColumn: 'span 2' }}
+                  >
+                    <label>Подпроект</label>
+
+                    <select
+                      value={form.subprojectId}
+                      disabled={!form.projectId || subprojects.length === 0}
+                      onChange={event =>
+                        setForm(current => ({
+                          ...current,
+                          subprojectId: event.target.value,
+                        }))
+                      }
+                      className="input bg-white dark:bg-slate-900 disabled:opacity-60"
+                    >
+                      <option value="">
+                        {!form.projectId
+                          ? 'Сначала выберите проект'
+                          : subprojects.length === 0
+                            ? 'У проекта нет подпроектов'
+                            : 'Без подпроекта'}
+                      </option>
+
+                      {subprojects.map(subproject => (
+                        <option key={subproject.id} value={subproject.id}>
+                          {subproject.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="proles-input-group">
@@ -605,19 +819,49 @@ export function TripsPage() {
                     </select>
                   </div>
                   <div className="proles-input-group">
-                    <label>Дата</label>
+                    <label>Дата начала *</label>
+
                     <input
                       type="date"
                       value={form.startDate}
-                      onChange={(event) =>
+                      onChange={event =>
                         setForm(current => ({
                           ...current,
                           date: event.target.value,
                           startDate: event.target.value,
+                          endDate:
+                            current.endDate &&
+                            current.endDate < event.target.value
+                              ? ''
+                              : current.endDate,
                         }))
                       }
                       className="input"
                     />
+                  </div>
+
+                  <div className="proles-input-group">
+                    <label>Дата окончания</label>
+
+                    <input
+                      type="date"
+                      min={form.startDate}
+                      value={form.endDate}
+                      onChange={event =>
+                        setForm(current => ({
+                          ...current,
+                          endDate: event.target.value,
+                          status: event.target.value
+                            ? 'COMPLETED'
+                            : 'ACTIVE',
+                        }))
+                      }
+                      className="input"
+                    />
+
+                    <span className="text-xs text-slate-500">
+                      Можно указать позднее при завершении командировки
+                    </span>
                   </div>
                 </div>
               </div>
@@ -727,7 +971,7 @@ export function TripsPage() {
             </div>
             <div className="proles-modal-footer">
               <button onClick={() => setShowForm(false)} className="proles-btn-cancel">Отмена</button>
-              <button onClick={handleSaveTrip} disabled={saving || (!form.projectId && !form.projectNumber && !form.companyName)} className="proles-btn-save">
+              <button onClick={handleSaveTrip} disabled={saving || !form.startDate} className="proles-btn-save">
                 {saving ? '⏳ Сохранение...' : (editingTripId ? '💾 Сохранить' : '💾 Создать')}
               </button>
             </div>
@@ -776,16 +1020,35 @@ export function TripsPage() {
             const cfg = TRIP_TYPES[trip.type as keyof typeof TRIP_TYPES] || TRIP_TYPES.DEPARTURE;
             const userName = isAdmin ? allUsers.find(u => u.id === trip.userId)?.name : null;
             const participants = trip.participants.map(pid => allUsers.find(u => u.id === pid)?.name).filter(Boolean);
+
+            const tripStartDate = trip.startDate || trip.date;
+            const tripEndDate =
+              trip.endDate || trip.completedDate || null;
             return (
               <div key={trip.id} className="card p-5 group hover:shadow-md transition-all animate-fade-in">
                 <div className="flex items-start justify-between gap-4 mb-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.color}`}>{cfg.label}</span>
-                      <span className="text-xs text-slate-400">{trip.completedDate ? `${formatDate(trip.date)} — ${formatDate(trip.completedDate)}` : formatDate(trip.date)}</span>
+                      <span className="text-xs text-slate-400">
+                        {tripEndDate
+                          ? `${formatDate(tripStartDate)} — ${formatDate(tripEndDate)}`
+                          : `с ${formatDate(tripStartDate)}`}
+                      </span>
                       {userName && <span className="text-xs text-slate-500 dark:text-slate-400">👤 {userName}</span>}
                     </div>
-                    <div className="font-bold text-slate-900 dark:text-slate-100 truncate">{trip.projectName}</div>
+                    <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                      {trip.projectName ||
+                        trip.projectNumber ||
+                        trip.companyName ||
+                        'Без проекта'}
+                    </div>
+
+                    {trip.subprojectName && (
+                      <div className="text-xs text-indigo-600 dark:text-indigo-400">
+                        Подпроект: {trip.subprojectName}
+                      </div>
+                    )}
                     {trip.city && <div className="text-sm text-slate-600 dark:text-slate-400">📍 {trip.city}</div>}
                     {/* 🛣 Отображение пунктов следования */}
                     {trip.waypoints && trip.waypoints.length > 0 && (
@@ -860,8 +1123,30 @@ export function TripsPage() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-sm text-slate-500 dark:text-slate-400">Дата:</span>
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.completedDate ? `${formatDate(selectedTrip.date)} — ${formatDate(selectedTrip.completedDate)}` : formatDate(selectedTrip.date)}</span>
+                    <span className="text-sm text-slate-500 dark:text-slate-400">
+                      Дата начала:
+                    </span>
+
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      {formatDate(
+                        selectedTrip.startDate || selectedTrip.date,
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">
+                      Дата окончания:
+                    </span>
+
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      {selectedTrip.endDate || selectedTrip.completedDate
+                        ? formatDate(
+                            selectedTrip.endDate ||
+                              selectedTrip.completedDate!,
+                          )
+                        : 'Не указана'}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Город:</span>

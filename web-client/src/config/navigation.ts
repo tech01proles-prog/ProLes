@@ -131,6 +131,11 @@ const PAGE_META: Record<string, PageMeta> = {
     description: 'Активные проекты и подпроекты',
     parent: 'Управление',
   },
+  '/projects?view=tnpa': {
+    title: 'ТНПА',
+    description: 'Сертифицированная документация проектов',
+    parent: 'Управление',
+  },
   '/employees': {
     title: 'Сотрудники',
     description: 'Команда и данные сотрудников',
@@ -173,7 +178,9 @@ const PAGE_META: Record<string, PageMeta> = {
 };
 
 export function getPageMeta(pathname: string): PageMeta {
-  if (pathname.startsWith('/projects/')) {
+  const cleanPath = pathname.split('?')[0];
+
+  if (cleanPath.startsWith('/projects/')) {
     return {
       title: 'Карточка проекта',
       description: 'Данные, участники и документы проекта',
@@ -181,7 +188,7 @@ export function getPageMeta(pathname: string): PageMeta {
     };
   }
 
-  return PAGE_META[pathname] ?? {
+  return PAGE_META[pathname] ?? PAGE_META[cleanPath] ?? {
     title: 'ProLes',
     description: 'Корпоративная информационная система',
   };
