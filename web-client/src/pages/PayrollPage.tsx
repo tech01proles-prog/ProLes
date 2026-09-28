@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import api from '../api/client';
 import type {
   SalaryComponentDto, SalaryBreakdownResponse, SalaryRecordDto,
-  PayrollExportResponse, UserDto, ProjectDto, TimeEntryDto
+  PayrollExportResponse, UserDto, ProjectDto, TimeEntryDto, SubprojectDto
 } from '../types';
 import { generateUUID, formatMoney, monthName } from '../lib/utils';
 import { exportPayrollToExcel, exportPayrollToPdf, exportMySalaryToExcel, exportMySalaryToPdf } from '../lib/export';
@@ -65,11 +65,13 @@ export function PayrollPage() {
     type: 'HOURLY' as keyof typeof COMPONENT_TYPES,
     amount: '',
     projectId: '',
+    subprojectId: '',
     ratePerHour: '',
     ratePerUnit: '',
     description: '',
     effectiveFrom: new Date().toISOString().slice(0, 10),
   });
+  const formSubprojects = useMemo<SubprojectDto[]>(() => allProjects.find((project) => project.id === form.projectId)?.subprojects?.filter((subproject) => subproject.isActive) || [], [allProjects, form.projectId]);
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -284,6 +286,7 @@ export function PayrollPage() {
         type: form.type,
         amount: parseFloat(form.amount) || 0,
         projectId: form.projectId || null,
+        subprojectId: form.subprojectId || null,
         ratePerHour: form.ratePerHour ? parseFloat(form.ratePerHour) : null,
         ratePerUnit: form.ratePerUnit ? parseFloat(form.ratePerUnit) : null,
         description: form.description,
@@ -303,7 +306,7 @@ export function PayrollPage() {
       setShowForm(false);
       setEditingComponentId(null);
       setEditingForUserId(null);
-      setForm({ type: 'HOURLY', amount: '', projectId: '', ratePerHour: '', ratePerUnit: '', description: '', effectiveFrom: new Date().toISOString().slice(0, 10) });
+      setForm({ type: 'HOURLY', amount: '', projectId: '', subprojectId: '', ratePerHour: '', ratePerUnit: '', description: '', effectiveFrom: new Date().toISOString().slice(0, 10) });
       if (tab === 'my') await loadMyData();
       else await loadAdminData();
       if (selectedEmployeeId) await loadEmployeeComponents(selectedEmployeeId);
@@ -322,6 +325,7 @@ export function PayrollPage() {
       type: component.type,
       amount: component.amount.toString(),
       projectId: component.projectId || '',
+      subprojectId: component.subprojectId || '',
       ratePerHour: component.ratePerHour?.toString() || '',
       ratePerUnit: component.ratePerUnit?.toString() || '',
       description: component.description,
@@ -445,9 +449,16 @@ export function PayrollPage() {
                         )}
                         <div className="proles-input-group" style={{ gridColumn: 'span 2' }}>
                           <label>Проект (опционально)</label>
-                          <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input bg-white dark:bg-slate-900">
+                          <select value={form.projectId} onChange={(e) => setForm((current) => ({ ...current, projectId: e.target.value, subprojectId: '' }))} className="input bg-white dark:bg-slate-900">
                             <option value="">Без проекта</option>
                             {allProjects.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="proles-input-group" style={{ gridColumn: 'span 2' }}>
+                          <label>Подпроект (опционально)</label>
+                          <select value={form.subprojectId} onChange={(e) => setForm((current) => ({ ...current, subprojectId: e.target.value }))} disabled={!form.projectId || formSubprojects.length === 0} className="input bg-white dark:bg-slate-900 disabled:opacity-60">
+                            <option value="">{!form.projectId ? 'Сначала выберите проект' : formSubprojects.length === 0 ? 'У проекта нет подпроектов' : 'Без подпроекта'}</option>
+                            {formSubprojects.map((subproject) => <option key={subproject.id} value={subproject.id}>{subproject.name}</option>)}
                           </select>
                         </div>
                         <div className="proles-input-group">
@@ -588,6 +599,7 @@ export function PayrollPage() {
                       {c.ratePerUnit != null && c.ratePerUnit > 0 && (
                         <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">🔨 {formatMoney(c.ratePerUnit)}/ед.</div>
                       )}
+                      {c.subprojectName && <div className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mt-1">Подпроект: {c.subprojectName}</div>}
                       {c.description && <div className="text-xs text-slate-600 dark:text-slate-400 mt-1 truncate">{c.description}</div>}
                       <div className="text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                         С {new Date(c.effectiveFrom).toLocaleDateString('ru-RU')}
@@ -748,6 +760,7 @@ export function PayrollPage() {
                               <div className="text-lg font-bold mt-2">{formatMoney(c.amount)}</div>
                               {c.ratePerHour != null && c.ratePerHour > 0 && <div className="text-xs text-slate-500">⏱ {formatMoney(c.ratePerHour)}/час</div>}
                               {c.ratePerUnit != null && c.ratePerUnit > 0 && <div className="text-xs text-slate-500">🔨 {formatMoney(c.ratePerUnit)}/ед.</div>}
+                              {c.subprojectName && <div className="text-xs font-semibold text-indigo-600 mt-1">Подпроект: {c.subprojectName}</div>}
                               {c.description && <div className="text-xs text-slate-600 mt-1 truncate">{c.description}</div>}
                             </div>
                           );

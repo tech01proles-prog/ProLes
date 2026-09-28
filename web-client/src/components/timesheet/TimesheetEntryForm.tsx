@@ -5,8 +5,11 @@ export interface TimesheetProjectOption {
   name: string;
 }
 
+export interface TimesheetSubprojectOption { id: string | number; projectId: string | number; name: string; }
+
 export interface TimesheetEntryFormValue {
   projectId: string;
+  subprojectId: string;
   date: string;
   hours: string;
   description: string;
@@ -14,6 +17,7 @@ export interface TimesheetEntryFormValue {
 
 interface TimesheetEntryFormProps {
   projects: TimesheetProjectOption[];
+  subprojects: TimesheetSubprojectOption[];
   initialValue?: Partial<TimesheetEntryFormValue>;
   submitting?: boolean;
   submitLabel?: string;
@@ -23,6 +27,7 @@ interface TimesheetEntryFormProps {
 
 const EMPTY_VALUE: TimesheetEntryFormValue = {
   projectId: '',
+  subprojectId: '',
   date: '',
   hours: '',
   description: '',
@@ -37,6 +42,7 @@ const FIELD_CLASS_NAME = [
 
 export function TimesheetEntryForm({
   projects,
+  subprojects,
   initialValue,
   submitting = false,
   submitLabel = 'Сохранить запись',
@@ -48,6 +54,7 @@ export function TimesheetEntryForm({
     ...initialValue,
   });
   const [error, setError] = useState('');
+  const availableSubprojects = subprojects.filter((subproject) => String(subproject.projectId) === value.projectId);
 
   useEffect(() => {
     setValue({
@@ -105,7 +112,7 @@ export function TimesheetEntryForm({
           </span>
           <select
             value={value.projectId}
-            onChange={(event) => updateField('projectId', event.target.value)}
+            onChange={(event) => setValue((current) => ({ ...current, projectId: event.target.value, subprojectId: '' }))}
             className={FIELD_CLASS_NAME}
             disabled={submitting}
           >
@@ -115,6 +122,14 @@ export function TimesheetEntryForm({
                 {project.name}
               </option>
             ))}
+          </select>
+        </label>
+
+        <label className="sm:col-span-2">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Подпроект</span>
+          <select value={value.subprojectId} onChange={(event) => updateField('subprojectId', event.target.value)} className={FIELD_CLASS_NAME} disabled={submitting || !value.projectId || availableSubprojects.length === 0}>
+            <option value="">{!value.projectId ? 'Сначала выберите проект' : availableSubprojects.length === 0 ? 'У проекта нет подпроектов' : 'Без подпроекта'}</option>
+            {availableSubprojects.map((subproject) => <option key={subproject.id} value={String(subproject.id)}>{subproject.name}</option>)}
           </select>
         </label>
 

@@ -234,6 +234,8 @@ export interface SalaryComponentDto {
   type: 'FIXED' | 'HOURLY' | 'PIECE' | 'BONUS' | 'PENALTY' | 'MARGIN_PERCENT';
   amount: number;
   projectId: string | null;
+  subprojectId: string | null;
+  subprojectName: string;
   ratePerHour: number | null;
   ratePerUnit: number | null;
   description: string;
@@ -248,8 +250,14 @@ export interface SalaryBreakdownResponse {
   piece: number;
   hourly: number;
   bonus: number;
-  penalty?: number;
+  penalty: number;
+  withholding: number;
+  withholdingRepayment: number;
+  gross: number;
   total: number;
+  balance: number;
+  taxInclusiveCost: number;
+  remoteEmployee: boolean;
 }
 
 export interface SalaryRecordDto {
@@ -262,7 +270,12 @@ export interface SalaryRecordDto {
   piece: number;
   hourly: number;
   bonus: number;
+  penalty: number;
+  withholding: number;
+  withholdingRepayment: number;
+  gross: number;
   total: number;
+  taxInclusiveCost: number;
   status: 'draft' | 'approved' | 'paid';
 }
 
@@ -324,6 +337,8 @@ export interface TicketDto {
   id: string;
   projectId: string;
   projectName: string;
+  subprojectId: string | null;
+  subprojectName: string;
   fileName: string;
   fileType: string;
   fileSize: number;
@@ -336,6 +351,7 @@ export interface TicketDto {
   amount: number;
   currency: string;
   hasReceipt: boolean;  // 🆕 Флаг наличия чека
+  receiptDownloadUrl: string | null;
   recipients: TicketRecipientDto[];
 }
 

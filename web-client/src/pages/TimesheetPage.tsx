@@ -61,6 +61,7 @@ interface CalendarSourceDay {
 
 interface TimeEntryPayload {
   projectId: string;
+  subprojectId: string | null;
   date: string;
   hours: number;
   country: string;
@@ -160,16 +161,9 @@ function getEntryCountry(entry: TimeEntryDto) {
   return entry.country || 'RF';
 }
 
-function getProjectName(
-  entry: TimeEntryDto,
-  projects: ProjectDto[],
-) {
-  return (
-    entry.projectName ||
-    projects.find((project) => project.id === entry.projectId)
-      ?.name ||
-    'Без проекта'
-  );
+function getProjectName(entry: TimeEntryDto, projects: ProjectDto[]) {
+  const projectName = entry.projectName || projects.find((project) => project.id === entry.projectId)?.name || 'Без проекта';
+  return entry.subprojectName ? `${projectName} / ${entry.subprojectName}` : projectName;
 }
 
 function StandardTimesheetPage({
@@ -465,6 +459,7 @@ function StandardTimesheetPage({
       id: generateUUID(),
       userId: user.id,
       projectId: payload.projectId,
+      subprojectId: payload.subprojectId,
       projectName: project?.name || '',
       date: payload.date,
       hours: payload.hours,
@@ -486,6 +481,7 @@ function StandardTimesheetPage({
       id: entryId,
       userId: user.id,
       projectId: payload.projectId,
+      subprojectId: payload.subprojectId,
       projectName: project?.name || '',
       date: payload.date,
       hours: payload.hours,
@@ -504,6 +500,7 @@ function StandardTimesheetPage({
     try {
       const payload: TimeEntryPayload = {
         projectId: value.projectId,
+        subprojectId: value.subprojectId || null,
         date: value.date,
         hours: Number(value.hours),
         country: formCountry,
@@ -862,12 +859,14 @@ function StandardTimesheetPage({
         onClose={closeEntryModal}
       >
         <TimesheetEntryForm
+          subprojects={projects.flatMap((project) => (project.subprojects || []).filter((subproject) => subproject.isActive).map((subproject) => ({ id: subproject.id, projectId: project.id, name: subproject.name })))}
           projects={projects.map((project) => ({
             id: project.id,
             name: project.name,
           }))}
           initialValue={{
             projectId: editingEntry?.projectId || '',
+            subprojectId: editingEntry?.subprojectId || '',
             date: editingEntry?.date || selectedDate,
             hours:
               editingEntry?.hours !== undefined

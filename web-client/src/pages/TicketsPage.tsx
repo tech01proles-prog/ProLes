@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
-import type { TicketDto, ProjectDto, UserDto } from '../types';
+import type { TicketDto, ProjectDto, UserDto, SubprojectDto } from '../types';
 import { formatDateTime, formatFileSize, formatMoney, readFileAsBase64 } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../components/Toast/ToastContext';
@@ -21,6 +21,7 @@ export function TicketsPage() {
   // Форма
   const [form, setForm] = useState({
     projectId: '',
+    subprojectId: '',
     description: '',
     sendToAccountant: false,
     accountantEmail: '',
@@ -66,64 +67,44 @@ export function TicketsPage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const tickets = tab === 'my' ? myTickets : allTickets;
-
+  const ticketSubprojects = useMemo<SubprojectDto[]>(() => projects.find((project) => project.id === form.projectId)?.subprojects?.filter((subproject) => subproject.isActive) || [], [form.projectId, projects]);
   // 🔧 Исправленное скачивание через fetch + Blob
+  const downloadProtectedFile = async (url: string, fileName: string) => {
+    const apiPath = url.replace(/^https?:\/\/[^/]+/, '').replace(/^\/api\/v1/, '');
+    const response = await api.get(apiPath, { responseType: 'blob' });
+    const blobUrl = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+  };
+
   const handleDownload = async (ticket: TicketDto) => {
     try {
-      // 🎯 Формируем правильный URL к серверу
-      const apiBase = (import.meta.env.VITE_API_URL as string) || '/api/v1';
-      // Убираем /api/v1 → получаем корень сервера
-      const serverRoot = apiBase.replace(/\/api\/v1\/?$/, '');
-      const fullUrl = serverRoot
-        ? `${serverRoot}${ticket.downloadUrl}`
-        : ticket.downloadUrl; // production: тот же хост
+      await downloadProtectedFile(ticket.downloadUrl, ticket.fileName);
+    } catch (err) {
+      console.error(err);
+      addToast('Не удалось скачать билет', 'error');
+    }
+  };
 
-      const response = await fetch(fullUrl);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // 🎯 Определяем MIME-тип по расширению файла
-      const ext = (ticket.fileName.split('.').pop() || '').toLowerCase();
-      const mimeMap: Record<string, string> = {
-        pdf: 'application/pdf',
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        png: 'image/png',
-        gif: 'image/gif',
-        doc: 'application/msword',
-        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        xls: 'application/vnd.ms-excel',
-        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      };
-      const mimeType = mimeMap[ext] || response.headers.get('Content-Type') || 'application/octet-stream';
-
-      // 🎯 Создаём Blob с ПРАВИЛЬНЫМ типом
-      const rawBlob = await response.blob();
-      const typedBlob = new Blob([rawBlob], { type: mimeType });
-
-      const url = window.URL.createObjectURL(typedBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = ticket.fileName;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-
-      // Очистка
-      setTimeout(() => {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      }, 100);
-    } catch (err: any) {
-      console.error('Download error:', err);
-      alert(`Ошибка скачивания: ${err.message}`);
+  const handleReceiptDownload = async (ticket: TicketDto) => {
+    if (!ticket.receiptDownloadUrl) return;
+    try {
+      await downloadProtectedFile(ticket.receiptDownloadUrl, `Чек — ${ticket.fileName}`);
+    } catch (err) {
+      console.error(err);
+      addToast('Не удалось скачать чек билета', 'error');
     }
   };
 
   const handleFileChange = (file: File | null, isReceipt = false) => {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { alert('Файл не должен превышать 10 МБ'); return; }
+    const limit = isReceipt ? 25 * 1024 * 1024 : 100 * 1024 * 1024;
+    if (file.size > limit) { alert(`Файл не должен превышать ${isReceipt ? 25 : 100} МБ`); return; }
     if (isReceipt) {
       setSelectedReceiptFile(file);
     } else {
@@ -148,6 +129,7 @@ export function TicketsPage() {
       }
       await api.post('/tickets/upload', {
         projectId: form.projectId,
+        subprojectId: form.subprojectId || null,
         description: form.description,
         sendToAccountant: form.sendToAccountant,
         accountantEmail: form.accountantEmail,
@@ -164,7 +146,7 @@ export function TicketsPage() {
       setShowForm(false);
       setSelectedFile(null);
       setSelectedReceiptFile(null);
-      setForm({ projectId: '', description: '', sendToAccountant: false, accountantEmail: '', recipientIds: [], amount: '', currency: 'RUB' });
+      setForm({ projectId: '', subprojectId: '', description: '', sendToAccountant: false, accountantEmail: '', recipientIds: [], amount: '', currency: 'RUB' });
       await loadData();
       addToast('Билет успешно загружен и отправлен в Telegram', 'success');
     } catch (err) {
@@ -281,7 +263,7 @@ export function TicketsPage() {
                     <div>
                       <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📤</div>
                       <div style={{ fontWeight: 600, color: '#475569' }}>Перетащите файл билета</div>
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>или кликните (до 10 МБ)</div>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>или кликните (до 100 МБ)</div>
                     </div>
                   )}
                 </div>
@@ -317,7 +299,7 @@ export function TicketsPage() {
                     <div>
                       <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🧾</div>
                       <div style={{ fontWeight: 600, color: '#475569' }}>Перетащите файл чека</div>
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>или кликните (до 10 МБ)</div>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>или кликните (до 25 МБ)</div>
                     </div>
                   )}
                 </div>
@@ -327,11 +309,20 @@ export function TicketsPage() {
                 <div className="proles-modal-grid">
                   <div className="proles-input-group">
                     <label>Проект *</label>
-                    <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input bg-white dark:bg-slate-900">
+                    <select value={form.projectId} onChange={(e) => setForm((current) => ({ ...current, projectId: e.target.value, subprojectId: '' }))} className="input bg-white dark:bg-slate-900">
                       <option value="">Выберите проект</option>
                       {projects.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
+
+                  <div className="proles-input-group">
+                    <label>Подпроект</label>
+                    <select value={form.subprojectId} onChange={(e) => setForm((current) => ({ ...current, subprojectId: e.target.value }))} disabled={!form.projectId || ticketSubprojects.length === 0} className="input bg-white dark:bg-slate-900 disabled:opacity-60">
+                      <option value="">{!form.projectId ? 'Сначала выберите проект' : ticketSubprojects.length === 0 ? 'У проекта нет подпроектов' : 'Без подпроекта'}</option>
+                      {ticketSubprojects.map((subproject) => <option key={subproject.id} value={subproject.id}>{subproject.name}</option>)}
+                    </select>
+                  </div>
+
                   <div className="proles-input-group">
                     <label>Описание</label>
                     <input type="text" placeholder="Москва-Питер 15.07" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" />
@@ -414,6 +405,7 @@ export function TicketsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="font-bold text-slate-900 dark:text-slate-100 truncate">{t.fileName}</div>
                     <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{t.projectName}</div>
+                    {t.subprojectName && <div className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 truncate">Подпроект: {t.subprojectName}</div>}
                     {isUnread && <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-bold">● Непрочитано</span>}
                   </div>
                 </div>
@@ -438,6 +430,9 @@ export function TicketsPage() {
                   <button onClick={() => handleDownload(t)} className="btn-outline px-3 py-1.5 text-xs flex-1">
                     📥 Скачать
                   </button>
+
+                  {t.hasReceipt && t.receiptDownloadUrl && <button onClick={() => handleReceiptDownload(t)} className="btn-outline px-3 py-1.5 text-xs flex-1">Чек</button>}
+
                   {isUnread && (
                     <button onClick={() => handleMarkViewed(t.id)} className="btn-ghost px-3 py-1.5 text-xs text-indigo-600 dark:text-indigo-400">
                       ✓ Прочитано
