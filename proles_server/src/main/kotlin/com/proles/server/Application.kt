@@ -16,7 +16,7 @@ import io.ktor.server.websocket.*
 import kotlin.time.Duration.Companion.seconds
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
-// import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -33,6 +33,9 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.update
 import java.io.File
 import org.jetbrains.exposed.sql.deleteWhere
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
+import io.ktor.server.plugins.cors.routing.CORS
 
 
 fun main() {
@@ -163,6 +166,22 @@ fun Application.module() {
         maxFrameSize = 64 * 1024
         masking = false
     }
+
+    install(CORS) {
+        allowHost("138.16.177.245", schemes = listOf("http"))
+
+        allowHeader(HttpHeaders.ContentType)
+        allowHeader(HttpHeaders.Accept)
+        allowHeader("X-Session-Token")
+
+        allowMethod(HttpMethod.Options)
+        allowMethod(HttpMethod.Get)
+        allowMethod(HttpMethod.Post)
+        allowMethod(HttpMethod.Put)
+        allowMethod(HttpMethod.Delete)
+        allowMethod(HttpMethod.Patch)
+    }
+
 
     routing {
         staticFiles("/uploads", java.io.File("uploads"))
