@@ -3,6 +3,7 @@ package com.proles.server.routes
 import com.proles.server.config.PermissionMiddleware.checkPermission
 import com.proles.server.data.ProjectsTable
 import com.proles.server.data.SalaryComponentsTable
+import com.proles.server.data.SalaryRecordsTable
 import com.proles.server.data.SubprojectsTable
 import com.proles.server.data.UsersTable
 import com.proles.server.model.Permission
@@ -10,6 +11,7 @@ import com.proles.server.model.ProjectCostPayrollDataDto
 import com.proles.server.model.ProjectCostUpdateDto
 import com.proles.server.model.SalaryComponentDto
 import com.proles.server.model.UserDto
+import kotlinx.serialization.Serializable
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -26,6 +28,9 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import java.util.UUID
 
+@Serializable
+private data class PaidSalaryCostDto(val userId: String, val year: Int, val month: Int, val amount: Double, val taxInclusiveAmount: Double, val status: String)
+
 internal fun Route.projectCostRoutes() {
     route("/api/v1/project-costs") {
         get("/paid-salaries") {
@@ -36,7 +41,7 @@ internal fun Route.projectCostRoutes() {
             val toYear = call.request.queryParameters["toYear"]?.toIntOrNull()
             val toMonth = call.request.queryParameters["toMonth"]?.toIntOrNull()
 
-            if (fromYear == null || fromMonth !in 1..12 || toYear == null || toMonth !in 1..12) return@get call.respond(HttpStatusCode.BadRequest, "Invalid period")
+            if (fromYear == null || fromMonth == null || fromMonth !in 1..12 || toYear == null || toMonth == null || toMonth !in 1..12) return@get call.respond(HttpStatusCode.BadRequest, "Invalid period")
 
             val fromKey = fromYear * 100 + fromMonth
             val toKey = toYear * 100 + toMonth
