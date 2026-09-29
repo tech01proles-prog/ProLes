@@ -70,6 +70,8 @@ interface CombinedEntry {
   comment: string;
   hasReceipt?: boolean;
   entryCategory: 'WITH_RECEIPT' | 'WITHOUT_RECEIPT';
+  expenseScope?: string;
+  creatorRole?: string;
 }
 
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
@@ -107,9 +109,10 @@ function PendingReceiptPreview({ file }: { file: File }) {
   return <div className="w-16 h-16 rounded-md border border-slate-200 dark:border-slate-700 flex items-center justify-center text-2xl shrink-0">📄</div>;
 }
 
-export function ExpensesPage() {
+export function ExpensesPage({ directorMode = false }: { directorMode?: boolean }) {
   const [searchParams] = useSearchParams();
   const [user, setUser] = useState<UserDto | null>(null);
+  const isDirector = user?.role?.trim().toLowerCase() === 'director';
 
   useEffect(() => {
     const stored = localStorage.getItem('proles_user');
@@ -117,6 +120,11 @@ export function ExpensesPage() {
       try { setUser(JSON.parse(stored)); } catch { /* ignore malformed cached user */ }
     }
   }, []);
+
+  useEffect(() => {
+    if (directorMode && user && !isDirector) window.location.replace('/');
+  }, [directorMode, isDirector, user]);
+
   const { can } = usePermissions();
   const canViewAll = can('expenses_all', 'view');
 
@@ -138,6 +146,7 @@ export function ExpensesPage() {
   const [filterUser, setFilterUser] = useState(searchParams.get('userId') || 'all');
   const [filterEntryType, setFilterEntryType] = useState<'all' | 'INCOME' | 'EXPENSE'>('all');
   const [hidePerDiem, setHidePerDiem] = useState(false);
+  const [hideDirectorExpenses, setHideDirectorExpenses] = useState(false);
   const [filterReceipt, setFilterReceipt] = useState<'all' | 'with' | 'without'>('all');
   const [filterCategory, setFilterCategory] = useState<'all' | 'WITH_RECEIPT' | 'WITHOUT_RECEIPT'>('all');
   const [filterSubcategory, setFilterSubcategory] = useState('all');  // 🆕 Фильтр по подкатегории (типу расхода)
@@ -173,7 +182,7 @@ export function ExpensesPage() {
     comment: '',
     name: '',
     category: 'WITH_RECEIPT',
-    expenseScope: 'GENERAL',
+    expenseScope: directorMode ? 'DIRECTOR' : 'GENERAL',
   });
   const [saving, setSaving] = useState(false);
   const [pendingReceiptFiles, setPendingReceiptFiles] = useState<File[]>([]);
@@ -298,6 +307,8 @@ export function ExpensesPage() {
         income.category === 'WITHOUT_RECEIPT'
           ? 'WITHOUT_RECEIPT'
           : 'WITH_RECEIPT',
+      expenseScope: 'GENERAL',
+      creatorRole: '',
     })),
     ...expenses.map((expense): CombinedEntry => ({
       id: expense.id,
@@ -322,10 +333,14 @@ export function ExpensesPage() {
         expense.category === 'WITHOUT_RECEIPT'
           ? 'WITHOUT_RECEIPT'
           : 'WITH_RECEIPT',
+      expenseScope: expense.expenseScope,
+      creatorRole: expense.creatorRole,
     })),
   ];
 
   const filtered = combinedEntries
+    .filter(entry => !directorMode || (entry.type === 'EXPENSE' && entry.expenseScope === 'DIRECTOR'))
+    .filter(entry => directorMode || !hideDirectorExpenses || entry.expenseScope !== 'DIRECTOR')
     .filter(entry => effectiveScope !== 'all' || filterUser === 'all' || entry.userId === filterUser)
     .filter(entry => {
       if (reportPreset === '1') return true;
@@ -450,8 +465,7 @@ export function ExpensesPage() {
             category: form.category,
             subcategory: form.type,
             receiptCount: 0,
-            expenseScope: form.expenseScope,
-            creatorRole: user.role,
+            expenseScope: directorMode ? 'DIRECTOR' : form.expenseScope,
             createdAt: Date.now(),
           },
         );
@@ -474,6 +488,7 @@ export function ExpensesPage() {
         comment: '',
         name: '',
         category: 'WITH_RECEIPT',
+        expenseScope: directorMode ? 'DIRECTOR' : 'GENERAL',
       }));
       await loadData();
     } catch {
@@ -645,7 +660,7 @@ export function ExpensesPage() {
       {/* Заголовок и Сальдо */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">📊 Доходы и Расходы</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{directorMode ? 'Расходы учредителей' : 'Доходы и расходы'}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {filtered.length} записей за период с {formatDate(dateFrom)} по {formatDate(dateTo)}
           </p>
@@ -660,10 +675,12 @@ export function ExpensesPage() {
             </svg>
             Экспорт в XLSX
           </button>
-          <button onClick={() => { setFormType('INCOME'); setShowForm(!showForm); }} className={`bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-green-200 dark:shadow-green-900/30 ${!showForm || formType === 'INCOME' ? 'shadow-indigo-200' : ''}`}>
-            {showForm && formType === 'INCOME' ? '✕ Закрыть' : '＋ Новый доход'}
-          </button>
-          <button onClick={() => { setFormType('EXPENSE'); setShowForm(true); }} className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-red-200 dark:shadow-red-900/30">
+          {!directorMode && (
+            <button onClick={() => { setFormType('INCOME'); setShowForm(!showForm); }} className={`bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-green-200 dark:shadow-green-900/30 ${!showForm || formType === 'INCOME' ? 'shadow-indigo-200' : ''}`}>
+              {showForm && formType === 'INCOME' ? '✕ Закрыть' : '＋ Новый доход'}
+            </button>
+          )}
+          <button onClick={() => { setFormType('EXPENSE'); setForm((current) => ({ ...current, expenseScope: directorMode ? 'DIRECTOR' : current.expenseScope })); setShowForm(true); }} className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-all shadow-md shadow-red-200 dark:shadow-red-900/30">
             {showForm && formType === 'EXPENSE' ? '✕ Закрыть' : '－ Новый расход'}
           </button>
         </div>
@@ -702,7 +719,7 @@ export function ExpensesPage() {
         </div>
       </div>
 
-      <ScopeTabs scope={effectiveScope} onChange={setScope} canViewAll={canViewAll} myCount={myCount} allCount={allCount} />
+      {!directorMode && <ScopeTabs scope={effectiveScope} onChange={setScope} canViewAll={canViewAll} myCount={myCount} allCount={allCount} />}
 
       {/* 🌲 PROLES MODAL: Новый доход / Новый расход */}
       {showForm && createPortal(
@@ -808,26 +825,25 @@ export function ExpensesPage() {
                     </div>
                   )}
 
-                  {formType === 'EXPENSE' &&
-                    user?.role?.trim().toLowerCase() === 'director' && (
-                      <div className="proles-input-group">
-                        <label>Область расхода</label>
+                  {formType === 'EXPENSE' && isDirector && !directorMode && (
+                    <div className="proles-input-group">
+                      <label>Область расхода</label>
 
-                        <select
-                          value={form.expenseScope}
-                          onChange={event =>
-                            setForm(current => ({
-                              ...current,
-                              expenseScope: event.target.value,
-                            }))
-                          }
-                          className="input bg-white dark:bg-slate-900"
-                        >
-                          <option value="GENERAL">Общий</option>
-                          <option value="DIRECTOR">Директорский</option>
-                        </select>
-                      </div>
-                    )}
+                      <select
+                        value={form.expenseScope}
+                        onChange={event =>
+                          setForm(current => ({
+                            ...current,
+                            expenseScope: event.target.value,
+                          }))
+                        }
+                        className="input bg-white dark:bg-slate-900"
+                      >
+                        <option value="GENERAL">Общий</option>
+                        <option value="DIRECTOR">Директорский</option>
+                      </select>
+                    </div>
+                  )}
 
                   <div className="proles-input-group">
                     <label>Сумма *</label>
@@ -1059,17 +1075,17 @@ export function ExpensesPage() {
         )}
         
         {/* Галочка "Скрыть суточные" */}
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-          <input 
-            type="checkbox" 
-            id="hidePerDiem"
-            checked={hidePerDiem}
-            onChange={(e) => setHidePerDiem(e.target.checked)}
-            className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-          />
-          <label htmlFor="hidePerDiem" className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
-            🚫 Скрыть суточные
+        <div className="flex flex-wrap items-center gap-5 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+            <input type="checkbox" checked={hidePerDiem} onChange={(e) => setHidePerDiem(e.target.checked)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+            Скрыть суточные
           </label>
+          {canViewAll && !directorMode && (
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+              <input type="checkbox" checked={hideDirectorExpenses} onChange={(e) => setHideDirectorExpenses(e.target.checked)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+              Скрыть учредителей
+            </label>
+          )}
         </div>
       </div>
 

@@ -9,6 +9,7 @@ interface ManagementCard {
   gradient: string;
   permission?: string;
   action?: 'view' | 'create' | 'edit' | 'delete';
+  directorOnly?: boolean;
 }
 
 interface ManagementSection {
@@ -96,6 +97,14 @@ const SECTIONS: ManagementSection[] = [
         gradient: 'from-sky-500 to-cyan-500',
       },
       {
+        to: '/director-expenses',
+        icon: '₽',
+        title: 'Расходы учредителей',
+        description: 'Отдельные расходы директоров',
+        gradient: 'from-amber-500 to-orange-500',
+        directorOnly: true,
+      },
+      {
         to: '/cost-calculation',
         icon: '∑',
         title: 'Себестоимость',
@@ -175,7 +184,8 @@ const SECTIONS: ManagementSection[] = [
 export function ManagementPage() {
   const navigate = useNavigate();
   const { can, loading } = usePermissions();
-
+  const storedUser = localStorage.getItem('proles_user');
+  const isDirector = storedUser ? JSON.parse(storedUser).role?.trim().toLowerCase() === 'director' : false;
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -187,11 +197,11 @@ export function ManagementPage() {
   const visibleSections = SECTIONS
     .map(section => ({
       ...section,
-      cards: section.cards.filter(card =>
-        card.permission
-          ? can(card.permission, card.action || 'view')
-          : true,
-      ),
+      cards: section.cards.filter(card => {
+        if (isDirector && card.to === '/hours-calendar') return false;
+        if (card.directorOnly && !isDirector) return false;
+        return card.permission ? can(card.permission, card.action || 'view') : true;
+      }),
     }))
     .filter(section => section.cards.length > 0);
 
