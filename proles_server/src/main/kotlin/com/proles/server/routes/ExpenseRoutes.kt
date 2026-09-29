@@ -109,7 +109,7 @@ private fun mapRowToExpenseDto(row: ResultRow): ExpenseDto {
     return ExpenseDto(
         id = expenseId.toString(),
         userId = row[ExpensesTable.userId].value.toString(),
-        projectId = row[ExpensesTable.projectId].value.toString(),
+        projectId = row[ExpensesTable.projectId]?.value?.toString(),
         subprojectId = row[ExpensesTable.subprojectId]?.value?.toString(),
         subprojectName = expenseSubprojectName(row),
         projectName = row.getOrNull(ProjectsTable.name).orEmpty(),
@@ -209,7 +209,7 @@ internal fun Route.expenseRoutes() {
             }
 
             val expenseWithProject = transaction {
-                (ExpensesTable innerJoin ProjectsTable)
+                (ExpensesTable leftJoin ProjectsTable)
                     .selectAll()
                     .where {
                         (ExpensesTable.id eq expenseUuid) and
@@ -252,8 +252,7 @@ internal fun Route.expenseRoutes() {
 
             val expenseUserId =
                 expenseWithProject[ExpensesTable.userId].value
-            val projectName =
-                expenseWithProject[ProjectsTable.name]
+            val projectName = expenseWithProject.getOrNull(ProjectsTable.name).orEmpty().ifBlank { "Без проекта" }
 
             val canUploadForeignExpense =
                 session.role in directorExpenseRoles
@@ -556,7 +555,7 @@ internal fun Route.expenseRoutes() {
                         (ExpensesTable.expenseScope eq "GENERAL")
                 }
 
-                (ExpensesTable innerJoin ProjectsTable)
+                (ExpensesTable leftJoin ProjectsTable)
                     .selectAll()
                     .where { condition }
                     .orderBy(
@@ -629,7 +628,7 @@ internal fun Route.expenseRoutes() {
                         (ExpensesTable.expenseScope eq "GENERAL")
                 }
 
-                (ExpensesTable innerJoin ProjectsTable)
+                (ExpensesTable leftJoin ProjectsTable)
                     .selectAll()
                     .where { condition }
                     .orderBy(
@@ -661,10 +660,6 @@ internal fun Route.expenseRoutes() {
                 )
 
             val projectId = expense.projectId.toUuidOrNull()
-                ?: return@post call.respond(
-                    HttpStatusCode.BadRequest,
-                    "projectId required"
-                )
 
             val subprojectId = expense.subprojectId.toUuidOrNull()
 
@@ -747,7 +742,7 @@ internal fun Route.expenseRoutes() {
                         it[deletedBy] = null
                     }
 
-                    (ExpensesTable innerJoin ProjectsTable)
+                    (ExpensesTable leftJoin ProjectsTable)
                         .selectAll()
                         .where { ExpensesTable.id eq id }
                         .single()
@@ -770,28 +765,22 @@ internal fun Route.expenseRoutes() {
             }
 
             val financeRecipients = transaction {
-                UsersTable
-                    .selectAll()
-                    .where {
-                        UsersTable.role inList
-                            directorExpenseRoles.toList()
-                    }
-                    .map { it[UsersTable.id].value }
-                    .filter { it != userId }
+                val roles = if (expenseScope == "DIRECTOR") listOf("director") else directorExpenseRoles.toList()
+                UsersTable.selectAll().where { UsersTable.role inList roles }.map { it[UsersTable.id].value }.filter { it != userId }
             }
 
             NotificationService.notifyUsers(
                 financeRecipients,
                 userId,
                 "EXPENSE_CREATED",
-                "Новый расход",
+                if (expenseScope == "DIRECTOR") "Новый расход учредителя" else "Новый расход",
                 "$senderName: ${expense.name} — " +
                     "${"%.2f".format(expense.amount)} " +
                     expense.currency,
                 expenseJson.encodeToString(
                     mapOf(
                         "expenseId" to created.id,
-                        "projectId" to projectId.toString(),
+                        "projectId" to (projectId?.toString() ?: ""),
                         "expenseScope" to expenseScope
                     )
                 ),
@@ -820,10 +809,6 @@ internal fun Route.expenseRoutes() {
                 )
 
             val projectId = expense.projectId.toUuidOrNull()
-                ?: return@put call.respond(
-                    HttpStatusCode.BadRequest,
-                    "projectId required"
-                )
 
             val subprojectId = expense.subprojectId.toUuidOrNull()
 
@@ -930,7 +915,7 @@ internal fun Route.expenseRoutes() {
                             }
                     }
 
-                    (ExpensesTable innerJoin ProjectsTable)
+                    (ExpensesTable leftJoin ProjectsTable)
                         .selectAll()
                         .where { ExpensesTable.id eq expenseId }
                         .single()
