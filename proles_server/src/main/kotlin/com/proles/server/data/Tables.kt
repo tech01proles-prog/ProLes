@@ -2,6 +2,7 @@ package com.proles.server.data
 
 import org.jetbrains.exposed.dao.id.UUIDTable
 import org.jetbrains.exposed.sql.ReferenceOption
+import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.kotlin.datetime.date
 
 object UsersTable : UUIDTable("users") {
@@ -492,8 +493,7 @@ object ChatConversationsTable : UUIDTable("chat_conversations") {
     val lastMessageId = uuid("last_message_id").nullable()
 }
 
-object ChatConversationMembersTable :
-    UUIDTable("chat_conversation_members") {
+object ChatConversationMembersTable : Table("chat_conversation_members") {
 
     val conversationId = reference(
         "conversation_id",
