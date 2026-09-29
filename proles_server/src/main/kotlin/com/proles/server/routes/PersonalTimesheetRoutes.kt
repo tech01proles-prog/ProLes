@@ -57,7 +57,7 @@ internal fun Route.personalTimesheetRoutes() {
 
 
         get {
-            val session = call.checkNotificationSession() ?: return@get
+            val session = call.checkPersonalTimesheetSession() ?: return@get
             val targetUserId = targetUserId(session)
                 ?: return@get call.respond(HttpStatusCode.Forbidden, "Personal timesheet is unavailable for this user")
 
@@ -115,7 +115,7 @@ internal fun Route.personalTimesheetRoutes() {
         }
 
         put {
-            val session = call.checkNotificationSession() ?: return@put
+            val session = call.checkPersonalTimesheetSession() ?: return@put
             val targetUserId = targetUserId(session)
                 ?: return@put call.respond(HttpStatusCode.Forbidden, "Personal timesheet is unavailable for this user")
 
@@ -180,7 +180,7 @@ internal fun Route.personalTimesheetRoutes() {
         }
 
         get("/categories") {
-            val session = call.checkNotificationSession() ?: return@get
+            val session = call.checkPersonalTimesheetSession() ?: return@get
             val targetUserId = targetUserId(session)
                 ?: return@get call.respond(HttpStatusCode.Forbidden, "Personal timesheet is unavailable for this user")
             val categories = transaction {
@@ -194,7 +194,7 @@ internal fun Route.personalTimesheetRoutes() {
         }
 
         post("/categories") {
-            val session = call.checkNotificationSession() ?: return@post
+            val session = call.checkPersonalTimesheetSession() ?: return@post
             val targetUserId = targetUserId(session)
                 ?: return@post call.respond(HttpStatusCode.Forbidden, "Personal timesheet is unavailable for this user")
             val body = try { call.receive<Map<String, String>>() } catch (_: Exception) {
@@ -221,7 +221,7 @@ internal fun Route.personalTimesheetRoutes() {
         }
 
         delete("/categories/{id}") {
-            val session = call.checkNotificationSession() ?: return@delete
+            val session = call.checkPersonalTimesheetSession() ?: return@delete
             val targetUserId = targetUserId(session)
                 ?: return@delete call.respond(HttpStatusCode.Forbidden, "Personal timesheet is unavailable for this user")
             val id = runCatching { UUID.fromString(call.parameters["id"]) }.getOrNull()

@@ -15,21 +15,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
-
-private suspend fun ApplicationCall.checkNotificationSession():
-    SessionManager.Session? {
-    val token = request.headers["X-Session-Token"]
-    val session = SessionManager.validate(token)
-
-    if (session == null) {
-        respond(HttpStatusCode.Unauthorized, "Session expired")
-        return null
-    }
-
-    return session
-}
 
 internal fun Route.notificationRoutes() {
     route("/api/v1/notifications") {
@@ -46,7 +34,7 @@ internal fun Route.notificationRoutes() {
                 val query = if (canViewAll) {
                     // Админы видят все уведомления (личные + общие)
                     baseQuery.where {
-                        (NotificationsTable.targetUserId eq null) or
+                        (NotificationsTable.targetUserId.isNull()) or
                                 (NotificationsTable.targetUserId eq session.userId)
                     }
                 } else {
@@ -141,7 +129,7 @@ internal fun Route.notificationRoutes() {
                 NotificationsTable.update({
                     (NotificationsTable.id eq UUID.fromString(notifId)) and
                             ((NotificationsTable.targetUserId eq session.userId) or
-                                    (NotificationsTable.targetUserId eq null))
+                                    (NotificationsTable.targetUserId.isNull()))
                 }) { it[isRead] = true }
             }
             call.respond(HttpStatusCode.OK)
@@ -153,7 +141,7 @@ internal fun Route.notificationRoutes() {
                 NotificationsTable.update({
                     // 🔥 ИСПРАВЛЕНО: помечаем и личные, и общие уведомления
                     ((NotificationsTable.targetUserId eq session.userId) or
-                            (NotificationsTable.targetUserId eq null)) and
+                            (NotificationsTable.targetUserId.isNull())) and
                             (NotificationsTable.isRead eq false)
                 }) { it[isRead] = true }
             }

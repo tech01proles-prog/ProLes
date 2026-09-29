@@ -432,7 +432,7 @@ internal fun Route.payrollRoutes() {
             if (!body.withholdingAmount.isFinite() || body.withholdingAmount < 0.0 || !body.withholdingRepaymentAmount.isFinite() || body.withholdingRepaymentAmount < 0.0) return@post call.respond(HttpStatusCode.BadRequest, "Invalid withholding amount")
 
             val userId = runCatching { UUID.fromString(body.userId) }.getOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid userId")
-            val creatorId = runCatching { UUID.fromString(session.userId) }.getOrNull() ?: return@post call.respond(HttpStatusCode.Unauthorized, "Invalid session")
+            val creatorId = session.userId
             val breakdown = com.proles.server.services.SalaryCalculator.calculate(userId, body.year, body.month)
             val gross = breakdown.fixed + breakdown.piece + breakdown.hourly + breakdown.bonus
             val availableBalance = transaction { currentEmployeeBalance(userId) }

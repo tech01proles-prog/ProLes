@@ -24,8 +24,10 @@ import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.consumeEach
+import io.ktor.utils.io.jvm.javaio.toInputStream
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
 
@@ -242,15 +244,20 @@ fun Route.chatRoutes() {
                             tempFile = File.createTempFile("chat-", ".upload", chatUploadDirectory)
                             FileOutputStream(tempFile!!).use { output ->
                                 val buffer = ByteArray(64 * 1024)
-                                val input = part.provider()
-                                while (true) {
-                                    val read = input.readAvailable(buffer, 0, buffer.size)
-                                    if (read < 0) break
-                                    if (read == 0) continue
-                                    size += read
-                                    if (size > MAX_CHAT_ATTACHMENT_BYTES) throw IllegalArgumentException("Файл превышает 100 MiB")
-                                    digest.update(buffer, 0, read)
-                                    output.write(buffer, 0, read)
+                                part.provider().toInputStream().use { input ->
+                                    while (true) {
+                                        val read = input.read(buffer)
+                                        if (read < 0) break
+                                        if (read == 0) continue
+                                        size += read.toLong()
+                                        if (size > MAX_CHAT_ATTACHMENT_BYTES) {
+                                            throw IllegalArgumentException(
+                                                "Файл превышает 100 MiB"
+                                            )
+                                        }
+                                        digest.update(buffer, 0, read)
+                                        output.write(buffer, 0, read)
+                                    }
                                 }
                             }
                         }
