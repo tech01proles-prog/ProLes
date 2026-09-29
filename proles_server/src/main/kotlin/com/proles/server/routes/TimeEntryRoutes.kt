@@ -357,67 +357,33 @@ internal fun Route.timeEntryRoutes() {
                         )
                     }
 
-                    val baseCondition =
-                        (TimeEntriesTable.userId eq userId) and
-                            (TimeEntriesTable.projectId eq projectId) and
-                            (TimeEntriesTable.date eq entryDate)
-
-                    val existing = TimeEntriesTable
+                                        val existing = TimeEntriesTable
                         .selectAll()
                         .where {
-                            if (subprojectId == null) {
-                                baseCondition and
-                                    TimeEntriesTable
-                                        .subprojectId
-                                        .isNull()
-                            } else {
-                                baseCondition and
-                                    (TimeEntriesTable.subprojectId eq
-                                        subprojectId)
-                            }
+                            TimeEntriesTable.id eq entryId
                         }
-                        .firstOrNull()
+                        .singleOrNull()
 
                     if (existing != null) {
-                        val existingId =
-                            existing[TimeEntriesTable.id].value
-                        val newHours =
-                            existing[TimeEntriesTable.hours] +
-                                entry.hours
-                        val oldComment =
-                            existing[
-                                TimeEntriesTable.comment
-                            ].orEmpty()
-                        val newComment =
-                            if (
-                                entry.comment.isNotBlank() &&
-                                entry.comment != oldComment
-                            ) {
-                                listOf(
-                                    oldComment,
-                                    entry.comment
-                                )
-                                    .filter(String::isNotBlank)
-                                    .joinToString(" | ")
-                            } else {
-                                oldComment
-                            }
-
-                        TimeEntriesTable.update(
-                            {
-                                TimeEntriesTable.id eq existingId
-                            }
-                        ) {
-                            it[hours] = newHours
-                            it[comment] = newComment
+                        TimeEntriesTable.update({
+                            TimeEntriesTable.id eq entryId
+                        }) {
+                            it[TimeEntriesTable.userId] = userId
+                            it[TimeEntriesTable.projectId] = projectId
+                            it[TimeEntriesTable.subprojectId] =
+                                subprojectId
+                            it[projectName] = entry.projectName
+                            it[date] = entryDate
+                            it[hours] = entry.hours
                             it[country] = entry.country
+                            it[comment] = entry.comment
                             it[synced] = entry.synced
                         }
 
                         TimeEntriesTable
                             .selectAll()
                             .where {
-                                TimeEntriesTable.id eq existingId
+                                TimeEntriesTable.id eq entryId
                             }
                             .single()
                             .let(::mapTimeEntry) to true

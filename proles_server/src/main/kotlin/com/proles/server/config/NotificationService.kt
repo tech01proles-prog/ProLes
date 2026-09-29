@@ -79,12 +79,26 @@ object NotificationService {
                         .map { it[FcmTokensTable.token] }
                 }
                 fcmTokens.forEach { token ->
-                    FirebaseService.sendPush(
-                        token = token,
-                        title = title,
-                        body = message.lines().firstOrNull().orEmpty().take(180),
-                        data = mapOf("type" to type, "payload" to payload)
-                    )
+                    runCatching {
+                        FirebaseService.sendPush(
+                            token = token,
+                            title = title,
+                            body = message
+                                .lines()
+                                .firstOrNull()
+                                .orEmpty()
+                                .take(180),
+                            data = mapOf(
+                                "type" to type,
+                                "payload" to payload
+                            )
+                        )
+                    }.onFailure { error ->
+                        println(
+                            "FCM delivery failed for userId=$userId: " +
+                                error.message
+                        )
+                    }
                 }
 
                 val telegram = transaction {
@@ -97,7 +111,18 @@ object NotificationService {
                 }
                 if (telegram.first) {
                     telegram.second?.let { chatId ->
-                        TelegramService.sendMessageToChat(chatId, "<b>$title</b>\n\n${escapeTelegram(message)}")
+                        runCatching {
+                            TelegramService.sendMessageToChat(
+                                chatId,
+                                "<b>${escapeTelegram(title)}</b>\n\n" +
+                                    escapeTelegram(message)
+                            )
+                        }.onFailure { error ->
+                            println(
+                                "Telegram delivery failed for " +
+                                    "userId=$userId: ${error.message}"
+                            )
+                        }
                     }
                 }
             }

@@ -464,36 +464,7 @@ internal fun Route.ticketRoutes() {
                 UsersTable.selectAll().where { UsersTable.id eq session.userId }.single()[UsersTable.name]
             }
             val recipientUuids = request.recipientIds.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
-            transaction {
-                recipientUuids.forEach { recipientId ->
-                    NotificationsTable.insert {
-                        it[id] = UUID.randomUUID()
-                        it[targetUserId] = recipientId
-                        it[senderUserId] = session.userId
-                        it[type] = "TICKET"
-                        it[title] = "🎫 Новый билет"
-                        it[message] = "$senderName загрузил(а) билет по проекту «$projectName»"
-                        it[payload] = ticketJson.encodeToString(mapOf(
-                            "ticketId" to ticketId.toString(),
-                            "projectId" to request.projectId,
-                            "projectName" to projectName
-                        ))
-                        it[createdAt] = System.currentTimeMillis()
-                    }
-                }
-            }
-            CoroutineScope(Dispatchers.IO).launch {
-                val tokens = transaction {
-                    FcmTokensTable.selectAll()
-                        .where { FcmTokensTable.userId inList recipientUuids }
-                        .map { it[FcmTokensTable.token] }
-                }
-                tokens.forEach { token ->
-                    FirebaseService.sendPush(token = token, title = "🎫 Новый билет",
-                        body = "$senderName загрузил билет по проекту «$projectName»",
-                        data = mapOf("type" to "TICKET"))
-                }
-            }
+
             //  Отправка email бухгалтеру (если выбрана галочка)
             if (request.sendToAccountant && request.accountantEmail.isNotBlank()) {
                 CoroutineScope(Dispatchers.IO).launch {

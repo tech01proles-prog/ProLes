@@ -120,6 +120,60 @@ private fun parsePayrollDate(
 
 private fun currentEmployeeBalance(userId: UUID): Double = EmployeeBalanceTransactionsTable.selectAll().where { EmployeeBalanceTransactionsTable.userId eq userId }.sumOf { it[EmployeeBalanceTransactionsTable.amount].toDouble() }
 
+private fun reverseSalaryBalanceTransactions(
+    salaryRecordId: UUID,
+    userId: UUID,
+    createdBy: UUID,
+    reason: String
+) {
+    val alreadyReversedIds = EmployeeBalanceTransactionsTable
+        .selectAll()
+        .where {
+            EmployeeBalanceTransactionsTable.salaryRecordId eq salaryRecordId
+        }
+        .mapNotNull {
+            it[EmployeeBalanceTransactionsTable.reversedTransactionId]
+        }
+        .toSet()
+
+    val originals = EmployeeBalanceTransactionsTable
+        .selectAll()
+        .where {
+            (EmployeeBalanceTransactionsTable.salaryRecordId eq salaryRecordId) and
+                EmployeeBalanceTransactionsTable.reversedTransactionId.isNull()
+        }
+        .filter {
+            it[EmployeeBalanceTransactionsTable.id].value !in alreadyReversedIds
+        }
+
+    val now = System.currentTimeMillis()
+
+    originals.forEachIndexed { index, original ->
+        val originalId =
+            original[EmployeeBalanceTransactionsTable.id].value
+        val originalType =
+            original[EmployeeBalanceTransactionsTable.transactionType]
+        val originalAmount =
+            original[EmployeeBalanceTransactionsTable.amount]
+
+        EmployeeBalanceTransactionsTable.insert {
+            it[id] = UUID.randomUUID()
+            it[EmployeeBalanceTransactionsTable.userId] = userId
+            it[EmployeeBalanceTransactionsTable.salaryRecordId] =
+                salaryRecordId
+            it[transactionType] = "REVERSAL"
+            it[amount] = originalAmount.negate()
+            it[comment] =
+                "$reason: $originalType, операция $originalId"
+            it[EmployeeBalanceTransactionsTable.createdBy] = createdBy
+            it[createdAt] = now + index
+            it[reversedTransactionId] = originalId
+            it[idempotencyKey] =
+                "salary:$salaryRecordId:reverse:$originalId"
+        }
+    }
+}
+
 private fun balanceTransactionDto(row: ResultRow): EmployeeBalanceTransactionDto {
     val creatorId = row[EmployeeBalanceTransactionsTable.createdBy].value
     val creatorName = UsersTable.selectAll().where { UsersTable.id eq creatorId }.limit(1).singleOrNull()?.get(UsersTable.name).orEmpty()
@@ -438,36 +492,66 @@ internal fun Route.payrollRoutes() {
             val availableBalance = transaction { currentEmployeeBalance(userId) }
             val repayment = body.withholdingRepaymentAmount.coerceAtMost(availableBalance.coerceAtLeast(0.0))
             val total = (gross - breakdown.penalty - body.withholdingAmount + repayment).coerceAtLeast(0.0)
-            val recordId = UUID.randomUUID()
-
             val response = transaction {
-                val oldRecord = SalaryRecordsTable.selectAll().where {
-                    (SalaryRecordsTable.userId eq userId) and (SalaryRecordsTable.periodYear eq body.year) and (SalaryRecordsTable.periodMonth eq body.month)
-                }.limit(1).singleOrNull()
-                val oldRecordId = oldRecord?.get(SalaryRecordsTable.id)?.value
+                val oldRecord = SalaryRecordsTable
+                    .selectAll()
+                    .where {
+                        (SalaryRecordsTable.userId eq userId) and
+                            (SalaryRecordsTable.periodYear eq body.year) and
+                            (SalaryRecordsTable.periodMonth eq body.month)
+                    }
+                    .limit(1)
+                    .singleOrNull()
 
-                if (oldRecordId != null) {
-                    EmployeeBalanceTransactionsTable.deleteWhere { EmployeeBalanceTransactionsTable.salaryRecordId eq oldRecordId }
-                    SalaryRecordsTable.deleteWhere { SalaryRecordsTable.id eq oldRecordId }
-                }
+                val recordId =
+                    oldRecord?.get(SalaryRecordsTable.id)?.value
+                        ?: UUID.randomUUID()
 
-                SalaryRecordsTable.insert {
-                    it[id] = recordId
-                    it[SalaryRecordsTable.userId] = userId
-                    it[periodYear] = body.year
-                    it[periodMonth] = body.month
-                    it[fixedAmount] = breakdown.fixed
-                    it[pieceAmount] = breakdown.piece
-                    it[hourlyAmount] = breakdown.hourly
-                    it[bonusAmount] = breakdown.bonus
-                    it[penaltyAmount] = breakdown.penalty
-                    it[withholdingAmount] = body.withholdingAmount
-                    it[withholdingRepaymentAmount] = repayment
-                    it[grossAmount] = gross
-                    it[totalAmount] = total
-                    it[status] = "draft"
-                    it[calculatedAt] = System.currentTimeMillis()
-                    it[notes] = body.comment.trim()
+                if (oldRecord == null) {
+                    SalaryRecordsTable.insert {
+                        it[id] = recordId
+                        it[SalaryRecordsTable.userId] = userId
+                        it[periodYear] = body.year
+                        it[periodMonth] = body.month
+                        it[fixedAmount] = breakdown.fixed
+                        it[pieceAmount] = breakdown.piece
+                        it[hourlyAmount] = breakdown.hourly
+                        it[bonusAmount] = breakdown.bonus
+                        it[penaltyAmount] = breakdown.penalty
+                        it[withholdingAmount] = body.withholdingAmount
+                        it[withholdingRepaymentAmount] = repayment
+                        it[grossAmount] = gross
+                        it[totalAmount] = total
+                        it[status] = "draft"
+                        it[calculatedAt] = System.currentTimeMillis()
+                        it[notes] = body.comment.trim()
+                    }
+                } else {
+                    reverseSalaryBalanceTransactions(
+                        salaryRecordId = recordId,
+                        userId = userId,
+                        createdBy = creatorId,
+                        reason = "Сторнирование перед перерасчётом " +
+                            "${body.month}.${body.year}"
+                    )
+
+                    SalaryRecordsTable.update({
+                        SalaryRecordsTable.id eq recordId
+                    }) {
+                        it[fixedAmount] = breakdown.fixed
+                        it[pieceAmount] = breakdown.piece
+                        it[hourlyAmount] = breakdown.hourly
+                        it[bonusAmount] = breakdown.bonus
+                        it[penaltyAmount] = breakdown.penalty
+                        it[withholdingAmount] = body.withholdingAmount
+                        it[withholdingRepaymentAmount] = repayment
+                        it[grossAmount] = gross
+                        it[totalAmount] = total
+                        it[status] = "draft"
+                        it[calculatedAt] = System.currentTimeMillis()
+                        it[paidAt] = null
+                        it[notes] = body.comment.trim()
+                    }
                 }
 
                 val now = System.currentTimeMillis()
@@ -480,7 +564,7 @@ internal fun Route.payrollRoutes() {
                     it[comment] = body.comment.trim().ifBlank { "Удержание за ${body.month}.${body.year}" }
                     it[createdBy] = creatorId
                     it[createdAt] = now
-                    it[idempotencyKey] = "salary:${userId}:${body.year}:${body.month}:withholding"
+                    it[idempotencyKey] ="salary:$recordId:$now:withholding"
                 }
                 if (repayment > 0.0) EmployeeBalanceTransactionsTable.insert {
                     it[id] = UUID.randomUUID()
@@ -491,7 +575,7 @@ internal fun Route.payrollRoutes() {
                     it[comment] = body.comment.trim().ifBlank { "Погашение удержания за ${body.month}.${body.year}" }
                     it[createdBy] = creatorId
                     it[createdAt] = now + 1
-                    it[idempotencyKey] = "salary:${userId}:${body.year}:${body.month}:repayment"
+                    it[idempotencyKey] = "salary:$recordId:$now:repayment"
                 }
 
                 val balance = currentEmployeeBalance(userId)
