@@ -12,6 +12,8 @@ import io.ktor.server.netty.*
 import io.ktor.server.routing.*
 import io.ktor.server.response.*
 import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.websocket.*
+import kotlin.time.Duration.Companion.seconds
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.SchemaUtils
@@ -153,6 +155,13 @@ fun Application.module() {
 
     install(ContentNegotiation) {
         json(Json { ignoreUnknownKeys = true; encodeDefaults = true })
+    }
+
+    install(WebSockets) {
+        pingPeriod = 20.seconds
+        timeout = 45.seconds
+        maxFrameSize = 64 * 1024
+        masking = false
     }
 
     routing {

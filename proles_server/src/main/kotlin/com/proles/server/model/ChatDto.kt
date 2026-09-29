@@ -48,3 +48,14 @@ data class ChatMessagesPageDto(val items: List<ChatMessageDto>, val nextCursor: 
 
 @Serializable
 data class MarkChatReadRequest(val messageId: String? = null)
+
+@Serializable
+data class ChatRealtimeEvent(
+    val type: String,
+    val conversationId: String? = null,
+    val message: ChatMessageDto? = null,
+    val userId: String? = null,
+    val messageId: String? = null,
+    val unreadCount: Int? = null,
+    val occurredAt: Long = System.currentTimeMillis()
+)

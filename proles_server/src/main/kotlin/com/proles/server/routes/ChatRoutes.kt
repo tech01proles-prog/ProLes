@@ -4,6 +4,7 @@ import com.proles.server.config.SessionManager
 import com.proles.server.data.*
 import com.proles.server.model.*
 import com.proles.server.services.ChatCrypto
+import com.proles.server.services.ChatRealtimeHub
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.ContentDisposition
 import io.ktor.http.HttpHeaders
@@ -20,6 +21,9 @@ import io.ktor.server.application.*
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.*
+import io.ktor.server.websocket.*
+import io.ktor.websocket.*
+import kotlinx.coroutines.channels.consumeEach
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -31,6 +35,41 @@ private val chatUploadDirectory = File(System.getenv("CHAT_UPLOAD_DIR") ?: "uplo
 
 fun Route.chatRoutes() {
     route("/api/v1/chat") {
+        webSocket("/ws") {
+            val token = call.request.queryParameters["token"]
+            val session = SessionManager.validate(token)
+
+            if (session == null) {
+                close(
+                    CloseReason(
+                        CloseReason.Codes.VIOLATED_POLICY,
+                        "Unauthorized"
+                    )
+                )
+                return@webSocket
+            }
+
+            ChatRealtimeHub.register(session.userId, this)
+
+            try {
+                ChatRealtimeHub.send(
+                    session.userId,
+                    ChatRealtimeEvent(
+                        type = "CONNECTED",
+                        userId = session.userId.toString()
+                    )
+                )
+
+                incoming.consumeEach { frame ->
+                    if (frame is Frame.Close) {
+                        return@consumeEach
+                    }
+                }
+            } finally {
+                ChatRealtimeHub.unregister(session.userId, this)
+            }
+        }
+
         get("/users") {
             val session = call.requireChatSession() ?: return@get
             val users = transaction {
@@ -140,7 +179,7 @@ fun Route.chatRoutes() {
                 }
                 messageDto(ChatMessagesTable.selectAll().where { ChatMessagesTable.id eq messageId }.single())
             } ?: return@post call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Нет доступа к диалогу или ответу"))
-
+            publishMessageCreated(conversationId, result)
             call.respond(HttpStatusCode.Created, result)
         }
 
@@ -161,7 +200,19 @@ fun Route.chatRoutes() {
                 true
             }
 
-            if (!updated) call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Нет доступа к сообщению")) else call.respond(mapOf("ok" to true))
+            if (!updated) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    mapOf("error" to "Нет доступа к сообщению")
+                )
+            } else {
+                publishConversationRead(
+                    conversationId = conversationId,
+                    readerId = session.userId,
+                    messageId = requestedMessageId
+                )
+                call.respond(mapOf("ok" to true))
+            }
         }
 
         post("/conversations/{conversationId}/attachments") {
@@ -265,7 +316,15 @@ fun Route.chatRoutes() {
                     ChatAttachmentUploadResponse(message.attachments.single(), message)
                 }
 
-                if (response == null) call.respond(HttpStatusCode.Conflict, mapOf("error" to "clientMessageId уже занят текстовым сообщением")) else call.respond(HttpStatusCode.Created, response)
+                if (response == null) {
+                    call.respond(
+                        HttpStatusCode.Conflict,
+                        mapOf("error" to "clientMessageId уже занят текстовым сообщением")
+                    )
+                } else {
+                    publishMessageCreated(conversationId, response.message)
+                    call.respond(HttpStatusCode.Created, response)
+                }
             } catch (error: IllegalArgumentException) {
                 call.respond(HttpStatusCode.PayloadTooLarge, mapOf("error" to (error.message ?: "Файл слишком большой")))
             } finally {
@@ -294,6 +353,61 @@ fun Route.chatRoutes() {
         }
     }
 }
+private suspend fun publishMessageCreated(
+    conversationId: UUID,
+    message: ChatMessageDto
+) {
+    val memberIds = transaction {
+        conversationMemberIds(conversationId)
+    }
+
+    memberIds.forEach { memberId ->
+        val unreadCount = transaction {
+            conversationDto(conversationId, memberId)?.unreadCount ?: 0
+        }
+
+        ChatRealtimeHub.send(
+            memberId,
+            ChatRealtimeEvent(
+                type = "MESSAGE_CREATED",
+                conversationId = conversationId.toString(),
+                message = message,
+                unreadCount = unreadCount
+            )
+        )
+    }
+}
+
+private suspend fun publishConversationRead(
+    conversationId: UUID,
+    readerId: UUID,
+    messageId: UUID?
+) {
+    val memberIds = transaction {
+        conversationMemberIds(conversationId)
+    }
+
+    ChatRealtimeHub.sendToUsers(
+        memberIds,
+        ChatRealtimeEvent(
+            type = "CONVERSATION_READ",
+            conversationId = conversationId.toString(),
+            userId = readerId.toString(),
+            messageId = messageId?.toString(),
+            unreadCount = 0
+        )
+    )
+}
+
+private fun conversationMemberIds(conversationId: UUID): List<UUID> =
+    ChatConversationMembersTable
+        .selectAll()
+        .where {
+            ChatConversationMembersTable.conversationId eq conversationId
+        }
+        .map {
+            it[ChatConversationMembersTable.userId].value
+        }
 
 private suspend fun ApplicationCall.requireChatSession(): ChatSession? {
     val session = SessionManager.validate(request.headers["X-Session-Token"])
