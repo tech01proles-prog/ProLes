@@ -13,16 +13,40 @@ type ChatRealtimeEvent = {
 };
 
 const buildChatWebSocketUrl = (token: string) => {
-  const configuredApi = import.meta.env.VITE_API_URL as string | undefined;
+  const configuredWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
+  const configuredApiUrl = import.meta.env.VITE_API_URL as string | undefined;
+
+  if (configuredWsUrl) {
+    const wsUrl = new URL(configuredWsUrl, window.location.origin);
+    wsUrl.searchParams.set('token', token);
+    return wsUrl.toString();
+  }
+
   const apiUrl = new URL(
-    configuredApi || '/api/v1',
+    configuredApiUrl || '/api/v1',
     window.location.origin
   );
 
-  const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-  const apiPath = apiUrl.pathname.replace(/\/+$/, '');
+  apiUrl.protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  apiUrl.pathname = `${apiUrl.pathname.replace(/\/+$/, '')}/chat/ws`;
+  apiUrl.search = '';
+  apiUrl.searchParams.set('token', token);
 
-  return `${protocol}//${apiUrl.host}${apiPath}/chat/ws?token=${encodeURIComponent(token)}`;
+  return apiUrl.toString();
+};
+
+const createClientMessageId = () => {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return `web-${Date.now()}-${globalThis.crypto.randomUUID()}`;
+  }
+
+  const randomPart = Array.from({ length: 16 }, () =>
+    Math.floor(Math.random() * 256)
+      .toString(16)
+      .padStart(2, '0')
+  ).join('');
+
+  return `web-${Date.now()}-${randomPart}`;
 };
 
 const formatSize = (bytes: number) => bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} КБ` : `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
@@ -81,6 +105,11 @@ export function ChatPage() {
 
       socket.onopen = () => {
         reconnectAttempt = 0;
+        void loadSidebar();
+
+        if (activeIdRef.current) {
+          void loadMessages(activeIdRef.current);
+        }
       };
 
       socket.onmessage = (event) => {
@@ -129,6 +158,10 @@ export function ChatPage() {
         }
       };
 
+      socket.onerror = () => {
+        socket?.close();
+      };
+
       socket.onclose = () => {
         if (closedByComponent) return;
 
@@ -148,9 +181,15 @@ export function ChatPage() {
         window.clearTimeout(reconnectTimer);
       }
 
-      socket?.close(1000, 'Component unmounted');
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.close(1000, 'Component unmounted');
+      } else if (socket?.readyState === WebSocket.CONNECTING) {
+        socket.onopen = () => {
+          socket?.close(1000, 'Component unmounted');
+        };
+      }
     };
-  }, [loadSidebar]);
+  }, [loadMessages, loadSidebar]);
 
   const startConversation = async (userId: string) => {
     const { data } = await api.post<ChatConversationDto>('/chat/conversations/direct', { userId });
@@ -161,7 +200,7 @@ export function ChatPage() {
   const send = async () => {
     if (!activeId || (!text.trim() && !file) || sending) return;
     setSending(true);
-    const clientMessageId = `web-${Date.now()}-${crypto.randomUUID()}`;
+    const clientMessageId = createClientMessageId();
     try {
       if (file) {
         const formData = new FormData();
