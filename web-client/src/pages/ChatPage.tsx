@@ -2,6 +2,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client';
 import type { ChatConversationDto, ChatMessageDto, ChatMessagesPageDto, ChatUserDto, UserDto } from '../types';
 
+type ChatRealtimeEvent = {
+  type: 'CONNECTED' | 'MESSAGE_CREATED' | 'CONVERSATION_READ';
+  conversationId?: string;
+  message?: ChatMessageDto;
+  userId?: string;
+  messageId?: string;
+  unreadCount?: number;
+  occurredAt: number;
+};
+
+const buildChatWebSocketUrl = (token: string) => {
+  const configuredApi = import.meta.env.VITE_API_URL as string | undefined;
+  const apiUrl = new URL(
+    configuredApi || '/api/v1',
+    window.location.origin
+  );
+
+  const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  const apiPath = apiUrl.pathname.replace(/\/+$/, '');
+
+  return `${protocol}//${apiUrl.host}${apiPath}/chat/ws?token=${encodeURIComponent(token)}`;
+};
+
 const formatSize = (bytes: number) => bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} КБ` : `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
 
 export function ChatPage() {
@@ -16,6 +39,7 @@ export function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const activeIdRef = useRef('');
 
   const loadSidebar = useCallback(async () => {
     const [conversationResponse, userResponse] = await Promise.all([api.get<ChatConversationDto[]>('/chat/conversations'), api.get<ChatUserDto[]>('/chat/users')]);
@@ -32,12 +56,101 @@ export function ChatPage() {
   }, []);
 
   useEffect(() => {
-    loadSidebar().catch(console.error).finally(() => setLoading(false));
-    const timer = window.setInterval(() => { void loadSidebar(); if (activeId) void loadMessages(activeId); }, 5000);
-    return () => window.clearInterval(timer);
-  }, [activeId, loadMessages, loadSidebar]);
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+   useEffect(() => {
+    loadSidebar()
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [loadSidebar]);
 
   useEffect(() => { if (activeId) void loadMessages(activeId); else setMessages([]); }, [activeId, loadMessages]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('proles_token');
+    if (!token) return;
+
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
+    let closedByComponent = false;
+    let reconnectAttempt = 0;
+
+    const connect = () => {
+      socket = new WebSocket(buildChatWebSocketUrl(token));
+
+      socket.onopen = () => {
+        reconnectAttempt = 0;
+      };
+
+      socket.onmessage = (event) => {
+        let realtimeEvent: ChatRealtimeEvent;
+
+        try {
+          realtimeEvent = JSON.parse(event.data) as ChatRealtimeEvent;
+        } catch {
+          return;
+        }
+
+        if (
+          realtimeEvent.type === 'MESSAGE_CREATED' &&
+          realtimeEvent.conversationId &&
+          realtimeEvent.message
+        ) {
+          const incoming = realtimeEvent.message;
+
+          if (realtimeEvent.conversationId === activeIdRef.current) {
+            setMessages((current) => {
+              if (
+                current.some(
+                  (message) =>
+                    message.id === incoming.id ||
+                    message.clientMessageId === incoming.clientMessageId
+                )
+              ) {
+                return current;
+              }
+
+              return [incoming, ...current];
+            });
+
+            void api.post(
+              `/chat/conversations/${realtimeEvent.conversationId}/read`,
+              { messageId: incoming.id }
+            );
+          }
+
+          void loadSidebar();
+          return;
+        }
+
+        if (realtimeEvent.type === 'CONVERSATION_READ') {
+          void loadSidebar();
+        }
+      };
+
+      socket.onclose = () => {
+        if (closedByComponent) return;
+
+        reconnectAttempt += 1;
+        const delay = Math.min(30_000, 1_000 * 2 ** Math.min(reconnectAttempt, 5));
+
+        reconnectTimer = window.setTimeout(connect, delay);
+      };
+    };
+
+    connect();
+
+    return () => {
+      closedByComponent = true;
+
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+      }
+
+      socket?.close(1000, 'Component unmounted');
+    };
+  }, [loadSidebar]);
 
   const startConversation = async (userId: string) => {
     const { data } = await api.post<ChatConversationDto>('/chat/conversations/direct', { userId });
@@ -62,7 +175,7 @@ export function ChatPage() {
       setText('');
       setFile(null);
       if (fileInput.current) fileInput.current.value = '';
-      await Promise.all([loadMessages(activeId), loadSidebar()]);
+      await loadSidebar();
     } finally {
       setSending(false);
     }
