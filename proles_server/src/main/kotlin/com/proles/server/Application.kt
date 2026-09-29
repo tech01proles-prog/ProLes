@@ -16,7 +16,7 @@ import io.ktor.server.websocket.*
 import kotlin.time.Duration.Companion.seconds
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.sql.SchemaUtils
+// import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -59,27 +59,27 @@ fun Application.module() {
     )
 
     transaction {
-        SchemaUtils.createMissingTablesAndColumns(
-            UsersTable, PositionsTable, ProjectsTable, PersonalTimesheetTasksTable,
-            PersonalTimesheetCategoriesTable, TimeEntriesTable, ExpensesTable,
-            IncomesTable,
-            VacationsTable, DayOffsTable, BusinessTripsTable,
-            NotificationsTable, ExpenseReceiptsTable, FcmTokensTable,
-            NotificationPreferencesTable, TelegramLinksTable,
-            RolesTable, RolePermissionsTable, UserPermissionOverridesTable,
-            TicketsTable, TicketRecipientsTable,
-            SalaryComponentsTable,
-            SalaryRecordsTable,
-            SessionsTable,
-            SubprojectsTable,
-            TnpaDocumentsTable,
-            EmployeeBalanceTransactionsTable,
-            ChatConversationsTable,
-            ChatConversationMembersTable,
-            ChatMessagesTable,
-            ChatAttachmentsTable,
-            TicketReceiptsTable
-        )
+//        SchemaUtils.createMissingTablesAndColumns(
+//            UsersTable, PositionsTable, ProjectsTable, PersonalTimesheetTasksTable,
+//            PersonalTimesheetCategoriesTable, TimeEntriesTable, ExpensesTable,
+//            IncomesTable,
+//            VacationsTable, DayOffsTable, BusinessTripsTable,
+//            NotificationsTable, ExpenseReceiptsTable, FcmTokensTable,
+//            NotificationPreferencesTable, TelegramLinksTable,
+//            RolesTable, RolePermissionsTable, UserPermissionOverridesTable,
+//            TicketsTable, TicketRecipientsTable,
+//            SalaryComponentsTable,
+//            SalaryRecordsTable,
+//            SessionsTable,
+//            SubprojectsTable,
+//            TnpaDocumentsTable,
+//            EmployeeBalanceTransactionsTable,
+//            ChatConversationsTable,
+//            ChatConversationMembersTable,
+//            ChatMessagesTable,
+//            ChatAttachmentsTable,
+//            TicketReceiptsTable
+//        )
 
         exec("CREATE UNIQUE INDEX IF NOT EXISTS chat_member_conversation_user_uidx ON chat_conversation_members(conversation_id, user_id)")
         exec("CREATE INDEX IF NOT EXISTS chat_member_user_idx ON chat_conversation_members(user_id)")
