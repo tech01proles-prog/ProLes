@@ -459,3 +459,9 @@ export interface PositionDto {
   isActive: boolean;
   sortOrder: number;
 }
+
+export type ChatUserDto = { id: string; name: string; role: string; position: string };
+export type ChatAttachmentDto = { id: string; originalName: string; mimeType: string; sizeBytes: number; downloadUrl: string };
+export type ChatMessageDto = { id: string; conversationId: string; senderId: string; senderName: string; text: string; clientMessageId: string; replyToMessageId: string | null; createdAt: number; editedAt: number | null; deletedAt: number | null; attachments: ChatAttachmentDto[] };
+export type ChatConversationDto = { id: string; type: string; title: string; members: ChatUserDto[]; lastMessage: ChatMessageDto | null; unreadCount: number; updatedAt: number };
+export type ChatMessagesPageDto = { items: ChatMessageDto[]; nextCursor: string | null };

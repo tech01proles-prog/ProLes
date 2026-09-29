@@ -60,6 +60,13 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     section: 'workspace',
   },
   {
+    to: '/chat',
+    label: 'PRO-Chat',
+    description: 'Личные сообщения и файлы',
+    icon: '◆',
+    section: 'workspace',
+  },
+  {
     to: '/notifications',
     label: 'Уведомления',
     description: 'События и сообщения системы',
@@ -117,6 +124,10 @@ const PAGE_META: Record<string, PageMeta> = {
   '/vacations': {
     title: 'Отпуска',
     description: 'Заявки на отпуск и история отсутствий',
+  },
+  '/chat': {
+    title: 'PRO-Chat',
+    description: 'Личные сообщения и файлы',
   },
   '/notifications': {
     title: 'Уведомления',

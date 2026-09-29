@@ -11,6 +11,7 @@ import { ExpensesPage } from './pages/ExpensesPage';
 import { TripsPage } from './pages/TripsPage';
 import { VacationsPage } from './pages/VacationsPage';
 import { TicketsPage } from './pages/TicketsPage';
+import { ChatPage } from './pages/ChatPage';
 import { PayrollPage } from './pages/PayrollPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { NotificationSettingsPage } from './pages/NotificationSettingsPage';
@@ -71,6 +72,7 @@ function App() {
             <Route path="/trips" element={<TripsPage />} />
             <Route path="/vacations" element={<VacationsPage />} />
             <Route path="/tickets" element={<TicketsPage />} />
+            <Route path="/chat" element={<ChatPage />} />
             <Route path="/payroll" element={<PayrollPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
