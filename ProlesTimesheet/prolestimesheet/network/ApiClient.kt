@@ -764,15 +764,13 @@ object ApiClient {
     }
 
     // 📸 Загрузка фото чека (совместимый wrapper)
-    suspend fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray, userFullName: String): Result<String> {
-        return uploadExpenseAttachment(
-            expenseId = expenseId,
-            fileBytes = imageBytes,
-            fileName = "receipt_${System.currentTimeMillis()}.jpg",
-            mimeType = "image/jpeg",
-            userFullName = userFullName
-        )
-    }
+    suspend fun uploadReceiptPhoto(
+        expenseId: String,
+        imageBytes: ByteArray,
+        userFullName: String,
+        fileName: String = "receipt_${System.currentTimeMillis()}",
+        mimeType: String = "application/octet-stream"
+    ): Result<String> = uploadExpenseAttachment(expenseId, imageBytes, fileName, mimeType, userFullName)
 
 
 
