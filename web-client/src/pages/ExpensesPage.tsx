@@ -625,9 +625,12 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
           },
         );
 
+        const rawContentType = response.headers['content-type'];
+
         const contentType =
-          response.headers['content-type'] ||
-          'application/octet-stream';
+          typeof rawContentType === 'string'
+            ? rawContentType
+            : 'application/octet-stream';
 
         const blobUrl = URL.createObjectURL(
           new Blob([response.data], {
