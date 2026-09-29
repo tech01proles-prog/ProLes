@@ -1,0 +1,4 @@
+Получил ошибки в консоли 
+Access to XMLHttpRequest at 'http://138.16.177.245:8080/api/v1/notifications' from origin 'http://138.16.177.245:5173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+http://138.16.177.245:8080/api/v1/rbac/my-permissions net::ERR_FAILED
+NotificationBell.tsx:20  GET http://138.16.177.245:8080/api/v1/notifications net::ERR_FAILED
