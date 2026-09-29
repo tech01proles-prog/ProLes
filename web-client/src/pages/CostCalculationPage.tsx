@@ -103,15 +103,22 @@ export function CostCalculationPage() {
       return date >= bounds.start && date <= bounds.end && isRealizationExpense(expense);
     });
 
-    const totalHoursByUser = new Map<string, number>();
-    periodEntries.forEach((entry) => totalHoursByUser.set(entry.userId, (totalHoursByUser.get(entry.userId) || 0) + entry.hours));
+    const monthKey = (userId: string, year: number, month: number) => `${userId}:${year}-${String(month).padStart(2, '0')}`;
+    const totalHoursByUserMonth = new Map<string, number>();
 
-    const paidByUser = new Map<string, { salary: number; salaryWithTax: number }>();
+    periodEntries.forEach((entry) => {
+      const date = new Date(`${entry.date}T00:00:00`);
+      const key = monthKey(entry.userId, date.getFullYear(), date.getMonth() + 1);
+      totalHoursByUserMonth.set(key, (totalHoursByUserMonth.get(key) || 0) + entry.hours);
+    });
+
+    const paidByUserMonth = new Map<string, { salary: number; salaryWithTax: number }>();
     salaries.forEach((salary) => {
-      const current = paidByUser.get(salary.userId) || { salary: 0, salaryWithTax: 0 };
+      const key = monthKey(salary.userId, salary.year, salary.month);
+      const current = paidByUserMonth.get(key) || { salary: 0, salaryWithTax: 0 };
       current.salary += salary.amount;
       current.salaryWithTax += salary.taxInclusiveAmount || salary.amount;
-      paidByUser.set(salary.userId, current);
+      paidByUserMonth.set(key, current);
     });
 
     const map = new Map<string, CostRow>();
@@ -126,8 +133,10 @@ export function CostCalculationPage() {
       const project = projects.find((item) => item.id === entry.projectId);
       if (!project) return;
       const row = ensureRow(project.id, entry.subprojectId || null, project.name, entry.subprojectName || '');
-      const employeeHours = totalHoursByUser.get(entry.userId) || 0;
-      const paid = paidByUser.get(entry.userId);
+      const entryDate = new Date(`${entry.date}T00:00:00`);
+      const key = monthKey(entry.userId, entryDate.getFullYear(), entryDate.getMonth() + 1);
+      const employeeHours = totalHoursByUserMonth.get(key) || 0;
+      const paid = paidByUserMonth.get(key);
       row.hours += entry.hours;
       if (employeeHours > 0 && paid) {
         row.salary += paid.salary * entry.hours / employeeHours;
