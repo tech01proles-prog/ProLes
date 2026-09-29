@@ -3,6 +3,8 @@ package com.proles.server.services
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
+import java.io.InputStream
+import java.io.OutputStream
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -28,4 +30,29 @@ object ChatCrypto {
         cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, Base64.getDecoder().decode(iv)))
         return String(cipher.doFinal(Base64.getDecoder().decode(ciphertext)), Charsets.UTF_8)
     }
+
+    fun encryptStream(input: InputStream, output: OutputStream): String {
+        val iv = ByteArray(12).also(random::nextBytes)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
+        val buffer = ByteArray(64 * 1024)
+        var read: Int
+        while (input.read(buffer).also { read = it } >= 0) {
+            if (read > 0) cipher.update(buffer, 0, read)?.let(output::write)
+        }
+        cipher.doFinal()?.let(output::write)
+        return Base64.getEncoder().encodeToString(iv)
+    }
+
+    fun decryptStream(input: InputStream, output: OutputStream, encodedIv: String) {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, Base64.getDecoder().decode(encodedIv)))
+        val buffer = ByteArray(64 * 1024)
+        var read: Int
+        while (input.read(buffer).also { read = it } >= 0) {
+            if (read > 0) cipher.update(buffer, 0, read)?.let(output::write)
+        }
+        cipher.doFinal()?.let(output::write)
+    }
+
 }

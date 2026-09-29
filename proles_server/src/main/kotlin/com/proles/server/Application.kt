@@ -4,6 +4,7 @@ import com.proles.server.config.DatabaseFactory
 import com.proles.server.config.EmailService
 import com.proles.server.routes.authRoutes
 import com.proles.server.routes.dataRoutes
+import com.proles.server.routes.chatRoutes
 import com.proles.server.routes.platformRoutes
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -77,6 +78,10 @@ fun Application.module() {
             ChatAttachmentsTable,
             TicketReceiptsTable
         )
+
+        exec("CREATE UNIQUE INDEX IF NOT EXISTS chat_member_conversation_user_uidx ON chat_conversation_members(conversation_id, user_id)")
+        exec("CREATE INDEX IF NOT EXISTS chat_member_user_idx ON chat_conversation_members(user_id)")
+        exec("CREATE INDEX IF NOT EXISTS chat_message_conversation_created_idx ON chat_messages(conversation_id, created_at DESC)")
 
         // 🔐 Идемпотентно приводим таблицу настроек уведомлений к актуальной схеме.
         // Это защищает существующие БД, созданные до появления новых настроек.
@@ -157,6 +162,7 @@ fun Application.module() {
         }
         authRoutes()
         dataRoutes()
+        chatRoutes()
         platformRoutes()
 
         // 🆕 Раздача статики веб-клиента
@@ -216,7 +222,7 @@ private fun initDefaultRoles() {
                 "displayName" to "Директор",
                 "description" to "Просмотр аналитики и отчётов",
                 "permissions" to mapOf(
-                    "timesheet"             to Actions(true, true, true, false),
+                    "timesheet"             to Actions(false, false, false, false),
                     "projects"              to Actions(true, false, false, false),
                     "employees"             to Actions(true, false, false, false),
                     "payroll"               to Actions(true, true, true, false),  // может считать и изменять

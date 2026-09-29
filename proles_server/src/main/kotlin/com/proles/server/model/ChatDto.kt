@@ -15,6 +15,9 @@ data class ChatUserDto(val id: String, val name: String, val role: String, val p
 data class ChatAttachmentDto(val id: String, val originalName: String, val mimeType: String, val sizeBytes: Long, val downloadUrl: String)
 
 @Serializable
+data class ChatAttachmentUploadResponse(val attachment: ChatAttachmentDto, val message: ChatMessageDto)
+
+@Serializable
 data class ChatMessageDto(
     val id: String,
     val conversationId: String,

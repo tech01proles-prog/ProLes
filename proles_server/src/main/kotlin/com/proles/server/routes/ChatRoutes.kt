@@ -5,6 +5,17 @@ import com.proles.server.data.*
 import com.proles.server.model.*
 import com.proles.server.services.ChatCrypto
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.ContentDisposition
+import io.ktor.http.HttpHeaders
+import io.ktor.http.content.PartData
+import io.ktor.http.content.forEachPart
+import io.ktor.server.request.receiveMultipart
+import io.ktor.server.response.header
+import io.ktor.server.response.respondOutputStream
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.security.MessageDigest
 import io.ktor.server.application.*
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -15,6 +26,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
 
 private data class ChatSession(val userId: UUID)
+private const val MAX_CHAT_ATTACHMENT_BYTES = 100L * 1024L * 1024L
+private val chatUploadDirectory = File(System.getenv("CHAT_UPLOAD_DIR") ?: "uploads/chat").apply { mkdirs() }
 
 fun Route.chatRoutes() {
     route("/api/v1/chat") {
@@ -57,7 +70,7 @@ fun Route.chatRoutes() {
                     listOf(session.userId, otherId).forEach { memberId ->
                         ChatConversationMembersTable.insert {
                             it[ChatConversationMembersTable.conversationId] = conversationId
-                            it[userId] = memberId
+                            it[ChatConversationMembersTable.userId] = memberId
                             it[joinedAt] = now
                             it[lastReadMessageId] = null
                             it[lastReadAt] = null
@@ -104,7 +117,8 @@ fun Route.chatRoutes() {
                 if (replyId != null && ChatMessagesTable.selectAll().where { (ChatMessagesTable.id eq replyId) and (ChatMessagesTable.conversationId eq conversationId) }.limit(1).none()) return@transaction null
 
                 val messageId = UUID.randomUUID()
-                val now = System.currentTimeMillis()
+                val lastCreatedAt = ChatMessagesTable.selectAll().where { ChatMessagesTable.conversationId eq conversationId }.orderBy(ChatMessagesTable.createdAt to SortOrder.DESC).limit(1).singleOrNull()?.get(ChatMessagesTable.createdAt) ?: 0L
+                val now = maxOf(System.currentTimeMillis(), lastCreatedAt + 1)
                 val encrypted = ChatCrypto.encrypt(text)
                 ChatMessagesTable.insert {
                     it[id] = messageId
@@ -148,6 +162,135 @@ fun Route.chatRoutes() {
             }
 
             if (!updated) call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Нет доступа к сообщению")) else call.respond(mapOf("ok" to true))
+        }
+
+        post("/conversations/{conversationId}/attachments") {
+            val session = call.requireChatSession() ?: return@post
+            val conversationId = call.parameters["conversationId"].uuidOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Некорректный conversationId"))
+            if (!transaction { isConversationMember(conversationId, session.userId) }) return@post call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Нет доступа к диалогу"))
+
+            val multipart = call.receiveMultipart()
+            var originalName = ""
+            var mimeType = "application/octet-stream"
+            var text = ""
+            var clientMessageId = ""
+            var tempFile: File? = null
+            var size = 0L
+            val digest = MessageDigest.getInstance("SHA-256")
+
+            try {
+                multipart.forEachPart { part ->
+                    when (part) {
+                        is PartData.FormItem -> when (part.name) {
+                            "text" -> text = part.value.trim()
+                            "clientMessageId" -> clientMessageId = part.value.trim()
+                        }
+                        is PartData.FileItem -> if (part.name == "file" && tempFile == null) {
+                            originalName = File(part.originalFileName ?: "attachment").name.take(500)
+                            mimeType = part.contentType?.toString()?.take(255) ?: "application/octet-stream"
+                            tempFile = File.createTempFile("chat-", ".upload", chatUploadDirectory)
+                            FileOutputStream(tempFile!!).use { output ->
+                                val buffer = ByteArray(64 * 1024)
+                                val input = part.provider()
+                                while (true) {
+                                    val read = input.readAvailable(buffer, 0, buffer.size)
+                                    if (read < 0) break
+                                    if (read == 0) continue
+                                    size += read
+                                    if (size > MAX_CHAT_ATTACHMENT_BYTES) throw IllegalArgumentException("Файл превышает 100 MiB")
+                                    digest.update(buffer, 0, read)
+                                    output.write(buffer, 0, read)
+                                }
+                            }
+                        }
+                        else -> Unit
+                    }
+                    part.dispose()
+                }
+
+                val sourceFile = tempFile ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Файл не передан"))
+                if (clientMessageId.isBlank() || clientMessageId.length > 100) return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Некорректный clientMessageId"))
+                if (text.length > 20_000) return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Текст превышает 20000 символов"))
+
+                val response = transaction {
+                    ChatMessagesTable.selectAll().where { (ChatMessagesTable.senderId eq session.userId) and (ChatMessagesTable.clientMessageId eq clientMessageId) }.limit(1).singleOrNull()?.let { existing ->
+                        val message = messageDto(existing)
+                        val attachment = message.attachments.firstOrNull() ?: return@transaction null
+                        return@transaction ChatAttachmentUploadResponse(attachment, message)
+                    }
+
+                    val lastCreatedAt = ChatMessagesTable.selectAll().where { ChatMessagesTable.conversationId eq conversationId }.orderBy(ChatMessagesTable.createdAt to SortOrder.DESC).limit(1).singleOrNull()?.get(ChatMessagesTable.createdAt) ?: 0L
+                    val now = maxOf(System.currentTimeMillis(), lastCreatedAt + 1)
+                    val messageId = UUID.randomUUID()
+                    val attachmentId = UUID.randomUUID()
+                    val storedName = "$attachmentId.bin"
+                    val encryptedFile = File(chatUploadDirectory, storedName)
+                    val encryptedText = ChatCrypto.encrypt(text)
+
+                    FileInputStream(sourceFile).use { input ->
+                        FileOutputStream(encryptedFile).use { output ->
+                            val iv = ChatCrypto.encryptStream(input, output)
+                            ChatMessagesTable.insert {
+                                it[id] = messageId
+                                it[ChatMessagesTable.conversationId] = conversationId
+                                it[senderId] = session.userId
+                                it[bodyCiphertext] = encryptedText.first
+                                it[bodyIv] = encryptedText.second
+                                it[bodyKeyVersion] = 1
+                                it[ChatMessagesTable.clientMessageId] = clientMessageId
+                                it[replyToMessageId] = null
+                                it[createdAt] = now
+                                it[editedAt] = null
+                                it[deletedAt] = null
+                            }
+                            ChatAttachmentsTable.insert {
+                                it[id] = attachmentId
+                                it[ChatAttachmentsTable.messageId] = messageId
+                                it[ChatAttachmentsTable.originalName] = originalName
+                                it[ChatAttachmentsTable.storedName] = storedName
+                                it[storagePath] = encryptedFile.absolutePath
+                                it[ChatAttachmentsTable.mimeType] = mimeType
+                                it[sizeBytes] = size
+                                it[checksumSha256] = digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+                                it[encryptionIv] = iv
+                                it[encryptionKeyVersion] = 1
+                                it[createdAt] = now
+                            }
+                        }
+                    }
+
+                    ChatConversationsTable.update({ ChatConversationsTable.id eq conversationId }) { it[updatedAt] = now; it[lastMessageId] = messageId }
+                    ChatConversationMembersTable.update({ (ChatConversationMembersTable.conversationId eq conversationId) and (ChatConversationMembersTable.userId eq session.userId) }) { it[lastReadMessageId] = messageId; it[lastReadAt] = now }
+                    val message = messageDto(ChatMessagesTable.selectAll().where { ChatMessagesTable.id eq messageId }.single())
+                    ChatAttachmentUploadResponse(message.attachments.single(), message)
+                }
+
+                if (response == null) call.respond(HttpStatusCode.Conflict, mapOf("error" to "clientMessageId уже занят текстовым сообщением")) else call.respond(HttpStatusCode.Created, response)
+            } catch (error: IllegalArgumentException) {
+                call.respond(HttpStatusCode.PayloadTooLarge, mapOf("error" to (error.message ?: "Файл слишком большой")))
+            } finally {
+                tempFile?.delete()
+            }
+        }
+
+        get("/attachments/{attachmentId}/download") {
+            val session = call.requireChatSession() ?: return@get
+            val attachmentId = call.parameters["attachmentId"].uuidOrNull() ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Некорректный attachmentId"))
+
+            val attachment = transaction {
+                val row = ChatAttachmentsTable.selectAll().where { ChatAttachmentsTable.id eq attachmentId }.limit(1).singleOrNull() ?: return@transaction null
+                val message = ChatMessagesTable.selectAll().where { ChatMessagesTable.id eq row[ChatAttachmentsTable.messageId].value }.limit(1).singleOrNull() ?: return@transaction null
+                if (!isConversationMember(message[ChatMessagesTable.conversationId].value, session.userId)) return@transaction null
+                Triple(row[ChatAttachmentsTable.storagePath], row[ChatAttachmentsTable.originalName], Pair(row[ChatAttachmentsTable.mimeType], row[ChatAttachmentsTable.encryptionIv]))
+            } ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Файл не найден"))
+
+            val file = File(attachment.first)
+            if (!file.isFile) return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Файл не найден"))
+            call.response.header(HttpHeaders.ContentDisposition, ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, attachment.second).toString())
+            call.response.header(HttpHeaders.ContentType, attachment.third.first)
+            call.respondOutputStream {
+                FileInputStream(file).use { input -> ChatCrypto.decryptStream(input, this, attachment.third.second) }
+            }
         }
     }
 }
