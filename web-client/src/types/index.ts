@@ -127,9 +127,9 @@ export interface ExpenseDto {
   id: string;
   userId: string;
   projectId: string | null;
+  projectName: string;
   subprojectId: string | null;
   subprojectName: string;
-  projectName: string;
   date: string;
   type: string;
   name: string;
