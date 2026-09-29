@@ -28,6 +28,10 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +49,7 @@ fun EmployeeExpensesScreen(
     val expenses by viewModel.expenses.collectAsState()
     val employees by viewModel.employees.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // 🆕 Находим пользователя COMPANY
     val companyUser = remember(employees) { employees.find { it.name == "COMPANY" } }
@@ -70,24 +75,35 @@ fun EmployeeExpensesScreen(
     }
 
     fun uploadPhotoUri(uri: Uri, expenseId: String) {
-        try {
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            if (bytes == null || bytes.isEmpty()) {
-                Toast.makeText(context, "❌ Не удалось прочитать фото", Toast.LENGTH_SHORT).show()
-                return
+        uploadingExpenseId = expenseId
+        scope.launch {
+            try {
+                val source = withContext(Dispatchers.IO) {
+                    val resolver = context.contentResolver
+                    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+                    val mimeType = resolver.getType(uri) ?: "application/octet-stream"
+                    val fileName = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+                    } ?: "receipt_${System.currentTimeMillis()}"
+                    Triple(bytes, fileName, mimeType)
+                }
+
+                val bytes = source.first
+                if (bytes.isNullOrEmpty()) {
+                    uploadingExpenseId = null
+                    Toast.makeText(context, "Не удалось прочитать фото", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+
+                viewModel.uploadExpenseAttachment(expenseId, bytes, source.second, source.third, context) { success ->
+                    if (!success) uploadingExpenseId = null
+                }
+                Toast.makeText(context, "Фото отправляется без сжатия (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                uploadingExpenseId = null
+                Toast.makeText(context, "Ошибка чтения фото: ${e.message}", Toast.LENGTH_SHORT).show()
             }
-            val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-            val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (index >= 0) cursor.getString(index) else null
-                } else null
-            } ?: "receipt_${System.currentTimeMillis()}.jpg"
-            uploadingExpenseId = expenseId
-            viewModel.uploadExpenseAttachment(expenseId, bytes, fileName, mimeType, context)
-            Toast.makeText(context, "📤 Фото отправляется (${bytes.size / 1024} КБ)", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(context, "❌ Ошибка чтения фото: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
