@@ -1,6 +1,6 @@
 # ProLes — статус выполнения TASKS.txt
 
-Последнее обновление: 2026-09-28
+Последнее обновление: 2026-09-29
 
 ## Правила
 
@@ -127,10 +127,10 @@
 - [ ] Добавить защищённое скачивание вложений — PATCH ISSUED.
 - [ ] Реализовать WEB-интерфейс — PATCH ISSUED.
 - [ ] Добавить PRO-Chat в навигацию — PATCH ISSUED.
-- [ ] Добавить WebSocket realtime.
+- [x] Добавить WebSocket realtime — PATCH APPLIED / BUILD PENDING.
 - [ ] Подтвердить WEB и SERVER build владельцем.
 
-Статус: IN PROGRESS — REST/FILES/WEB ISSUED, WEBSOCKET PENDING
+Статус: CODE COMPLETE / WEB AND SERVER BUILD PENDING
 
 ## Финальная проверка владельцем
 
