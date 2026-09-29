@@ -1099,7 +1099,16 @@ function PersonalTimesheetPage() {
                             />
                           </td>
                           <td className={`border-b border-slate-200 p-1 align-top ${rowClass}`}>
-                            <StyledDropdown value={task.status} options={PERSONAL_STATUS_OPTIONS} onChange={value => updateTask(task.id, { status: value })} placeholder="Статус" />
+                            <StyledDropdown
+                              value={task.status}
+                              options={PERSONAL_STATUS_OPTIONS}
+                              onChange={value =>
+                                updateTask(task.id, {
+                                  status: value as PersonalTaskStatus,
+                                })
+                              }
+                              placeholder="Статус"
+                            />
                             <div className={`mt-1.5 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-extrabold ${statusClass}`}>{PERSONAL_STATUS_LABELS[task.status] || task.status}</div>
                           </td>
                           <td className={`border-b border-slate-200 p-1 text-center align-top ${rowClass}`}>

@@ -124,6 +124,8 @@ export function ProjectsPage() {
     const result = new Map<string, number>();
 
     expenses.forEach((expense) => {
+      if (!expense.projectId) return;
+
       result.set(
         expense.projectId,
         (result.get(expense.projectId) ?? 0) +

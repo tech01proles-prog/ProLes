@@ -293,8 +293,25 @@ export function AnalyticsPage() {
       hours: 0, employeeCount: 0, expenseCount: 0, noReceiptRub: 0, expenseShare: 0,
     }));
     filteredExpenses.forEach(x => {
-      if (!map.has(x.projectId)) map.set(x.projectId, { projectId: x.projectId, name: x.projectName || 'Без проекта', revenueRub: 0, expenseRub: 0, marginRub: 0, marginPct: 0, hours: 0, employeeCount: 0, expenseCount: 0, noReceiptRub: 0, expenseShare: 0 });
-      const m = map.get(x.projectId)!;
+      const projectId = x.projectId ?? '__no_project__';
+
+      if (!map.has(projectId)) {
+        map.set(projectId, {
+          projectId,
+          name: x.projectName || 'Без проекта',
+          revenueRub: 0,
+          expenseRub: 0,
+          marginRub: 0,
+          marginPct: 0,
+          hours: 0,
+          employeeCount: 0,
+          expenseCount: 0,
+          noReceiptRub: 0,
+          expenseShare: 0,
+        });
+      }
+
+      const m = map.get(projectId)!;
       const amount = rub(Number(x.amount || 0), x.currency);
       m.expenseRub += amount; m.expenseCount += 1;
       if (!x.receiptSubmitted && !x.hasReceiptPhoto) m.noReceiptRub += amount;
@@ -322,7 +339,18 @@ export function AnalyticsPage() {
     const userExpenses = filteredExpenses.filter(x => x.userId === selectedEmployeeId).sort((a, b) => b.date.localeCompare(a.date));
     const byProject = new Map<string, { name: string; hours: number; expense: number }>();
     userEntries.forEach(e => { const row = byProject.get(e.projectId) || { name: e.projectName || 'Без проекта', hours: 0, expense: 0 }; row.hours += Number(e.hours || 0); byProject.set(e.projectId, row); });
-    userExpenses.forEach(e => { const row = byProject.get(e.projectId) || { name: e.projectName || 'Без проекта', hours: 0, expense: 0 }; row.expense += rub(Number(e.amount || 0), e.currency); byProject.set(e.projectId, row); });
+    userExpenses.forEach(e => {
+      const projectId = e.projectId ?? '__no_project__';
+
+      const row = byProject.get(projectId) || {
+        name: e.projectName || 'Без проекта',
+        hours: 0,
+        expense: 0,
+      };
+
+      row.expense += rub(Number(e.amount || 0), e.currency);
+      byProject.set(projectId, row);
+    });
     return { userEntries, userExpenses, byProject: Array.from(byProject.entries()).map(([projectId, v]) => ({ projectId, ...v })).sort((a, b) => b.hours - a.hours) };
   }, [selectedEmployeeId, filteredEntries, filteredExpenses]);
 

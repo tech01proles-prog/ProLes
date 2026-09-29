@@ -933,7 +933,7 @@ export function TimesheetPage() {
   }
 
   if (user.login === PERSONAL_TIMESHEET_LOGIN) {
-    return <PersonalTimesheetPage user={user} />;
+    return <PersonalTimesheetPage />;
   }
 
   return <StandardTimesheetPage user={user} />;

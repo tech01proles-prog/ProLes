@@ -627,7 +627,6 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
 
         const contentType =
           response.headers['content-type'] ||
-          receipt.mimeType ||
           'application/octet-stream';
 
         const blobUrl = URL.createObjectURL(
