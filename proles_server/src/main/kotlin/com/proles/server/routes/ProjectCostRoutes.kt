@@ -28,6 +28,39 @@ import java.util.UUID
 
 internal fun Route.projectCostRoutes() {
     route("/api/v1/project-costs") {
+        get("/paid-salaries") {
+            if (!call.checkPermission(Permission.COST_CALCULATION, "view")) return@get
+
+            val fromYear = call.request.queryParameters["fromYear"]?.toIntOrNull()
+            val fromMonth = call.request.queryParameters["fromMonth"]?.toIntOrNull()
+            val toYear = call.request.queryParameters["toYear"]?.toIntOrNull()
+            val toMonth = call.request.queryParameters["toMonth"]?.toIntOrNull()
+
+            if (fromYear == null || fromMonth !in 1..12 || toYear == null || toMonth !in 1..12) return@get call.respond(HttpStatusCode.BadRequest, "Invalid period")
+
+            val fromKey = fromYear * 100 + fromMonth
+            val toKey = toYear * 100 + toMonth
+            if (fromKey > toKey) return@get call.respond(HttpStatusCode.BadRequest, "Invalid period range")
+
+            val result = transaction {
+                SalaryRecordsTable.selectAll().where { SalaryRecordsTable.status inList listOf("approved", "paid") }.mapNotNull { row ->
+                    val year = row[SalaryRecordsTable.periodYear]
+                    val month = row[SalaryRecordsTable.periodMonth]
+                    val key = year * 100 + month
+                    if (key !in fromKey..toKey) null else PaidSalaryCostDto(
+                        userId = row[SalaryRecordsTable.userId].value.toString(),
+                        year = year,
+                        month = month,
+                        amount = row[SalaryRecordsTable.totalAmount],
+                        taxInclusiveAmount = row[SalaryRecordsTable.taxInclusiveCost],
+                        status = row[SalaryRecordsTable.status]
+                    )
+                }
+            }
+
+            call.respond(HttpStatusCode.OK, result)
+        }
+
         get("/payroll-data") {
             if (
                 !call.checkPermission(
