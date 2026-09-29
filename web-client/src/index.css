@@ -8,7 +8,7 @@
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
-    --primary: 234 89% 63%;
+    --primary: 160 84% 39%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -20,7 +20,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 234 89% 63%;
+    --ring: 160 84% 39%;
     --radius: 0.75rem;
     /* Safe area insets for mobile devices */
     --safe-area-inset-top: env(safe-area-inset-top, 0px);
@@ -68,13 +68,13 @@
   }
 
   body {
-    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))] antialiased selection:bg-indigo-100 selection:text-indigo-900;
+    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))] antialiased selection:bg-emerald-100 selection:text-emerald-950;
     font-feature-settings: "rlig" 1, "calt" 1;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   :root.dark body {
-    @apply selection:bg-indigo-900 selection:text-indigo-100;
+    @apply selection:bg-emerald-900 selection:text-emerald-100;
   }
 }
 
@@ -852,6 +852,17 @@ input[type="checkbox"]:checked {
   }
 }
 
+/*
+ * Глобальный PageHeader уже содержит название маршрута.
+ * Скрывается только первый h1 в корневом контейнере страницы;
+ * заголовки карточек, секций и модальных окон сохраняются.
+ */
+.page-content > * > h1:first-child,
+.page-content > * > header:first-child > h1:first-child,
+.page-content > * > div:first-child > h1:first-child {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -864,7 +875,7 @@ input[type="checkbox"]:checked {
 }
 
 ::selection {
-  background: rgb(99 102 241 / 0.22);
+  background: rgb(16 185 129 / 0.22);
 }
 
 html {

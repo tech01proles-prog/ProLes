@@ -152,8 +152,8 @@ export function Layout() {
         <span
           className={[
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base',
-            'bg-slate-100 group-hover:bg-white dark:bg-slate-800 dark:group-hover:bg-slate-700',
-            'group-[.active]:bg-white/15',
+            'bg-emerald-50 text-emerald-700 group-hover:bg-emerald-100',
+            'dark:bg-emerald-950/50 dark:text-emerald-300 dark:group-hover:bg-emerald-900/50',
           ].join(' ')}
           aria-hidden="true"
         >
@@ -258,8 +258,7 @@ export function Layout() {
             </button>
 
             <NavLink to="/" className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-700 text-sm font-black text-white shadow-lg shadow-indigo-500/20">
-                PL
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-green-800 text-sm font-black text-white shadow-lg shadow-emerald-500/25">                PL
               </div>
 
               <div className="hidden leading-tight sm:block">
@@ -281,7 +280,7 @@ export function Layout() {
               to="/profile"
               className="ml-1 flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-slate-700 to-slate-950 text-xs font-bold text-white dark:from-indigo-500 dark:to-violet-700">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-600 to-green-950 text-xs font-bold text-white dark:from-emerald-500 dark:to-green-800">
                 {getInitials(user)}
               </div>
               <div className="hidden max-w-40 text-left lg:block">
@@ -313,7 +312,7 @@ export function Layout() {
               to="/profile"
               className="mb-2 flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-xs font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-xs font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                 {getInitials(user)}
               </div>
               <div className="min-w-0 flex-1">
@@ -378,7 +377,7 @@ export function Layout() {
       >
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 md:px-8 md:py-8">
           <PageHeader />
-          <div className="animate-fade-in">
+          <div className="page-content animate-fade-in">
             <Outlet />
           </div>
         </div>
