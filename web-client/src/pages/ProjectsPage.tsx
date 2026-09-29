@@ -360,61 +360,63 @@ export function ProjectsPage() {
           />
         </div>
       ) : (
-        <div className="card p-2">
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setProjectsView('projects')}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                projectsView === 'projects'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              Проекты
-            </button>
+        <>
+          <div className="card p-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setProjectsView('projects')}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                  projectsView === 'projects'
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                Проекты
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setProjectsView('tnpa')}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                projectsView === 'tnpa'
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              ТНПА
-            </button>
-          </div>
-        </div>
-
-        {projectsView === 'tnpa' && (
-          <div className="rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/20 px-4 py-3">
-            <div className="font-semibold text-indigo-900 dark:text-indigo-200">
-              ТНПА по проектам
-            </div>
-
-            <div className="text-sm text-indigo-700 dark:text-indigo-300 mt-1">
-              Выберите проект ниже и откройте его карточку. Сертифицированная
-              документация и документы подпроектов находятся в разделе ТНПА
-              карточки проекта.
+              <button
+                type="button"
+                onClick={() => setProjectsView('tnpa')}
+                className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                  projectsView === 'tnpa'
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                ТНПА
+              </button>
             </div>
           </div>
-        )}
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              hours={hoursByProject.get(project.id) ?? 0}
-              expenses={expensesByProject.get(project.id) ?? 0}
-              onOpen={(selectedProject) =>
-                navigate(`/projects/${selectedProject.id}`)
-              }
-            />
-          ))}
-        </div>
+          {projectsView === 'tnpa' && (
+            <div className="rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/20 px-4 py-3">
+              <div className="font-semibold text-indigo-900 dark:text-indigo-200">
+                ТНПА по проектам
+              </div>
+
+              <div className="text-sm text-indigo-700 dark:text-indigo-300 mt-1">
+                Выберите проект ниже и откройте его карточку. Сертифицированная
+                документация и документы подпроектов находятся в разделе ТНПА
+                карточки проекта.
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filteredProjects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                hours={hoursByProject.get(project.id) ?? 0}
+                expenses={expensesByProject.get(project.id) ?? 0}
+                onOpen={(selectedProject) =>
+                  navigate(`/projects/${selectedProject.id}`)
+                }
+              />
+            ))}
+          </div>
+        </>
       )}
 
       <Modal
