@@ -105,6 +105,11 @@ const PAGE_META: Record<string, PageMeta> = {
     title: 'Финансы',
     description: 'Расходы и доходы по проектам',
   },
+  '/director-expenses': {
+    title: 'Расходы учредителей',
+    description: 'Отдельные расходы директоров',
+    parent: 'Управление',
+  },
   '/tickets': {
     title: 'Билеты',
     description: 'Документы и транспортные расходы',

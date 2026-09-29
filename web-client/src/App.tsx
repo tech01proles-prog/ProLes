@@ -43,8 +43,17 @@ function TimesheetRoute() {
     return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
   }
 
-  const allowed = can('timesheet', 'view') || user?.login === 'a.ermashkevich';
+  const isDirector = user?.role?.trim().toLowerCase() === 'director';
+  const allowed = !isDirector && (can('timesheet', 'view') || user?.login === 'a.ermashkevich');
   return allowed ? <TimesheetPage /> : <Navigate to="/" replace />;
+}
+
+function NonDirectorPermissionGate({ permission }: { permission: string }) {
+  const { can, loading } = usePermissions();
+  let user: UserDto | null = null;
+  try { user = JSON.parse(localStorage.getItem('proles_user') || 'null'); } catch { localStorage.removeItem('proles_user'); }
+  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
+  return user?.role?.trim().toLowerCase() !== 'director' && can(permission, 'view') ? <PermissionGate permission={permission} /> : <Navigate to="/" replace />;
 }
 
 function App() {
@@ -58,6 +67,7 @@ function App() {
             <Route path="/timesheet" element={<TimesheetRoute />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/expenses" element={<ExpensesPage />} />
+            <Route path="/director-expenses" element={<ExpensesPage directorMode />} />
             <Route path="/trips" element={<TripsPage />} />
             <Route path="/vacations" element={<VacationsPage />} />
             <Route path="/tickets" element={<TicketsPage />} />
@@ -67,7 +77,7 @@ function App() {
             <Route path="/notification-settings" element={<NotificationSettingsPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route element={<PermissionGate permission="timesheet" />}><Route path="/hours-calendar" element={<HoursCalendarPage />} /></Route>
+            <Route element={<NonDirectorPermissionGate permission="timesheet" />}><Route path="/hours-calendar" element={<HoursCalendarPage />} /></Route>
             <Route path="/employees" element={<EmployeesPage />} />
             <Route path="/positions" element={<PositionsPage />} />
             <Route path="/management" element={<ManagementPage />} />

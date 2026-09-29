@@ -89,7 +89,9 @@ export function Layout() {
     can('permissions', 'view');
 
   const navigation = useMemo(() => {
+    const isDirector = user?.role?.trim().toLowerCase() === 'director';
     return NAVIGATION_ITEMS.filter((item) => {
+      if (isDirector && item.to === '/timesheet') return false;
       if (item.section === 'management') return hasManagement;
       if (!item.permission || !item.action) return true;
 
