@@ -704,8 +704,10 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                     val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     val fileBytes = bytes ?: return@forEach
                     if (fileBytes.isEmpty()) return@forEach
-                    val fileName = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null }
-                        ?: "attachment_${System.currentTimeMillis()}"
+                    val fileName = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+                    } ?: "attachment_${System.currentTimeMillis()}"
                     repository.uploadExpenseAttachment(
                         expenseId, fileBytes, fileName, mimeType, userFullName
                     ).onSuccess {
