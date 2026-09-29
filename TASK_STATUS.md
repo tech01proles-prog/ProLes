@@ -82,41 +82,52 @@
 
 - [x] Добавить WEB новой себестоимости.
 - [x] Добавить GET /project-costs/paid-salaries.
-- [ ] Добавить PaidSalaryCostDto и импорт SalaryRecordsTable — PATCH ISSUED.
-- [ ] Исправить nullable-проверку периода — PATCH ISSUED.
-- [ ] Распределять зарплату по месяцам, проектам и подпроектам пропорционально часам — PATCH ISSUED.
+- [x] Добавить PaidSalaryCostDto и импорт SalaryRecordsTable.
+- [x] Исправить nullable-проверку периода.
+- [x] Распределять зарплату по месяцам, проектам и подпроектам пропорционально часам.
 - [x] Использовать taxInclusiveCost.
 - [x] Оставить часы ТО, зарплату, налоги, реализацию и итог.
 - [x] Удалить продажи, маржу, материалы, транспорт, кредит и менеджера из WEB.
 - [x] Обновить XLSX-экспорт.
 - [ ] Подтвердить WEB и SERVER build владельцем.
 
-Статус: CODE COMPLETE AFTER P3.1.4–P3.1.5 / BUILD PENDING
+Статус: CODE COMPLETE / BUILD PENDING
 
 ### P3.2 — Android без сжатия
 
 - [x] Проверить пути камеры, Photo Picker, GetContent и вложений.
 - [x] Подтвердить отсутствие Bitmap resize и JPEG recompress в загрузке чеков.
-- [ ] Убрать подмену исходного MIME-типа на image/jpeg в legacy wrapper — PATCH ISSUED.
-- [ ] Читать оригинал вне UI-потока — PATCH ISSUED.
-- [ ] Сохранять исходное имя content URI — PATCH ISSUED.
+- [x] Убрать подмену исходного MIME-типа на image/jpeg в legacy wrapper.
+- [x] Читать оригинал вне UI-потока.
+- [x] Сохранять исходное имя content URI.
 - [x] Передавать исходные байты выбранного файла.
 - [ ] Подтвердить Android build владельцем.
 
-Статус: IN PROGRESS — P3.2 ORIGINAL FILE PATCH ISSUED
+Статус: CODE COMPLETE / ANDROID BUILD PENDING
 
 ### P3.3 — PRO-Chat
 
-- [ ] Исправить серверную модель участников диалога.
-- [ ] Реализовать API диалогов, сообщений и вложений.
-- [ ] Реализовать cursor pagination.
-- [ ] Реализовать WebSocket.
-- [ ] Добавить вложения до 100 MiB.
-- [ ] Добавить серверное AES-GCM-шифрование сообщений.
+#### P3.3A — серверное ядро
+
+- [ ] Исправить Exposed-модель участников диалога — PATCH ISSUED.
+- [ ] Добавить API сотрудников и личных диалогов — PATCH ISSUED.
+- [ ] Добавить API сообщений — PATCH ISSUED.
+- [ ] Добавить cursor pagination — PATCH ISSUED.
+- [ ] Добавить отметку прочтения и unreadCount — PATCH ISSUED.
+- [ ] Добавить AES-GCM-шифрование текста на сервере — PATCH ISSUED.
+- [ ] Зарегистрировать chatRoutes — PATCH ISSUED.
+- [ ] Подтвердить SERVER build владельцем.
+
+#### P3.3B — файлы, realtime и WEB
+
+- [ ] Добавить потоковые вложения до 100 MiB.
+- [ ] Добавить защищённое скачивание вложений.
+- [ ] Добавить WebSocket realtime.
 - [ ] Реализовать WEB-интерфейс.
+- [ ] Добавить PRO-Chat в навигацию.
 - [ ] Подтвердить WEB и SERVER build владельцем.
 
-Статус: IN PROGRESS — P3.1 WEB ISSUED / SERVER DTO PLACEMENT PENDING
+Статус: IN PROGRESS — P3.3A SERVER CORE ISSUED
 
 ## Финальная проверка владельцем
 
@@ -148,3 +159,8 @@
 - [ ] Android отправляет PNG/WebP/HEIC без объявления файла как JPEG.
 - [ ] Размер и контрольная сумма загруженного Android-файла совпадают с оригиналом.
 - [ ] Чтение большого фото не блокирует интерфейс Android.
+- [ ] CHAT_ENCRYPTION_KEY установлен и не меняется между перезапусками.
+- [ ] Повторный POST с одинаковым clientMessageId не создаёт дубль.
+- [ ] Пользователь не читает чужой диалог по прямому UUID.
+- [ ] Cursor pagination не повторяет сообщения.
+- [ ] unreadCount сбрасывается после /read.
