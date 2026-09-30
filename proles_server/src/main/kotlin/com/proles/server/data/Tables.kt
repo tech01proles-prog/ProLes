@@ -277,6 +277,7 @@ object NotificationPreferencesTable : UUIDTable("notification_preferences") {
     val tripChangeEnabled = bool("trip_change_enabled").default(true)
     val vacationDecisionEnabled = bool("vacation_decision_enabled").default(true)
     val ticketReceiptEnabled = bool("ticket_receipt_enabled").default(true)
+    val chatMessageEnabled = bool("chat_message_enabled").default(true)
     val privacyDefaultsConfigured = bool("privacy_defaults_configured").default(false)
     val telegramEnabled = bool("telegram_enabled").default(false)
     val telegramLinkCode = varchar("telegram_link_code", 20).uniqueIndex().nullable()
