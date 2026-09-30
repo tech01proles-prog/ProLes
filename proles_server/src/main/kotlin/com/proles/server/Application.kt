@@ -110,7 +110,7 @@ fun Application.module() {
                 trip_change_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 vacation_decision_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ticket_receipt_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-             chat_message_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                chat_message_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 privacy_defaults_configured BOOLEAN NOT NULL DEFAULT FALSE,
                 telegram_enabled BOOLEAN NOT NULL DEFAULT FALSE,
                 telegram_link_code VARCHAR(20) UNIQUE,
