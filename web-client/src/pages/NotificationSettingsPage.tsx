@@ -3,13 +3,13 @@ import api from '../api/client';
 import type { NotificationPreferencesDto } from '../types';
 
 const CHANNELS: Array<{ key: keyof NotificationPreferencesDto; label: string; desc: string }> = [
-  { key: 'tripEnabled', label: '✈️ Командировки', desc: 'Новые командировки и изменения маршрута' },
+  { key: 'tripEnabled', label: '✈️ Командировки', desc: 'Внутренние уведомления о ваших командировках' },
   { key: 'vacationEnabled', label: '🏖 Отпуска', desc: 'Запросы на отпуск для руководителей' },
   { key: 'dayoffEnabled', label: '🌞 Выходные', desc: 'Изменения выходных и рабочих дней' },
   { key: 'expenseEnabled', label: '💸 Новые расходы', desc: 'Новые расходы, которые адресованы вам или требуют ваших действий' },
   { key: 'payrollEnabled', label: '💰 Зарплата', desc: 'Расчёты, утверждения и выплаты' },
-  { key: 'ticketEnabled', label: '🎫 Билеты', desc: 'Новые билеты и переданные документы' },
-  { key: 'tripChangeEnabled', label: '🔄 Изменения поездок', desc: 'Переезды, завершение и исправления командировок' },
+  { key: 'ticketEnabled', label: '🎫 Билеты', desc: 'Личные Telegram- и внутренние уведомления, только если вы адресат билета' },
+  { key: 'tripChangeEnabled', label: '🔄 Изменения поездок', desc: 'Внутренние уведомления о переездах и завершении командировок' },
   { key: 'vacationDecisionEnabled', label: '✅ Решение по отпуску', desc: 'Подтверждение или отклонение моего отпуска' },
   { key: 'ticketReceiptEnabled', label: '🧷 Чек по билету', desc: 'Сохранение чека билета и бухгалтерский расход' },
 ];
