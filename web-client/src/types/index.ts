@@ -390,6 +390,7 @@ export interface NotificationPreferencesDto {
   tripChangeEnabled: boolean;
   vacationDecisionEnabled: boolean;
   ticketReceiptEnabled: boolean;
+  chatMessageEnabled: boolean;
   telegramEnabled: boolean;
   telegramLinked: boolean;
   telegramLinkCode: string | null;
