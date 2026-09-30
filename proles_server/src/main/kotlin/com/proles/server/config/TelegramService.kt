@@ -29,7 +29,7 @@ object TelegramService {
             ?.takeIf { it.isNotBlank() }
             ?: "https://api.telegram.org"
 
-    private suspend fun sendTelegramRequest(request: HttpRequest): HttpResponse<String> {
+    private fun sendTelegramRequest(request: HttpRequest): HttpResponse<String> {
         var lastError: Exception? = null
         repeat(3) { attempt ->
             try {
