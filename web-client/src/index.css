@@ -225,10 +225,10 @@
     @apply btn bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-md hover:opacity-90;
   }
   .btn-secondary {
-    @apply btn bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))] hover:opacity-80;
+    @apply btn bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100;
   }
   .btn-outline {
-    @apply btn border border-[hsl(var(--input))] bg-transparent hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))];
+    @apply btn border border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm hover:border-indigo-300 hover:bg-indigo-100;
   }
   .btn-ghost {
     @apply btn hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))];
