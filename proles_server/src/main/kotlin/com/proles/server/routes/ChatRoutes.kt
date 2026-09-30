@@ -94,7 +94,8 @@ fun Route.chatRoutes() {
                     ChatRealtimeHub.broadcast(
                         ChatRealtimeEvent(
                             type = "PRESENCE_CHANGED",
-                            userId = session.userId.toString()
+                            userId = session.userId.toString(),
+                            online = false
                         )
                     )
                 }
