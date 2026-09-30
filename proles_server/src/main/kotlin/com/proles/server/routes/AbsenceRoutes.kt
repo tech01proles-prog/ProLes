@@ -166,10 +166,28 @@ private fun Route.vacationRoutes() {
             if (updated == 0) return@post call.respond(HttpStatusCode.Conflict, "Отпуск уже обработан")
             val vacation = transaction { VacationsTable.selectAll().where { VacationsTable.id eq id }.single() }
             val employeeId = vacation[VacationsTable.userId].value
-            val employeeName = transaction { UsersTable.selectAll().where { UsersTable.id eq employeeId }.single()[UsersTable.name] }
-            val title = if (approved) "✅ Отпуск подтверждён" else "❌ Отпуск отклонён"
-            val msg = "👤 $employeeName\n📅 ${vacation[VacationsTable.start]} — ${vacation[VacationsTable.end]}\n${if (!approved && reason.isNotBlank()) "📝 Причина: $reason" else ""}".trim()
-            NotificationService.notifyUsers(listOf(employeeId), session.userId, "VACATION_DECISION", title, msg, absenceJson.encodeToString(mapOf("vacationId" to id.toString(), "approved" to approved)), "vacationDecision")
+            val employeeDisplayName = NotificationService.userDisplayName(employeeId)
+            val title = if (approved) "✅ Отпуск одобрен" else "❌ Отпуск отклонен"
+            val status = vacation[VacationsTable.status]
+            val msg = buildString {
+                append(employeeDisplayName)
+                append("\n📅 ${vacation[VacationsTable.start]} — ${vacation[VacationsTable.end]}")
+                append("\nСтатус: ${NotificationService.vacationStatus(vacation[VacationsTable.start].toString(), vacation[VacationsTable.end].toString(), status)}")
+                if (!approved && reason.isNotBlank()) append("\nПричина: $reason")
+            }
+            val payload = absenceJson.encodeToString(mapOf("vacationId" to id.toString(), "approved" to approved))
+            NotificationService.notifyUsers(listOf(employeeId), session.userId, "VACATION_DECISION", title, msg, payload, "vacationDecision")
+
+            val vacationLink = System.getenv("PROLES_WEB_URL")?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() }
+                ?.let { "$it/vacations" }
+            NotificationService.notifyDirectorsTelegram(
+                tag = "ОТПУСК",
+                title = title,
+                message = msg,
+                payload = absenceJson.encodeToString(mapOf("vacationId" to id.toString(), "userId" to employeeId.toString())),
+                preferenceKey = "vacation",
+                linkUrl = vacationLink
+            )
             call.respond(HttpStatusCode.OK, VacationDto(
                 id.toString(), employeeId.toString(), vacation[VacationsTable.start].toString(), vacation[VacationsTable.end].toString(),
                 vacation[VacationsTable.status], vacation[VacationsTable.approvedBy]?.value?.toString(), vacation[VacationsTable.approvedAt], vacation[VacationsTable.rejectionReason]
@@ -282,9 +300,10 @@ private fun Route.dayOffRoutes() {
                         .single()[UsersTable.name]
                 }
 
+                val employeeDisplayName = NotificationService.userDisplayName(userId)
                 val notifTitle = "🌞 Выходной в будний день"
                 val notifMessage = buildString {
-                    appendLine("👤 $senderName")
+                    appendLine(employeeDisplayName)
                     appendLine("📅 Дата: $formattedDate ($dayOfWeekRu)")
                     appendLine("⚠️ Сотрудник взял выходной в рабочий день")
                 }.trim()
@@ -305,6 +324,13 @@ private fun Route.dayOffRoutes() {
 
                 NotificationService.notifyUsers(
                     adminIds, userId, "DAYOFF_WEEKDAY", notifTitle, notifMessage, notifPayload, "dayoff"
+                )
+                NotificationService.notifyDirectorsTelegram(
+                    tag = "ВЫХОДНОЙ",
+                    title = notifTitle,
+                    message = notifMessage,
+                    payload = notifPayload,
+                    preferenceKey = "dayoff"
                 )
 
                 println("🌞 Выходной в будний день: $senderName на $formattedDate, уведомления отправлены ${adminIds.size} админам")
