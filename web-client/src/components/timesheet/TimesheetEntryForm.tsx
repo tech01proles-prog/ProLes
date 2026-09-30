@@ -13,6 +13,7 @@ export interface TimesheetEntryFormValue {
   date: string;
   hours: string;
   description: string;
+  country: string;
 }
 
 interface TimesheetEntryFormProps {
@@ -31,6 +32,7 @@ const EMPTY_VALUE: TimesheetEntryFormValue = {
   date: '',
   hours: '',
   description: '',
+  country: 'RF',
 };
 
 const FIELD_CLASS_NAME = [
@@ -162,6 +164,14 @@ export function TimesheetEntryForm({
             className={FIELD_CLASS_NAME}
             disabled={submitting}
           />
+        </label>
+
+        <label className="sm:col-span-2">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Страна выполнения работы</span>
+          <select value={value.country} onChange={(event) => updateField('country', event.target.value)} className={FIELD_CLASS_NAME} disabled={submitting}>
+            <option value="RF">Россия</option>
+            <option value="BY">Беларусь</option>
+          </select>
         </label>
 
         <label className="sm:col-span-2">
