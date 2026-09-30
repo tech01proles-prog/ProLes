@@ -107,10 +107,8 @@ fun Application.module() {
                 payroll_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ticket_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 trip_visible_to_all BOOLEAN NOT NULL DEFAULT TRUE,
-                trip_telegram_broadcast BOOLEAN NOT NULL DEFAULT TRUE,
                 trip_change_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 vacation_decision_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-                expense_created_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ticket_receipt_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 privacy_defaults_configured BOOLEAN NOT NULL DEFAULT FALSE,
                 telegram_enabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -131,10 +129,8 @@ fun Application.module() {
                 ADD COLUMN IF NOT EXISTS payroll_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ADD COLUMN IF NOT EXISTS ticket_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ADD COLUMN IF NOT EXISTS trip_visible_to_all BOOLEAN NOT NULL DEFAULT TRUE,
-                ADD COLUMN IF NOT EXISTS trip_telegram_broadcast BOOLEAN NOT NULL DEFAULT TRUE,
                 ADD COLUMN IF NOT EXISTS trip_change_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ADD COLUMN IF NOT EXISTS vacation_decision_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-                ADD COLUMN IF NOT EXISTS expense_created_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ADD COLUMN IF NOT EXISTS ticket_receipt_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ADD COLUMN IF NOT EXISTS privacy_defaults_configured BOOLEAN NOT NULL DEFAULT FALSE,
                 ADD COLUMN IF NOT EXISTS telegram_enabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -145,6 +141,7 @@ fun Application.module() {
                 ADD COLUMN IF NOT EXISTS email_enabled BOOLEAN NOT NULL DEFAULT FALSE,
                 ADD COLUMN IF NOT EXISTS email VARCHAR(255) NOT NULL DEFAULT ''
         """.trimIndent())
+        exec("ALTER TABLE notification_preferences DROP COLUMN IF EXISTS trip_telegram_broadcast, DROP COLUMN IF EXISTS expense_created_enabled")
         exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_user_id ON notification_preferences(user_id)")
         exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_link_code ON notification_preferences(telegram_link_code) WHERE telegram_link_code IS NOT NULL")
         exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_chat_id ON notification_preferences(telegram_chat_id) WHERE telegram_chat_id IS NOT NULL")
