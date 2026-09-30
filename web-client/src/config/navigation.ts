@@ -77,6 +77,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   },
   {
     to: '/notifications',
+    iconGradient: 'from-amber-500 to-orange-500',
     label: 'Уведомления',
     description: 'События и сообщения системы',
     icon: '◉',
