@@ -34,6 +34,7 @@ object NotificationService {
             "tripChange" -> row?.get(NotificationPreferencesTable.tripChangeEnabled) ?: true
             "vacationDecision" -> row?.get(NotificationPreferencesTable.vacationDecisionEnabled) ?: true
             "ticketReceipt" -> row?.get(NotificationPreferencesTable.ticketReceiptEnabled) ?: true
+            "chatMessage" -> row?.get(NotificationPreferencesTable.chatMessageEnabled) ?: true
             else -> true
         }
     }
@@ -473,6 +474,7 @@ object NotificationService {
             "EXPENSE_CREATED" -> "#РАСХОД"
             "PAYROLL_UPDATED" -> "#ЗАРПЛАТА"
             "TICKET_RECEIPT" -> "#БИЛЕТ"
+            "CHAT_MESSAGE" -> "#PROCHAT"
             else -> ""
         }
         return listOf(
