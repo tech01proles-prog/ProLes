@@ -386,6 +386,12 @@ internal fun Route.businessTripRoutes() {
                 )
             }
 
+            if (created.status == "COMPLETED") {
+                NotificationService.notifyBusinessTripCompleted(created)
+            } else {
+                NotificationService.notifyBusinessTripCreated(created)
+            }
+
             call.respond(HttpStatusCode.Created, created)
         }
 
@@ -631,6 +637,19 @@ internal fun Route.businessTripRoutes() {
                 }
 
                 BusinessTripResult.UPDATED
+            }
+
+            if (result == BusinessTripResult.UPDATED) {
+                val completedTrip = transaction {
+                    BusinessTripsTable
+                        .selectAll()
+                        .where { BusinessTripsTable.id eq tripId }
+                        .singleOrNull()
+                        ?.let(::mapRowToBusinessTripDto)
+                }
+                if (completedTrip != null) {
+                    NotificationService.notifyBusinessTripCompleted(completedTrip)
+                }
             }
 
             when (result) {
