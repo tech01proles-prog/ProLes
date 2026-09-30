@@ -29,7 +29,7 @@ object TelegramService {
             ?.takeIf { it.isNotBlank() }
             ?: "https://api.telegram.org"
 
-    private fun sendTelegramRequest(request: HttpRequest): HttpResponse<String> {
+    private suspend fun sendTelegramRequest(request: HttpRequest): HttpResponse<String> {
         var lastError: Exception? = null
         repeat(3) { attempt ->
             try {
@@ -164,7 +164,7 @@ object TelegramService {
         }
     }
 
-    private fun getUpdates(offset: Long): JsonObject? {
+    private suspend fun getUpdates(offset: Long): JsonObject? {
         val url = "${apiBaseUrl}/bot$botToken/getUpdates?timeout=25&allowed_updates=%5B%22message%22%5D&offset=$offset"
         val req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(35)).GET().build()
         val response = sendTelegramRequest(req)
