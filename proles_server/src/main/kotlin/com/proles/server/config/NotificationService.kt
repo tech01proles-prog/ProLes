@@ -244,6 +244,18 @@ object NotificationService {
     }
 
     fun notifyBusinessTripCreated(trip: BusinessTripDto) {
+        val participantIds = listOfNotNull(runCatching { UUID.fromString(trip.userId) }.getOrNull()) +
+            trip.participants.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+        notifyUsers(
+            targetUserIds = participantIds.distinct(),
+            senderUserId = runCatching { UUID.fromString(trip.userId) }.getOrDefault(UUID(0L, 0L)),
+            type = "TRIP_CREATED",
+            title = "🚆 Новая командировка",
+            message = buildBusinessTripCreatedMessage(trip).removePrefix("#КОМАНДИРОВКА\n").removePrefix("<b>🚆 НОВАЯ КОМАНДИРОВКА</b>\n"),
+            payload = "{\"tripId\":\"${trip.id}\"}",
+            preferenceKey = "trip",
+            deliverTelegram = false
+        )
         deliveryScope.launch {
             val message = buildBusinessTripCreatedMessage(trip)
             println("🚆 [Trip notification] NEW: tripId=${trip.id} systemChat=${TelegramService.configuredSystemChatId() != null}")
@@ -252,6 +264,20 @@ object NotificationService {
     }
 
     fun notifyBusinessTripCompleted(trip: BusinessTripDto) {
+        val ownerId = runCatching { UUID.fromString(trip.userId) }.getOrNull()
+        if (ownerId != null) {
+            val participantIds = listOf(ownerId) + trip.participants.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+            notifyUsers(
+                targetUserIds = participantIds.distinct(),
+                senderUserId = ownerId,
+                type = "TRIP_COMPLETED",
+                title = "✅ Командировка завершена",
+                message = buildBusinessTripCompletedMessage(trip).removePrefix("#КОМАНДИРОВКА\n").removePrefix("<b>🚆 КОМАНДИРОВКА ЗАВЕРШЕНА</b>\n"),
+                payload = "{\"tripId\":\"${trip.id}\"}",
+                preferenceKey = "tripChange",
+                deliverTelegram = false
+            )
+        }
         deliveryScope.launch {
             val message = buildBusinessTripCompletedMessage(trip)
             println("✅ [Trip notification] COMPLETED: tripId=${trip.id} systemChat=${TelegramService.configuredSystemChatId() != null}")
@@ -327,7 +353,10 @@ object NotificationService {
     }
 
     private fun projectTag(projectName: String): String =
-        projectName.trim().takeIf { it.isNotBlank() }?.let { "#${escapeTelegram(it)}" }.orEmpty()
+        projectName.trim().takeIf { it.isNotBlank() }?.let { raw ->
+            val searchable = raw.replace(Regex("[^\\p{L}\\p{N}_]+"), "_").trim('_')
+            if (searchable.isBlank()) "" else "#${escapeTelegram(searchable)}"
+        }.orEmpty()
 
     fun linkedChatId(userId: UUID): String? = transaction {
         TelegramLinksTable.selectAll()
