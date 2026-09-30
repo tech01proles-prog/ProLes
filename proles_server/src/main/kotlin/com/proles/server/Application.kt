@@ -46,12 +46,6 @@ fun Application.module() {
     // 🔥 Инициализация Firebase Admin
     FirebaseService.init()
 
-    // 🆕 Инициализация Telegram Bot
-    TelegramService.init(
-        token = System.getenv("TELEGRAM_BOT_TOKEN"),
-        chatId = System.getenv("TELEGRAM_CHAT_ID")
-    )
-
     // 🆕 Инициализация Email сервиса (читает из переменных окружения)
     EmailService.init()
 
@@ -164,6 +158,13 @@ fun Application.module() {
         ensureCompanyUser()
 
     }
+
+    // 🆕 Инициализация Telegram Bot после подключения к БД:
+    // polling и привязка по коду используют таблицы notification_preferences/telegram_links.
+    TelegramService.init(
+        token = System.getenv("TELEGRAM_BOT_TOKEN"),
+        chatId = System.getenv("TELEGRAM_CHAT_ID")
+    )
 
     // 📒 Запуск сервиса автоматического начисления суточных
     PerDiemService.startScheduler()
