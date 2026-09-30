@@ -9,6 +9,9 @@ data class CreateDirectConversationRequest(val userId: String)
 data class SendChatMessageRequest(val text: String, val clientMessageId: String, val replyToMessageId: String? = null)
 
 @Serializable
+data class UpdateChatMessageRequest(val text: String)
+
+@Serializable
 data class ChatUserDto(val id: String, val name: String, val role: String, val position: String = "", val online: Boolean = false)
 
 @Serializable
@@ -58,5 +61,6 @@ data class ChatRealtimeEvent(
     val userId: String? = null,
     val messageId: String? = null,
     val unreadCount: Int? = null,
+    val online: Boolean? = null,
     val occurredAt: Long = System.currentTimeMillis()
 )
