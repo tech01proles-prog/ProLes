@@ -6,12 +6,11 @@ const CHANNELS: Array<{ key: keyof NotificationPreferencesDto; label: string; de
   { key: 'tripEnabled', label: '✈️ Командировки', desc: 'Новые командировки и изменения маршрута' },
   { key: 'vacationEnabled', label: '🏖 Отпуска', desc: 'Запросы на отпуск для руководителей' },
   { key: 'dayoffEnabled', label: '🌞 Выходные', desc: 'Изменения выходных и рабочих дней' },
-  { key: 'expenseEnabled', label: '💸 Расходы', desc: 'Расходные операции и финансовые события' },
+  { key: 'expenseEnabled', label: '💸 Новые расходы', desc: 'Новые расходы, которые адресованы вам или требуют ваших действий' },
   { key: 'payrollEnabled', label: '💰 Зарплата', desc: 'Расчёты, утверждения и выплаты' },
   { key: 'ticketEnabled', label: '🎫 Билеты', desc: 'Новые билеты и переданные документы' },
   { key: 'tripChangeEnabled', label: '🔄 Изменения поездок', desc: 'Переезды, завершение и исправления командировок' },
   { key: 'vacationDecisionEnabled', label: '✅ Решение по отпуску', desc: 'Подтверждение или отклонение моего отпуска' },
-  { key: 'expenseCreatedEnabled', label: '🧾 Новые расходы', desc: 'Создание расхода от моего имени или по проекту' },
   { key: 'ticketReceiptEnabled', label: '🧷 Чек по билету', desc: 'Сохранение чека билета и бухгалтерский расход' },
 ];
 
@@ -29,9 +28,9 @@ export function NotificationSettingsPage() {
         tripEnabled: data.tripEnabled ?? true, vacationEnabled: data.vacationEnabled ?? true,
         dayoffEnabled: data.dayoffEnabled ?? true, expenseEnabled: data.expenseEnabled ?? true,
         payrollEnabled: data.payrollEnabled ?? true, ticketEnabled: data.ticketEnabled ?? true,
-        tripVisibleToAll: data.tripVisibleToAll ?? true, tripTelegramBroadcast: data.tripTelegramBroadcast ?? true,
+        tripVisibleToAll: data.tripVisibleToAll ?? true,
         tripChangeEnabled: data.tripChangeEnabled ?? true, vacationDecisionEnabled: data.vacationDecisionEnabled ?? true,
-        expenseCreatedEnabled: data.expenseCreatedEnabled ?? true, ticketReceiptEnabled: data.ticketReceiptEnabled ?? true,
+        ticketReceiptEnabled: data.ticketReceiptEnabled ?? true,
         telegramEnabled: data.telegramEnabled ?? false, telegramLinked: data.telegramLinked ?? false,
         telegramLinkCode: data.telegramLinkCode ?? null, emailEnabled: data.emailEnabled ?? false, email: data.email ?? '',
       });
@@ -64,7 +63,7 @@ export function NotificationSettingsPage() {
   if (loading || !prefs) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
 
   return <div className="space-y-6 max-w-3xl mx-auto">
-    <div><h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">🔔 Настройки уведомлений</h1><p className="text-sm text-slate-500 mt-1">Каналы, события и конфиденциальность</p></div>
+    <div><h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">🔔 Настройки уведомлений</h1><p className="text-sm text-slate-500 mt-1">Telegram для рабочих событий отправляется только адресатам события; командировки в личный Telegram не отправляются.</p></div>
     {message && <div className="p-4 rounded-xl text-sm bg-emerald-50 border border-emerald-200 text-emerald-700">{message}</div>}
 
     <div className="card p-6"><h3 className="font-bold mb-4">📱 События</h3><div className="space-y-1">
@@ -79,7 +78,6 @@ export function NotificationSettingsPage() {
     <div className="card p-6"><h3 className="font-bold mb-4">🔐 Конфиденциальность</h3>
       <div className="space-y-3">
         <label className="flex items-center justify-between gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800"><span><b className="text-sm">Отображать мои командировки всем</b><span className="block text-xs text-slate-500 mt-1">Другие сотрудники увидят ваши командировки в общем списке.</span></span><input type="checkbox" checked={prefs.tripVisibleToAll} onChange={() => toggle('tripVisibleToAll')} /></label>
-        <label className="flex items-center justify-between gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800"><span><b className="text-sm">Оповещать о моих командировках в Telegram</b><span className="block text-xs text-slate-500 mt-1">При включении новые поездки дублируются связанным подписчикам Telegram.</span></span><input type="checkbox" checked={prefs.tripTelegramBroadcast} onChange={() => toggle('tripTelegramBroadcast')} /></label>
       </div>
     </div>
 
