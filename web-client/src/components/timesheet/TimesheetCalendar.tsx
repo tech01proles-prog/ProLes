@@ -38,13 +38,13 @@ export function TimesheetCalendar({
   onSelectEntry,
 }: TimesheetCalendarProps) {
   return (
-    <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 md:block">
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
         {WEEK_DAYS.map((day, index) => (
           <div
             key={day}
             className={[
-              'px-3 py-3 text-center text-[11px] font-bold uppercase tracking-[0.14em]',
+              'px-1.5 py-2 text-center text-[10px] font-bold uppercase tracking-[0.1em] sm:px-3 sm:py-3 sm:text-[11px] sm:tracking-[0.14em]',
               index >= 5
                 ? 'text-rose-500 dark:text-rose-400'
                 : 'text-slate-400',
@@ -66,7 +66,7 @@ export function TimesheetCalendar({
             <article
               key={day.key}
               className={[
-                'group relative min-h-36 border-b border-r border-slate-200 p-2 transition-colors',
+                'group relative min-h-24 border-b border-r border-slate-200 p-1 transition-colors sm:min-h-28 sm:p-2',
                 'dark:border-slate-800',
                 day.currentMonth
                   ? 'bg-white hover:bg-slate-50/80 dark:bg-slate-900 dark:hover:bg-slate-800/50'
@@ -111,7 +111,7 @@ export function TimesheetCalendar({
                 )}
               </button>
 
-              <div className="mt-1 space-y-1">
+              <div className="mt-1 space-y-0.5 sm:space-y-1">
                 {day.entries.slice(0, 3).map((entry) => (
                   <button
                     key={entry.id}
