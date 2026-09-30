@@ -22,10 +22,8 @@ data class NotificationPreferencesResponseDto(
     val payrollEnabled: Boolean,
     val ticketEnabled: Boolean,
     val tripVisibleToAll: Boolean,
-    val tripTelegramBroadcast: Boolean,
     val tripChangeEnabled: Boolean,
     val vacationDecisionEnabled: Boolean,
-    val expenseCreatedEnabled: Boolean,
     val ticketReceiptEnabled: Boolean,
     val telegramEnabled: Boolean,
     val telegramLinked: Boolean,
@@ -98,10 +96,8 @@ internal fun Route.notificationPreferenceRoutes() {
                         it[payrollEnabled] = body["payrollEnabled"]?.toBoolean() ?: true
                         it[ticketEnabled] = body["ticketEnabled"]?.toBoolean() ?: true
                         it[tripVisibleToAll] = body["tripVisibleToAll"]?.toBoolean() ?: true
-                        it[tripTelegramBroadcast] = body["tripTelegramBroadcast"]?.toBoolean() ?: true
                         it[tripChangeEnabled] = body["tripChangeEnabled"]?.toBoolean() ?: true
                         it[vacationDecisionEnabled] = body["vacationDecisionEnabled"]?.toBoolean() ?: true
-                        it[expenseCreatedEnabled] = body["expenseCreatedEnabled"]?.toBoolean() ?: true
                         it[ticketReceiptEnabled] = body["ticketReceiptEnabled"]?.toBoolean() ?: true
                         it[privacyDefaultsConfigured] = true
                         it[NotificationPreferencesTable.telegramEnabled] = telegramEnabled
@@ -118,10 +114,8 @@ internal fun Route.notificationPreferenceRoutes() {
                         it[payrollEnabled] = body["payrollEnabled"]?.toBoolean() ?: existing[payrollEnabled]
                         it[ticketEnabled] = body["ticketEnabled"]?.toBoolean() ?: existing[ticketEnabled]
                         it[tripVisibleToAll] = body["tripVisibleToAll"]?.toBoolean() ?: existing[tripVisibleToAll]
-                        it[tripTelegramBroadcast] = body["tripTelegramBroadcast"]?.toBoolean() ?: existing[tripTelegramBroadcast]
                         it[tripChangeEnabled] = body["tripChangeEnabled"]?.toBoolean() ?: existing[tripChangeEnabled]
                         it[vacationDecisionEnabled] = body["vacationDecisionEnabled"]?.toBoolean() ?: existing[vacationDecisionEnabled]
-                        it[expenseCreatedEnabled] = body["expenseCreatedEnabled"]?.toBoolean() ?: existing[expenseCreatedEnabled]
                         it[ticketReceiptEnabled] = body["ticketReceiptEnabled"]?.toBoolean() ?: existing[ticketReceiptEnabled]
                         it[privacyDefaultsConfigured] = true
                         it[NotificationPreferencesTable.telegramEnabled] = telegramEnabled
