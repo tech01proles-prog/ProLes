@@ -154,8 +154,9 @@ export function Layout() {
         <span
           className={[
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base',
-            'bg-emerald-50 text-emerald-700 group-hover:bg-emerald-100',
-            'dark:bg-emerald-950/50 dark:text-emerald-300 dark:group-hover:bg-emerald-900/50',
+            item.iconGradient
+              ? `bg-gradient-to-br ${item.iconGradient} text-white shadow-sm`
+              : 'bg-slate-100 text-slate-700 group-hover:bg-slate-200',
           ].join(' ')}
           aria-hidden="true"
         >
