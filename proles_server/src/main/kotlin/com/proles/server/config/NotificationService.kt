@@ -365,7 +365,7 @@ object NotificationService {
         }.orEmpty()
 
     fun notifyDirectorsTelegram(
-        type: String,
+        tag: String,
         title: String,
         message: String,
         payload: String = "",
@@ -378,7 +378,7 @@ object NotificationService {
                 .map { it[UsersTable.id].value }
                 .distinct()
         }
-        println("📣 [Notification] director alert: type=$type directors=${directors.size}")
+        println("📣 [Notification] director alert: tag=$tag directors=${directors.size}")
 
         deliveryScope.launch {
             directors.forEach { directorId ->
@@ -388,7 +388,7 @@ object NotificationService {
                 if (!config.enabled || chatId.isNullOrBlank()) return@forEach
 
                 val body = buildList {
-                    add("#$type")
+                    add("#$tag")
                     add("<b>${escapeTelegram(title)}</b>")
                     add(escapeTelegram(message))
                     if (!linkUrl.isNullOrBlank()) add(linkUrl)
@@ -448,6 +448,17 @@ object NotificationService {
         add(escapeTelegram(employeeName))
         add(escapeTelegram(date))
     }.joinToString("\n")
+    fun userDisplayName(userId: UUID): String = transaction {
+        val row = UsersTable.selectAll().where { UsersTable.id eq userId }.singleOrNull()
+        row?.let {
+            surnameInitials(
+                it[UsersTable.lastName],
+                it[UsersTable.firstName],
+                it[UsersTable.middleName],
+                it[UsersTable.name]
+            )
+        } ?: "Сотрудник"
+    }
     fun linkedChatId(userId: UUID): String? = transaction {
         TelegramLinksTable.selectAll()
             .where { TelegramLinksTable.userId eq userId }
