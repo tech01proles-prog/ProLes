@@ -98,6 +98,7 @@ internal fun Route.notificationPreferenceRoutes() {
                         it[tripChangeEnabled] = body["tripChangeEnabled"]?.toBoolean() ?: true
                         it[vacationDecisionEnabled] = body["vacationDecisionEnabled"]?.toBoolean() ?: true
                         it[ticketReceiptEnabled] = body["ticketReceiptEnabled"]?.toBoolean() ?: true
+                         it[chatMessageEnabled] = body["chatMessageEnabled"]?.toBoolean() ?: true
                         it[privacyDefaultsConfigured] = true
                         it[NotificationPreferencesTable.telegramEnabled] = telegramEnabled
                         it[telegramLinkCode] = generatedCode
@@ -116,6 +117,7 @@ internal fun Route.notificationPreferenceRoutes() {
                         it[tripChangeEnabled] = body["tripChangeEnabled"]?.toBoolean() ?: existing[tripChangeEnabled]
                         it[vacationDecisionEnabled] = body["vacationDecisionEnabled"]?.toBoolean() ?: existing[vacationDecisionEnabled]
                         it[ticketReceiptEnabled] = body["ticketReceiptEnabled"]?.toBoolean() ?: existing[ticketReceiptEnabled]
+                         it[chatMessageEnabled] = body["chatMessageEnabled"]?.toBoolean() ?: existing[chatMessageEnabled]
                         it[privacyDefaultsConfigured] = true
                         it[NotificationPreferencesTable.telegramEnabled] = telegramEnabled
                         if (generatedCode != null) it[telegramLinkCode] = generatedCode
