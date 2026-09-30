@@ -61,7 +61,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem('proles_theme', newTheme);
+    localStorage.setItem('proles_theme', 'light');
   };
 
   return (
