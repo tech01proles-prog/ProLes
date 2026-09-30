@@ -613,6 +613,13 @@ internal fun Route.businessTripRoutes() {
                     )
                 }
 
+                // Завершение задним числом: удаляем уже начисленные суточные после новой даты окончания.
+                ExpensesTable.deleteWhere {
+                    (ExpensesTable.userId eq ownerId) and
+                        (ExpensesTable.date greater endDate) and
+                        (ExpensesTable.type inList listOf("PER_DIEM", "PER_DIEM_EXTRA"))
+                }
+
                 BusinessTripsTable.update(
                     { BusinessTripsTable.id eq tripId }
                 ) {
