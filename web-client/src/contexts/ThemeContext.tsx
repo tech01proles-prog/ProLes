@@ -19,8 +19,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Применение темы к <html>
   useEffect(() => {
     const root = window.document.documentElement;
-    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const isDark = theme === 'dark' || (theme === 'system' && systemDark);
+    const isDark = false;
 
     if (isDark) {
       root.classList.add('dark');
