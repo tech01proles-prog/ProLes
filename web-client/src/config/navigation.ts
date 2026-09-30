@@ -8,6 +8,7 @@ export interface NavigationItem {
   icon: string;
   permission?: string;
   action?: NavigationAction;
+  directorOnly?: boolean;
   section: 'workspace' | 'management';
 }
 
