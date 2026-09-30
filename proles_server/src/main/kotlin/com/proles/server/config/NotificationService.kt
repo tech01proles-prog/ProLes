@@ -74,19 +74,11 @@ object NotificationService {
             println("🔔 [Notification] no per-user targets; system Telegram delivery will still be attempted")
         }
 
-        println("🔔 [Notification] async delivery started")
-        CoroutineScope(Dispatchers.IO).launch {
-            println("📢 [Notification] sending system Telegram notification first: type=$type")
-            runCatching {
-                TelegramService.sendSystemMessage(
-                    "<b>${escapeTelegram(title)}</b>\n\n" + escapeTelegram(message)
-                )
-            }.onFailure { error ->
-                println("❌ [Notification] system Telegram delivery failed: ${error::class.simpleName}: ${error.message}")
-            }
-
+        println("🔔 [Notification] async personal delivery started")
+        deliveryScope.launch {
             enabledTargets.forEach { userId ->
-                println("🔔 [Notification] delivering: type=$type, userId=$userId")
+                println("🔔 [Notification] personal delivery: type=$type, userId=$userId")
+
                 val fcmTokens = transaction {
                     FcmTokensTable.selectAll()
                         .where { FcmTokensTable.userId eq userId }
@@ -97,53 +89,34 @@ object NotificationService {
                         FirebaseService.sendPush(
                             token = token,
                             title = title,
-                            body = message
-                                .lines()
-                                .firstOrNull()
-                                .orEmpty()
-                                .take(180),
-                            data = mapOf(
-                                "type" to type,
-                                "payload" to payload
-                            )
+                            body = message.lines().firstOrNull().orEmpty().take(180),
+                            data = mapOf("type" to type, "payload" to payload)
                         )
                     }.onFailure { error ->
-                        println(
-                            "FCM delivery failed for userId=$userId: " +
-                                error.message
-                        )
+                        println("❌ FCM delivery failed for userId=$userId: ${error::class.simpleName}: ${error.message}")
                     }
                 }
 
-                val telegram = transaction {
-                    val pref = NotificationPreferencesTable.selectAll()
-                        .where { NotificationPreferencesTable.userId eq userId }
-                        .singleOrNull()
-                    val enabled = pref?.get(NotificationPreferencesTable.telegramEnabled) ?: false
-                    val chatId = pref?.get(NotificationPreferencesTable.telegramChatId)
-                    Pair(enabled && !chatId.isNullOrBlank(), chatId)
+                if (!deliverTelegram) {
+                    println("🔔 [Notification] Telegram disabled for event type=$type")
+                    return@forEach
                 }
-                println("🔔 [Notification] Telegram decision: userId=$userId, enabled=${telegram.first}, chatIdPresent=${!telegram.second.isNullOrBlank()}")
-                if (telegram.first) {
-                    telegram.second?.let { chatId ->
-                        runCatching {
-                            TelegramService.sendMessageToChat(
-                                chatId,
-                                "<b>${escapeTelegram(title)}</b>\n\n" +
-                                    escapeTelegram(message)
-                            )
-                        }.onFailure { error ->
-                            println(
-                                "Telegram delivery failed for " +
-                                    "userId=$userId: ${error.message}"
-                            )
-                        }
-                    }
+
+                val telegram = telegramConfig(userId, preferenceKey)
+                println("🔎 [Notification] Telegram personal config: userId=$userId, enabled=${telegram.enabled}, chatIdPresent=${!telegram.chatId.isNullOrBlank()}")
+                if (!telegram.enabled || telegram.chatId.isNullOrBlank()) return@forEach
+
+                runCatching {
+                    TelegramService.sendMessageToChat(
+                        telegram.chatId,
+                        "<b>${escapeTelegram(title)}</b>\n\n${escapeTelegram(message)}"
+                    )
+                }.onFailure { error ->
+                    println("❌ Telegram personal delivery failed for userId=$userId: ${error::class.simpleName}: ${error.message}")
                 }
             }
         }
     }
-
     suspend fun notifyTelegramUser(userId: UUID, text: String, preferenceKey: String = ""): Boolean {
         val config = transaction {
             val pref = NotificationPreferencesTable.selectAll()
