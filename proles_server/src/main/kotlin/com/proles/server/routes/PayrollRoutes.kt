@@ -594,6 +594,16 @@ internal fun Route.payrollRoutes() {
                 )
             }
 
+            NotificationService.notifyUsers(
+                targetUserIds = listOf(userId),
+                senderUserId = creatorId,
+                type = "PAYROLL_UPDATED",
+                title = "💰 Расчёт зарплаты",
+                message = "Подготовлен расчёт за ${body.month}.${body.year}: ${"%.2f".format(response.total)}",
+                payload = "{\"salaryRecordId\":\"${response.id}\",\"year\":${body.year},\"month\":${body.month}}",
+                preferenceKey = "payroll"
+            )
+
             call.respond(HttpStatusCode.Created, response)
         }
 
@@ -788,8 +798,30 @@ internal fun Route.payrollRoutes() {
                     "Salary record not found"
                 )
             } else {
+                val employeeId = transaction {
+                    SalaryRecordsTable
+                        .selectAll()
+                        .where { SalaryRecordsTable.id eq recordId }
+                        .single()[SalaryRecordsTable.userId].value
+                }
+                val statusLabel = when (status) {
+                    "approved" -> "утверждён"
+                    "paid" -> "выплачен"
+                    "draft" -> "возвращён в черновик"
+                    else -> status
+                }
+                NotificationService.notifyUsers(
+                    targetUserIds = listOf(employeeId),
+                    senderUserId = session.userId,
+                    type = "PAYROLL_UPDATED",
+                    title = "💰 Изменение зарплаты",
+                    message = "Расчёт зарплаты за запись $recordId $statusLabel",
+                    payload = "{\"salaryRecordId\":\"$recordId\",\"status\":\"$status\"}",
+                    preferenceKey = "payroll"
+                )
                 call.respond(HttpStatusCode.OK)
             }
+
         }
     }
 }
