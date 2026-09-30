@@ -166,7 +166,7 @@ object TelegramService {
 
     suspend fun sendFile(fileBytes: ByteArray, fileName: String, caption: String = ""): Boolean {
         if (!enabled || botToken.isNullOrBlank()) {
-            println("⚠️ [Telegram] sendFile пропущен: enabled=$enabled, tokenPresent=${!botToken.isNullOrBlank()}, file=$fileName")
+            println("⚠️ [Telegram] sendFile skipped: enabled=$enabled, tokenPresent=${!botToken.isNullOrBlank()}, file=$fileName")
             return false
         }
         val linkedChats = transaction { TelegramLinksTable.selectAll().map { it[TelegramLinksTable.chatId] } }
@@ -174,12 +174,41 @@ object TelegramService {
             systemChatId?.takeIf { it.isNotBlank() }?.let { add(it) }
         }.toList()
         println("📎 [Telegram] sendFile: file=$fileName, bytes=${fileBytes.size}, chats=${chats.size}, systemChatIncluded=${systemChatId != null}")
-        var ok = false
-        chats.forEach { chatId -> ok = sendDocumentToChat(chatId, fileBytes, fileName, caption) || ok }
-        println("📎 [Telegram] sendFile завершён: file=$fileName, success=$ok")
-        return ok
+        return sendDocumentToChats(chats, fileBytes, fileName, caption)
     }
 
+    suspend fun sendDocumentToChats(
+        chatIds: Collection<String>,
+        fileBytes: ByteArray,
+        fileName: String,
+        caption: String = ""
+    ): Boolean {
+        val uniqueChats = chatIds.map(String::trim).filter(String::isNotBlank).distinct()
+        if (!enabled || botToken.isNullOrBlank()) {
+            println("⚠️ [Telegram] sendDocumentToChats skipped: enabled=$enabled, tokenPresent=${!botToken.isNullOrBlank()}, chats=${uniqueChats.size}, file=$fileName")
+            return false
+        }
+        if (uniqueChats.isEmpty()) {
+            println("⚠️ [Telegram] sendDocumentToChats skipped: no chats, file=$fileName")
+            return false
+        }
+        var success = false
+        uniqueChats.forEach { chatId ->
+            success = sendDocumentToChat(chatId, fileBytes, fileName, caption) || success
+        }
+        println("📎 [Telegram] sendDocumentToChats finished: chats=${uniqueChats.size}, success=$success, file=$fileName")
+        return success
+    }
+
+    suspend fun sendSystemDocument(fileBytes: ByteArray, fileName: String, caption: String = ""): Boolean {
+        val chatId = systemChatId
+        if (chatId.isNullOrBlank()) {
+            println("⚠️ [Telegram] system document skipped: TELEGRAM_CHAT_ID is empty, file=$fileName")
+            return false
+        }
+        println("📢 [Telegram] sending system document: chatId=$chatId, file=$fileName, bytes=${fileBytes.size}")
+        return sendDocumentToChat(chatId, fileBytes, fileName, caption)
+    }
     private suspend fun sendDocumentToChat(chatId: String, bytes: ByteArray, fileName: String, caption: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val boundary = "----ProlesTelegram${System.currentTimeMillis()}"
