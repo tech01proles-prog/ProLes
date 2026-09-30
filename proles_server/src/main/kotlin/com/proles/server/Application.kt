@@ -87,6 +87,18 @@ fun Application.module() {
         exec("CREATE UNIQUE INDEX IF NOT EXISTS chat_member_conversation_user_uidx ON chat_conversation_members(conversation_id, user_id)")
         exec("CREATE INDEX IF NOT EXISTS chat_member_user_idx ON chat_conversation_members(user_id)")
         exec("CREATE INDEX IF NOT EXISTS chat_message_conversation_created_idx ON chat_messages(conversation_id, created_at DESC)")
+        exec("""
+            CREATE TABLE IF NOT EXISTS chat_message_deliveries (
+                id UUID PRIMARY KEY,
+                message_id UUID NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+                user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                delivered_at BIGINT,
+                read_at BIGINT,
+                UNIQUE(message_id, user_id)
+            )
+        """.trimIndent())
+        exec("CREATE INDEX IF NOT EXISTS chat_message_delivery_user_idx ON chat_message_deliveries(user_id)")
+        exec("CREATE INDEX IF NOT EXISTS chat_message_delivery_message_idx ON chat_message_deliveries(message_id)")
 
         // 🔐 Идемпотентно приводим таблицу настроек уведомлений к актуальной схеме.
         // Это защищает существующие БД, созданные до появления новых настроек.
