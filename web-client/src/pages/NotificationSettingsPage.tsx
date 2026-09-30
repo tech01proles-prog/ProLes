@@ -12,6 +12,7 @@ const CHANNELS: Array<{ key: keyof NotificationPreferencesDto; label: string; de
   { key: 'tripChangeEnabled', label: '🔄 Изменения поездок', desc: 'Внутренние уведомления о переездах и завершении командировок' },
   { key: 'vacationDecisionEnabled', label: '✅ Решение по отпуску', desc: 'Подтверждение или отклонение моего отпуска' },
   { key: 'ticketReceiptEnabled', label: '🧷 Чек по билету', desc: 'Сохранение чека билета и бухгалтерский расход' },
+  { key: 'chatMessageEnabled', label: '💬 PRO-Chat', desc: 'Уведомления о новых личных и групповых сообщениях' },
 ];
 
 export function NotificationSettingsPage() {
@@ -31,6 +32,7 @@ export function NotificationSettingsPage() {
         tripVisibleToAll: data.tripVisibleToAll ?? true,
         tripChangeEnabled: data.tripChangeEnabled ?? true, vacationDecisionEnabled: data.vacationDecisionEnabled ?? true,
         ticketReceiptEnabled: data.ticketReceiptEnabled ?? true,
+        chatMessageEnabled: data.chatMessageEnabled ?? true,
         telegramEnabled: data.telegramEnabled ?? false, telegramLinked: data.telegramLinked ?? false,
         telegramLinkCode: data.telegramLinkCode ?? null, emailEnabled: data.emailEnabled ?? false, email: data.email ?? '',
       });
