@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
+import java.time.LocalDate as JavaLocalDate
 
 /** Единая доставка событий в Web/FCM/Telegram с разделением системных и персональных сообщений. */
 object NotificationService {
@@ -361,6 +362,90 @@ object NotificationService {
             if (searchable.isBlank()) "" else "#${escapeTelegram(searchable)}"
         }.orEmpty()
 
+    fun notifyDirectorsTelegram(
+        type: String,
+        title: String,
+        message: String,
+        payload: String = "",
+        preferenceKey: String,
+        linkUrl: String? = null
+    ) {
+        val directors = transaction {
+            UsersTable.selectAll()
+                .where { UsersTable.role eq "director" }
+                .map { it[UsersTable.id].value }
+                .distinct()
+        }
+        println("📣 [Notification] director alert: type=$type directors=${directors.size}")
+
+        deliveryScope.launch {
+            directors.forEach { directorId ->
+                val config = telegramConfig(directorId, preferenceKey)
+                val chatId = config.chatId
+                println("🔎 [Notification] director Telegram: userId=$directorId enabled=${config.enabled} chatIdPresent=${!chatId.isNullOrBlank()}")
+                if (!config.enabled || chatId.isNullOrBlank()) return@forEach
+
+                val body = buildList {
+                    add("#$type")
+                    add("<b>${escapeTelegram(title)}</b>")
+                    add(escapeTelegram(message))
+                    if (!linkUrl.isNullOrBlank()) add(linkUrl)
+                }.joinToString("\n")
+
+                runCatching {
+                    TelegramService.sendMessageToChat(chatId, body)
+                }.onFailure { error ->
+                    println("❌ [Notification] director Telegram failed: userId=$directorId, ${error::class.simpleName}: ${error.message}")
+                }
+            }
+        }
+    }
+
+    fun vacationStatus(start: String, end: String, status: String): String {
+        val normalized = status.uppercase()
+        return when (normalized) {
+            "PENDING" -> "На рассмотрении"
+            "REJECTED" -> "Отклонен"
+            "APPROVED" -> {
+                val today = JavaLocalDate.now()
+                val startDate = runCatching { JavaLocalDate.parse(start) }.getOrNull()
+                val endDate = runCatching { JavaLocalDate.parse(end) }.getOrNull()
+                when {
+                    endDate != null && today.isAfter(endDate) -> "Завершен"
+                    startDate != null && !today.isBefore(startDate) -> "В процессе"
+                    else -> "Одобрен"
+                }
+            }
+            "IN_PROGRESS" -> "В процессе"
+            "COMPLETED" -> "Завершен"
+            else -> status
+        }
+    }
+
+    fun formatVacationTelegram(
+        title: String,
+        employeeName: String,
+        start: String,
+        end: String,
+        status: String,
+        reason: String = "",
+        linkUrl: String? = null
+    ): String = buildList {
+        add("#ОТПУСК")
+        add("<b>${escapeTelegram(title)}</b>")
+        add(escapeTelegram(employeeName))
+        add("$start — $end")
+        add("Статус: ${escapeTelegram(vacationStatus(start, end, status))}")
+        if (reason.isNotBlank()) add("Причина: ${escapeTelegram(reason)}")
+        if (!linkUrl.isNullOrBlank()) add(linkUrl)
+    }.joinToString("\n")
+
+    fun formatDayOffTelegram(title: String, employeeName: String, date: String): String = buildList {
+        add("#ВЫХОДНОЙ")
+        add("<b>${escapeTelegram(title)}</b>")
+        add(escapeTelegram(employeeName))
+        add(escapeTelegram(date))
+    }.joinToString("\n")
     fun linkedChatId(userId: UUID): String? = transaction {
         TelegramLinksTable.selectAll()
             .where { TelegramLinksTable.userId eq userId }
