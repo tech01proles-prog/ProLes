@@ -50,37 +50,41 @@ object NotificationService {
     ) {
         val uniqueTargets = targetUserIds.filter { it != senderUserId }.distinct()
         println("🔔 [Notification] notifyUsers: type=$type, title=$title, targets=${targetUserIds.size}, uniqueTargets=${uniqueTargets.size}, preferenceKey=$preferenceKey")
-        if (uniqueTargets.isEmpty()) {
-            println("🔔 [Notification] skip: no unique targets")
-            return
-        }
-
         val enabledTargets = if (preferenceKey.isBlank()) uniqueTargets else {
             uniqueTargets.filter { preferenceEnabled(it, preferenceKey) }
         }
         println("🔔 [Notification] enabledTargets=${enabledTargets.size}/${uniqueTargets.size}")
-        if (enabledTargets.isEmpty()) {
-            println("🔔 [Notification] skip: all targets disabled by preferences")
-            return
-        }
 
-        transaction {
-            enabledTargets.forEach { targetId ->
-                NotificationsTable.insert {
-                    it[id] = UUID.randomUUID()
-                    it[targetUserId] = targetId
-                    it[NotificationsTable.senderUserId] = senderUserId
-                    it[NotificationsTable.type] = type
-                    it[NotificationsTable.title] = title
-                    it[NotificationsTable.message] = message
-                    it[NotificationsTable.payload] = payload
-                    it[NotificationsTable.createdAt] = System.currentTimeMillis()
+        if (enabledTargets.isNotEmpty()) {
+            transaction {
+                enabledTargets.forEach { targetId ->
+                    NotificationsTable.insert {
+                        it[id] = UUID.randomUUID()
+                        it[targetUserId] = targetId
+                        it[NotificationsTable.senderUserId] = senderUserId
+                        it[NotificationsTable.type] = type
+                        it[NotificationsTable.title] = title
+                        it[NotificationsTable.message] = message
+                        it[NotificationsTable.payload] = payload
+                        it[NotificationsTable.createdAt] = System.currentTimeMillis()
+                    }
                 }
             }
+        } else {
+            println("🔔 [Notification] no per-user targets; system Telegram delivery will still be attempted")
         }
 
-        println("🔔 [Notification] database notification rows created for ${enabledTargets.size} users; async delivery started")
+        println("🔔 [Notification] async delivery started")
         CoroutineScope(Dispatchers.IO).launch {
+            println("📢 [Notification] sending system Telegram notification first: type=$type")
+            runCatching {
+                TelegramService.sendSystemMessage(
+                    "<b>${escapeTelegram(title)}</b>\n\n" + escapeTelegram(message)
+                )
+            }.onFailure { error ->
+                println("❌ [Notification] system Telegram delivery failed: ${error::class.simpleName}: ${error.message}")
+            }
+
             enabledTargets.forEach { userId ->
                 println("🔔 [Notification] delivering: type=$type, userId=$userId")
                 val fcmTokens = transaction {
