@@ -78,8 +78,12 @@ object PerDiemService {
                 BusinessTripsTable.selectAll()
                     .filter { row ->
                         val type = row[BusinessTripsTable.type]
-                        // Активные командировки: DEPARTURE или TRANSFER (но не COMPLETION)
-                        type == "DEPARTURE" || type == "TRANSFER"
+                        val status = row[BusinessTripsTable.status]
+                        val endDate = row[BusinessTripsTable.endDate]
+                        // Начисляем только незавершённые командировки и только до даты окончания.
+                        (type == "DEPARTURE" || type == "TRANSFER") &&
+                            status != "COMPLETED" &&
+                            (endDate == null || endDate >= today)
                     }
                     .toList()
             }
