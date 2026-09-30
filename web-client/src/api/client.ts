@@ -9,6 +9,7 @@ const api = axios.create({
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('proles_token');
   if (token && config.headers) config.headers['X-Session-Token'] = token;
+  if (config.data instanceof FormData && config.headers) delete config.headers['Content-Type'];
   return config;
 });
 
