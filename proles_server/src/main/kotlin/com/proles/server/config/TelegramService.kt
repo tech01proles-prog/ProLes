@@ -6,6 +6,10 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import java.io.ByteArrayOutputStream
+import java.net.InetSocketAddress
+import java.net.Proxy
+import java.net.ProxySelector
+import java.net.SocketAddress
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -20,9 +24,48 @@ import kotlinx.serialization.json.*
 object TelegramService {
     private var botToken: String? = null
     private var enabled = false
+
     private val httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
+        .apply {
+            telegramProxySelector()?.let { proxy(it) }
+        }
         .build()
+
+    private fun telegramProxySelector(): ProxySelector? {
+        val raw = sequenceOf(
+            System.getenv("TELEGRAM_HTTP_PROXY"),
+            System.getenv("HTTPS_PROXY"),
+            System.getenv("https_proxy"),
+            System.getenv("HTTP_PROXY"),
+            System.getenv("http_proxy")
+        )
+            .mapNotNull { it?.trim()?.takeIf(String::isNotBlank) }
+            .firstOrNull()
+            ?: return null
+
+        return runCatching {
+            val normalized = if (raw.contains("://")) raw else "http://$raw"
+            val uri = URI.create(normalized)
+            val host = uri.host ?: error("proxy host is missing")
+            val port = if (uri.port > 0) uri.port else 8080
+            val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(host, port))
+
+            object : ProxySelector() {
+                override fun select(uri: URI): List<Proxy> = listOf(proxy)
+                override fun connectFailed(
+                    uri: URI?,
+                    sa: SocketAddress?,
+                    ioe: java.io.IOException?
+                ) {
+                    println("⚠️ Telegram proxy connection failed: ${ioe?.message}")
+                }
+            }
+        }.getOrElse {
+            println("⚠️ Telegram proxy config is invalid: ${it.message}")
+            null
+        }
+    }
 
     private val apiBaseUrl =
         System.getenv("TELEGRAM_API_BASE_URL")?.trim()?.trimEnd('/')
