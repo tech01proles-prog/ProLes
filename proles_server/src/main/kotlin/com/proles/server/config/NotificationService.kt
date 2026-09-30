@@ -121,12 +121,13 @@ object NotificationService {
                 }
 
                 val telegram = telegramConfig(userId, preferenceKey)
-                println("🔎 [Notification] Telegram personal: userId=$userId enabled=${telegram.enabled} chatIdPresent=${!telegram.chatId.isNullOrBlank()}")
-                if (!telegram.enabled || telegram.chatId.isNullOrBlank()) return@forEach
+                val chatId = telegram.chatId
+                println("🔎 [Notification] Telegram personal: userId=$userId enabled=${telegram.enabled} chatIdPresent=${!chatId.isNullOrBlank()}")
+                if (!telegram.enabled || chatId.isNullOrBlank()) return@forEach
 
                 runCatching {
                     TelegramService.sendMessageToChat(
-                        telegram.chatId,
+                        chatId,
                         formatPersonalTelegram(type, title, message)
                     )
                 }.onFailure { error ->
@@ -138,9 +139,10 @@ object NotificationService {
 
     suspend fun notifyTelegramUser(userId: UUID, text: String, preferenceKey: String = ""): Boolean {
         val config = telegramConfig(userId, preferenceKey)
-        println("🔎 [Notification] user Telegram: userId=$userId enabled=${config.enabled} chatIdPresent=${!config.chatId.isNullOrBlank()} preference=$preferenceKey")
-        if (!config.enabled || config.chatId.isNullOrBlank()) return false
-        return TelegramService.sendMessageToChat(config.chatId, text)
+        val chatId = config.chatId
+        println("🔎 [Notification] user Telegram: userId=$userId enabled=${config.enabled} chatIdPresent=${!chatId.isNullOrBlank()} preference=$preferenceKey")
+        if (!config.enabled || chatId.isNullOrBlank()) return false
+        return TelegramService.sendMessageToChat(chatId, text)
     }
 
     suspend fun notifyTelegramUserWithFile(
@@ -151,9 +153,10 @@ object NotificationService {
         preferenceKey: String = ""
     ): Boolean {
         val config = telegramConfig(userId, preferenceKey)
-        println("🔎 [Notification] user Telegram file: userId=$userId enabled=${config.enabled} chatIdPresent=${!config.chatId.isNullOrBlank()} file=$fileName bytes=${fileBytes.size}")
-        if (!config.enabled || config.chatId.isNullOrBlank()) return false
-        return TelegramService.sendDocumentToChats(listOf(config.chatId), fileBytes, fileName, caption)
+        val chatId = config.chatId
+        println("🔎 [Notification] user Telegram file: userId=$userId enabled=${config.enabled} chatIdPresent=${!chatId.isNullOrBlank()} file=$fileName bytes=${fileBytes.size}")
+        if (!config.enabled || chatId.isNullOrBlank()) return false
+        return TelegramService.sendDocumentToChats(listOf(chatId), fileBytes, fileName, caption)
     }
 
     fun notifyTicket(
