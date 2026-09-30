@@ -548,6 +548,25 @@ object ChatMessagesTable : UUIDTable("chat_messages") {
     }
 }
 
+object ChatMessageDeliveriesTable : UUIDTable("chat_message_deliveries") {
+    val messageId = reference(
+        "message_id",
+        ChatMessagesTable,
+        onDelete = ReferenceOption.CASCADE
+    ).index()
+    val userId = reference(
+        "user_id",
+        UsersTable,
+        onDelete = ReferenceOption.CASCADE
+    ).index()
+    val deliveredAt = long("delivered_at").nullable()
+    val readAt = long("read_at").nullable()
+
+    init {
+        uniqueIndex("chat_message_delivery_message_user_uidx", messageId, userId)
+    }
+}
+
 object ChatAttachmentsTable : UUIDTable("chat_attachments") {
     val messageId = reference(
         "message_id",
