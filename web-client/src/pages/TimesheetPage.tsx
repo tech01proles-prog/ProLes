@@ -872,9 +872,8 @@ function StandardTimesheetPage({
               editingEntry?.hours !== undefined
                 ? String(editingEntry.hours)
                 : '',
-            description: editingEntry
-              ? getEntryComment(editingEntry)
-              : '',
+            description: editingEntry ? getEntryComment(editingEntry) : '',
+            country: formCountry,
           }}
           submitting={savingEntry}
           submitLabel={
