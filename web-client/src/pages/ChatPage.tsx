@@ -57,6 +57,7 @@ export function ChatPage() {
   const [users, setUsers] = useState<ChatUserDto[]>([]);
   const [activeId, setActiveId] = useState('');
   const [messages, setMessages] = useState<ChatMessageDto[]>([]);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -74,7 +75,8 @@ export function ChatPage() {
 
   const loadMessages = useCallback(async (conversationId: string, nextCursor?: string | null) => {
     const { data } = await api.get<ChatMessagesPageDto>(`/chat/conversations/${conversationId}/messages`, { params: { limit: 50, cursor: nextCursor || undefined } });
-    setMessages((current) => nextCursor ? [...current, ...data.items] : data.items);
+    const orderedItems = data.items.slice().reverse();
+    setMessages((current) => nextCursor ? [...orderedItems, ...current] : orderedItems);
     setCursor(data.nextCursor);
     if (!nextCursor) await api.post(`/chat/conversations/${conversationId}/read`, { messageId: data.items[0]?.id || null });
   }, []);
@@ -90,6 +92,14 @@ export function ChatPage() {
   }, [loadSidebar]);
 
   useEffect(() => { if (activeId) void loadMessages(activeId); else setMessages([]); }, [activeId, loadMessages]);
+
+  useEffect(() => {
+    if (!activeId || cursor !== null) return;
+    requestAnimationFrame(() => {
+      const container = messagesContainerRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+    });
+  }, [activeId, cursor]);
 
   useEffect(() => {
     const token = localStorage.getItem('proles_token');
@@ -140,7 +150,7 @@ export function ChatPage() {
                 return current;
               }
 
-              return [incoming, ...current];
+              return [...current, incoming];
             });
 
             void api.post(
@@ -264,7 +274,7 @@ export function ChatPage() {
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm font-black text-white">{active.title.trim().charAt(0).toUpperCase() || '?'}</div>
               <div className="min-w-0"><div className="truncate font-black text-slate-900">{active.title}</div><div className="text-xs text-emerald-600">Личная переписка</div></div>
             </header>
-            <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-slate-50/70 px-3 py-4 sm:p-5">
+            <div ref={messagesContainerRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-slate-50/70 px-3 py-4 sm:p-5">
               <div className="space-y-2.5">
                 {messages.map((message) => { const mine = message.senderId === currentUser?.id; return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[88%] rounded-[22px] px-4 py-3 shadow-sm sm:max-w-[76%] ${mine ? 'rounded-br-md bg-indigo-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-900'}`}>{!mine && <div className="mb-1 text-xs font-bold text-indigo-600">{message.senderName}</div>}{message.text && <div className="whitespace-pre-wrap break-words text-[15px] leading-6">{message.text}</div>}{message.attachments.map((attachment) => <button key={attachment.id} type="button" onClick={() => void download(message, attachment.id, attachment.originalName)} className="mt-2 block w-full rounded-2xl border border-current/15 bg-white/10 px-3 py-2.5 text-left text-sm"><span className="block truncate font-bold">{attachment.originalName}</span><span className="text-xs opacity-70">{formatSize(attachment.sizeBytes)}</span></button>)}<div className="mt-1 text-right text-[10px] opacity-60">{new Date(message.createdAt).toLocaleString('ru-RU')}</div></div></div>; })}
                 {cursor && <button type="button" onClick={() => void loadMessages(activeId, cursor)} className="mx-auto block rounded-full bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-600">Загрузить предыдущие</button>}
