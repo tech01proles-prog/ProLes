@@ -539,12 +539,27 @@ internal fun Route.ticketRoutes() {
                 }
             }
             println("🎫 [Ticket upload] calling NotificationService.notifyUsers for TICKET")
+            println("🎫 [Ticket upload] calling NotificationService.notifyUsers for TICKET")
             NotificationService.notifyUsers(
                 recipientUuids, session.userId, "TICKET", "🎫 Новый билет",
                 "$senderName загрузил билет по проекту «$projectName»",
                 ticketJson.encodeToString(mapOf("ticketId" to ticketId.toString(), "projectId" to request.projectId)),
                 "ticket"
             )
+            if (recipientUuids.isEmpty()) {
+                println("🎫 [Ticket upload] no explicit recipients; scheduling Telegram fallback to uploader userId=${session.userId}")
+                CoroutineScope(Dispatchers.IO).launch {
+                    val selfTelegramResult = NotificationService.notifyTelegramUser(
+                        session.userId,
+                        "<b>🎫 Новый билет</b>\n\n" +
+                            NotificationService.escapeTelegram(
+                                "$senderName загрузил билет по проекту «$projectName»"
+                            ),
+                        "ticket"
+                    )
+                    println("🎫 [Ticket upload] uploader Telegram fallback result=$selfTelegramResult")
+                }
+            }
             if (request.receiptBase64 != null && request.amount > 0.0) {
                 val financeRecipients = transaction {
                     UsersTable.selectAll().where { (UsersTable.role eq "superadmin") or (UsersTable.role eq "director") or (UsersTable.role eq "admin") }.map { it[UsersTable.id].value }.distinct()
