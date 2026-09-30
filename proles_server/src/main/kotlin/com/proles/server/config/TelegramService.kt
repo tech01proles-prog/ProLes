@@ -127,10 +127,8 @@ object TelegramService {
     }
 
     suspend fun sendMessage(text: String, parseMode: String = "HTML"): Boolean {
-        println("📨 [Telegram] sendMessage/broadcast вызван: textLength=${text.length}, parseMode=$parseMode")
-        val result = NotificationService.broadcastTelegram(text)
-        println("📨 [Telegram] sendMessage/broadcast завершён: success=$result")
-        return result
+        println("📢 [Telegram] sendMessage() redirected to system chat: textLength=${text.length}")
+        return sendSystemMessage(text, parseMode)
     }
 
     suspend fun sendMessageToChat(chatId: String, text: String, parseMode: String = "HTML"): Boolean {
