@@ -237,22 +237,7 @@ export function ChatPage() {
           realtimeEvent.userId &&
           realtimeEvent.userId !== currentUser?.id
         ) {
-          const target = realtimeEvent.messageId
-            ? messages.find((message) => message.id === realtimeEvent.messageId)
-            : undefined;
-
-          if (target) {
-            setMessages((current) =>
-              current.map((message) =>
-                message.senderId === currentUser?.id &&
-                message.createdAt <= target.createdAt
-                  ? { ...message, deliveryStatus: 'READ' }
-                  : message
-              )
-            );
-          } else {
-            void loadMessages(activeIdRef.current);
-          }
+          void loadMessages(activeIdRef.current);
           void loadSidebar();
         }
       };
