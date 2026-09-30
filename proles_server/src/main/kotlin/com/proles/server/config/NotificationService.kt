@@ -382,7 +382,7 @@ object NotificationService {
 
         deliveryScope.launch {
             directors.forEach { directorId ->
-                val config = telegramConfig(directorId, preferenceKey)
+                val config = telegramConfig(directorId)
                 val chatId = config.chatId
                 println("🔎 [Notification] director Telegram: userId=$directorId enabled=${config.enabled} chatIdPresent=${!chatId.isNullOrBlank()}")
                 if (!config.enabled || chatId.isNullOrBlank()) return@forEach
