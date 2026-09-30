@@ -286,13 +286,25 @@ object TelegramService {
                 it[TelegramLinksTable.username] = username
                 it[TelegramLinksTable.linkedAt] = System.currentTimeMillis()
             }
-            NotificationPreferencesTable.update({ NotificationPreferencesTable.userId eq userId }) {
+            val updatedRows = NotificationPreferencesTable.update({ NotificationPreferencesTable.userId eq userId }) {
                 it[NotificationPreferencesTable.telegramChatId] = chatId
                 it[NotificationPreferencesTable.telegramUsername] = username
                 it[NotificationPreferencesTable.telegramLinkedAt] = System.currentTimeMillis()
                 it[NotificationPreferencesTable.telegramLinkCode] = null
             }
+            if (updatedRows == 0) {
+                println("⚠️ [Telegram] notification_preferences missing for userId=$userId; creating it during Telegram link")
+                NotificationPreferencesTable.insert {
+                    it[id] = UUID.randomUUID()
+                    it[NotificationPreferencesTable.userId] = userId
+                    it[NotificationPreferencesTable.telegramEnabled] = true
+                    it[NotificationPreferencesTable.telegramChatId] = chatId
+                    it[NotificationPreferencesTable.telegramUsername] = username
+                    it[NotificationPreferencesTable.telegramLinkedAt] = System.currentTimeMillis()
+                }
+            }
         }
+        println("✅ [Telegram] linkByCode success: userId=$userId, chatId=$chatId, username=$username")
         scope.launch { sendMessageToChat(chatId, "✅ Telegram успешно привязан к вашему аккаунту Proles Sys. Дальше уведомления будут приходить сюда согласно настройкам.") }
         return true
     }
