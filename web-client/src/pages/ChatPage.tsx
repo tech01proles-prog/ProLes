@@ -3,13 +3,21 @@ import api from '../api/client';
 import type { ChatConversationDto, ChatMessageDto, ChatMessagesPageDto, ChatUserDto, UserDto } from '../types';
 
 type ChatRealtimeEvent = {
-  type: 'CONNECTED' | 'MESSAGE_CREATED' | 'CONVERSATION_READ';
+  type:
+    | 'CONNECTED'
+    | 'MESSAGE_CREATED'
+    | 'MESSAGE_UPDATED'
+    | 'MESSAGE_DELETED'
+    | 'MESSAGE_DELIVERY_UPDATED'
+    | 'CONVERSATION_READ'
+    | 'PRESENCE_CHANGED';
   conversationId?: string;
   message?: ChatMessageDto;
   userId?: string;
   messageId?: string;
   unreadCount?: number;
   occurredAt: number;
+  online?: boolean;
 };
 
 const buildChatWebSocketUrl = (token: string) => {
@@ -63,7 +71,12 @@ export function ChatPage() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState('');
+  const [messageMenuId, setMessageMenuId] = useState('');
+  const [editingText, setEditingText] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const activeIdRef = useRef('');
 
   const loadSidebar = useCallback(async () => {
@@ -163,7 +176,83 @@ export function ChatPage() {
           return;
         }
 
-        if (realtimeEvent.type === 'CONVERSATION_READ') {
+        if (
+          realtimeEvent.type === 'MESSAGE_UPDATED' ||
+          realtimeEvent.type === 'MESSAGE_DELETED'
+        ) {
+          const incoming = realtimeEvent.message;
+          if (incoming) {
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === incoming.id ? incoming : message
+              )
+            );
+          }
+          void loadSidebar();
+          return;
+        }
+
+        if (
+          realtimeEvent.type === 'MESSAGE_DELIVERY_UPDATED' &&
+          realtimeEvent.messageId
+        ) {
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === realtimeEvent.messageId &&
+              message.senderId === currentUser?.id &&
+              message.deliveryStatus === 'SENT'
+                ? { ...message, deliveryStatus: 'DELIVERED' }
+                : message
+            )
+          );
+          return;
+        }
+
+        if (
+          realtimeEvent.type === 'PRESENCE_CHANGED' &&
+          realtimeEvent.userId
+        ) {
+          const online = realtimeEvent.online ?? false;
+          setUsers((current) =>
+            current.map((user) =>
+              user.id === realtimeEvent.userId ? { ...user, online } : user
+            )
+          );
+          setConversations((current) =>
+            current.map((conversation) => ({
+              ...conversation,
+              members: conversation.members.map((member) =>
+                member.id === realtimeEvent.userId
+                  ? { ...member, online }
+                  : member
+              ),
+            }))
+          );
+          return;
+        }
+
+        if (
+          realtimeEvent.type === 'CONVERSATION_READ' &&
+          realtimeEvent.conversationId === activeIdRef.current &&
+          realtimeEvent.userId &&
+          realtimeEvent.userId !== currentUser?.id
+        ) {
+          const target = realtimeEvent.messageId
+            ? messages.find((message) => message.id === realtimeEvent.messageId)
+            : undefined;
+
+          if (target) {
+            setMessages((current) =>
+              current.map((message) =>
+                message.senderId === currentUser?.id &&
+                message.createdAt <= target.createdAt
+                  ? { ...message, deliveryStatus: 'READ' }
+                  : message
+              )
+            );
+          } else {
+            void loadMessages(activeIdRef.current);
+          }
           void loadSidebar();
         }
       };
@@ -230,7 +319,52 @@ export function ChatPage() {
     }
   };
 
-  const download = async (message: ChatMessageDto, attachmentId: string, fileName: string) => {
+  const beginEdit = (message: ChatMessageDto) => {
+    setEditingMessageId(message.id);
+    setMessageMenuId('');
+    setEditingText(message.text);
+    requestAnimationFrame(() => {
+      const input = document.getElementById('chat-edit-input') as HTMLTextAreaElement | null;
+      input?.focus();
+      if (input) input.setSelectionRange(input.value.length, input.value.length);
+    });
+  };
+
+  const saveEdit = async () => {
+    const value = editingText.trim();
+    if (!activeId || !editingMessageId || !value || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      const { data } = await api.put<ChatMessageDto>(
+        `/chat/conversations/${activeId}/messages/${editingMessageId}`,
+        { text: value }
+      );
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === data.id ? data : message
+        )
+      );
+      setEditingMessageId('');
+      setEditingText('');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const deleteMessage = async (message: ChatMessageDto) => {
+    if (!activeId || message.deletedAt) return;
+    if (!window.confirm('Удалить это сообщение?')) return;
+
+    const { data } = await api.delete<ChatMessageDto>(
+      `/chat/conversations/${activeId}/messages/${message.id}`
+    );
+    setMessages((current) =>
+      current.map((item) => item.id === data.id ? data : item)
+    );
+    setMessageMenuId('');
+  };
+
+  const download = async (message: ChatMessageDto, attachmentId: string, fileName: string) =>
     const attachment = message.attachments.find((item) => item.id === attachmentId);
     if (!attachment) return;
     const path = attachment.downloadUrl.replace(/^\/api\/v1/, '');
@@ -244,6 +378,8 @@ export function ChatPage() {
   };
 
   const active = conversations.find((item) => item.id === activeId);
+  const activePeer = active?.members.find((member) => member.id !== currentUser?.id);
+  const activeOnline = activePeer?.online ?? false;
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">◌</div></div>;
 
@@ -254,13 +390,22 @@ export function ChatPage() {
           <div className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-500">Мессенджер</div>
           <div className="mt-1 flex items-center justify-between gap-3"><h1 className="text-xl font-black tracking-tight text-slate-900">PRO-Chat</h1><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700">онлайн</span></div>
           <select defaultValue="" onChange={(event) => { if (event.target.value) void startConversation(event.target.value); event.target.value = ''; }} className="input mt-4 w-full border-indigo-100 bg-indigo-50/70 font-semibold">
-            <option value="">＋ Новый диалог</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}{user.position ? ` — ${user.position}` : ''}</option>)}
+            <option value="">＋ Новый диалог</option>{users.map((user) => <option key={user.id} value={user.id}>{user.online ? '● ' : '○ '}{user.name}{user.position ? ` — ${user.position}` : ''}</option>)}
           </select>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {conversations.map((conversation) => (
             <button key={conversation.id} type="button" onClick={() => setActiveId(conversation.id)} className={`w-full border-b border-slate-200/80 p-4 text-left ${activeId === conversation.id ? 'bg-indigo-50' : 'bg-white hover:bg-slate-100'}`}>
-              <div className="flex items-center gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm font-black text-white">{conversation.title.trim().charAt(0).toUpperCase() || '?'}</div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><span className="truncate font-bold text-slate-900">{conversation.title}</span>{conversation.unreadCount > 0 && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-bold text-white">{conversation.unreadCount}</span>}</div><div className="mt-1 truncate text-xs text-slate-500">{conversation.lastMessage?.text || 'Нет сообщений'}</div></div></div>
+              <div className="flex items-center gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm font-black text-white">{conversation.title.trim().charAt(0).toUpperCase() || '?'}</div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2">
+  <span className="flex min-w-0 items-center gap-2 truncate font-bold text-slate-900">
+    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${conversation.members.find((member) => member.id !== currentUser?.id)?.online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+    <span className="truncate">{conversation.title}</span>
+  </span>
+  {conversation.unreadCount > 0 && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-bold text-white">{conversation.unreadCount}</span>}
+</div>
+<div className="mt-1 truncate text-xs text-slate-500">
+  {conversation.lastMessage?.deletedAt ? 'Сообщение удалено' : conversation.lastMessage?.text || 'Нет сообщений'}
+</div></div></div>
             </button>
           ))}
           {conversations.length === 0 && <div className="p-8 text-center text-sm text-slate-500">Выберите сотрудника для начала диалога.</div>}
@@ -272,11 +417,92 @@ export function ChatPage() {
             <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-5 sm:py-4">
               <button type="button" onClick={() => setActiveId('')} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-indigo-50 text-lg font-bold text-indigo-600 md:hidden">←</button>
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm font-black text-white">{active.title.trim().charAt(0).toUpperCase() || '?'}</div>
-              <div className="min-w-0"><div className="truncate font-black text-slate-900">{active.title}</div><div className="text-xs text-emerald-600">Личная переписка</div></div>
+              <div className="min-w-0">
+  <div className="flex items-center gap-2">
+    <div className="truncate font-black text-slate-900">{active.title}</div>
+    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${activeOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+  </div>
+  <div className={activeOnline ? 'text-xs text-emerald-600' : 'text-xs text-slate-400'}>
+    {activeOnline ? 'онлайн' : 'не в сети'}
+  </div>
+</div>
             </header>
             <div ref={messagesContainerRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-slate-50/70 px-3 py-4 sm:p-5">
               <div className="space-y-2.5">
-                {messages.map((message) => { const mine = message.senderId === currentUser?.id; return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[88%] rounded-[22px] px-4 py-3 shadow-sm sm:max-w-[76%] ${mine ? 'rounded-br-md bg-indigo-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-900'}`}>{!mine && <div className="mb-1 text-xs font-bold text-indigo-600">{message.senderName}</div>}{message.text && <div className="whitespace-pre-wrap break-words text-[15px] leading-6">{message.text}</div>}{message.attachments.map((attachment) => <button key={attachment.id} type="button" onClick={() => void download(message, attachment.id, attachment.originalName)} className="mt-2 block w-full rounded-2xl border border-current/15 bg-white/10 px-3 py-2.5 text-left text-sm"><span className="block truncate font-bold">{attachment.originalName}</span><span className="text-xs opacity-70">{formatSize(attachment.sizeBytes)}</span></button>)}<div className="mt-1 text-right text-[10px] opacity-60">{new Date(message.createdAt).toLocaleString('ru-RU')}</div></div></div>; })}
+                {messages.map((message) => {
+                  const mine = message.senderId === currentUser?.id;
+                  const deleted = Boolean(message.deletedAt);
+                  const statusLabel =
+                    message.deliveryStatus === 'READ'
+                      ? '✓✓ просмотрено'
+                      : message.deliveryStatus === 'DELIVERED'
+                        ? '✓✓ доставлено'
+                        : '✓ отправлено';
+
+                  return (
+                    <div key={message.id} className={`group relative flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[92%] rounded-[22px] px-4 py-3 shadow-sm sm:max-w-[78%] ${mine ? 'rounded-br-md bg-indigo-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-900'}`}>
+                        {!mine && <div className="mb-1 text-xs font-bold text-indigo-600">{message.senderName}</div>}
+
+                        {editingMessageId === message.id && !deleted ? (
+                          <div className="min-w-[240px] sm:min-w-[320px]">
+                            <textarea
+                              id="chat-edit-input"
+                              value={editingText}
+                              onChange={(event) => setEditingText(event.target.value)}
+                              rows={3}
+                              maxLength={20000}
+                              className="w-full resize-none rounded-2xl border border-white/25 bg-white/15 px-3 py-2 text-sm text-current outline-none"
+                            />
+                            <div className="mt-2 flex justify-end gap-2">
+                              <button type="button" onClick={() => { setEditingMessageId(''); setEditingText(''); }} className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold">Отмена</button>
+                              <button type="button" onClick={() => void saveEdit()} disabled={!editingText.trim() || savingEdit} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 disabled:opacity-50">{savingEdit ? '…' : 'Сохранить'}</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {deleted ? (
+                              <div className="text-sm italic opacity-70">Сообщение удалено</div>
+                            ) : (
+                              <>
+                                {message.text && <div className="whitespace-pre-wrap break-words text-[15px] leading-6">{message.text}</div>}
+                                {message.attachments.map((attachment) => (
+                                  <button key={attachment.id} type="button" onClick={() => void download(message, attachment.id, attachment.originalName)} className="mt-2 block w-full rounded-2xl border border-current/15 bg-white/10 px-3 py-2.5 text-left text-sm">
+                                    <span className="block truncate font-bold">{attachment.originalName}</span>
+                                    <span className="text-xs opacity-70">{formatSize(attachment.sizeBytes)}</span>
+                                  </button>
+                                ))}
+                              </>
+                            )}
+
+                            <div className="mt-1 flex items-center justify-end gap-2 text-[10px] opacity-65">
+                              {mine && <span>{statusLabel}</span>}
+                              {message.editedAt && !deleted && <span>отредактировано</span>}
+                              <span>{new Date(message.createdAt).toLocaleString('ru-RU')}</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {!deleted && (
+                        <div className="absolute -top-2 right-1 z-10">
+                          <button
+                            type="button"
+                            onClick={() => setMessageMenuId((current) => current === message.id ? '' : message.id)}
+                            className="grid h-8 w-8 place-items-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:text-slate-900 sm:opacity-0 sm:group-hover:opacity-100"
+                            aria-label="Действия сообщения"
+                          >⋯</button>
+                          {messageMenuId === message.id && (
+                            <div className="absolute right-0 top-9 min-w-36 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 text-slate-700 shadow-xl">
+                              <button type="button" onClick={() => beginEdit(message)} className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-indigo-50">Редактировать</button>
+                              <button type="button" onClick={() => void deleteMessage(message)} className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-rose-600 hover:bg-rose-50">Удалить</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {cursor && <button type="button" onClick={() => void loadMessages(activeId, cursor)} className="mx-auto block rounded-full bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-600">Загрузить предыдущие</button>}
               </div>
             </div>
@@ -285,7 +511,7 @@ export function ChatPage() {
               <div className="flex items-end gap-2">
                 <input ref={fileInput} type="file" className="hidden" onChange={(event) => { const next = event.target.files?.[0] || null; if (next && next.size > 100 * 1024 * 1024) { alert('Максимальный размер файла — 100 MiB'); event.target.value = ''; return; } setFile(next); }} />
                 <button type="button" onClick={() => fileInput.current?.click()} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-100 text-xl text-emerald-700 hover:bg-emerald-200">＋</button>
-                <textarea value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} rows={1} maxLength={20000} className="input min-h-[44px] flex-1 resize-none rounded-[22px] border-slate-200 bg-slate-50 px-4 py-2.5 text-[15px] leading-6" placeholder="Сообщение..." />
+                <textarea ref={composerRef} value={text} onChange={(event) => setText(event.target.value)} onInput={(event) => { const input = event.currentTarget; input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight, 120)}px`; }} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} rows={1} maxLength={20000} className="input min-h-[44px] max-h-[120px] flex-1 resize-none overflow-y-auto rounded-[22px] border-slate-200 bg-slate-50 px-4 py-2.5 text-[15px] leading-6" placeholder="Сообщение..." />
                 <button type="button" onClick={() => void send()} disabled={sending || (!text.trim() && !file)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-indigo-600 text-lg font-black text-white shadow-md disabled:opacity-40">{sending ? '…' : '➤'}</button>
               </div>
             </footer>
