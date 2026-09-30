@@ -80,7 +80,10 @@ export function Layout() {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
+  const isDirector = user?.role?.trim().toLowerCase() === 'director';
+
   const hasManagement =
+    isDirector ||
     can('projects', 'view') ||
     can('dayoffs_all', 'view') ||
     can('payroll', 'view') ||
@@ -88,7 +91,6 @@ export function Layout() {
     can('permissions', 'view');
 
   const navigation = useMemo(() => {
-    const isDirector = user?.role?.trim().toLowerCase() === 'director';
     return NAVIGATION_ITEMS.filter((item) => {
       if (isDirector && item.to === '/timesheet') return false;
       if (item.directorOnly && !isDirector) return false;
