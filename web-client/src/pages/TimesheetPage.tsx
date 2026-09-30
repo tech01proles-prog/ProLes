@@ -885,32 +885,7 @@ function StandardTimesheetPage({
           onSubmit={saveEntry}
         />
 
-        <div className="mt-5 border-t border-slate-200 pt-5 dark:border-slate-800">
-          <label>
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              Страна выполнения работы
-            </span>
-
-            <select
-              value={formCountry}
-              onChange={(event) =>
-                setFormCountry(event.target.value)
-              }
-              disabled={savingEntry}
-              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-950 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-            >
-              {COUNTRIES.map((country) => (
-                <option
-                  key={country.code}
-                  value={country.code}
-                >
-                  {country.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </Modal>
+dal>
     </div>
   );
 }
