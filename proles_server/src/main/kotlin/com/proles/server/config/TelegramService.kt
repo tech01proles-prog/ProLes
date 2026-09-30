@@ -24,6 +24,7 @@ import kotlinx.serialization.json.*
 object TelegramService {
     private var botToken: String? = null
     private var enabled = false
+    private var systemChatId: String? = null
 
     private val httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
@@ -106,14 +107,30 @@ object TelegramService {
             return
         }
         botToken = token
+        systemChatId = chatId?.trim()?.takeIf { it.isNotBlank() }
         enabled = true
-        println("✅ [Telegram] Bot инициализирован, token=${maskedBotToken()}, polling запускается")
+        println("✅ [Telegram] Bot инициализирован, token=${maskedBotToken()}, systemChatConfigured=${systemChatId != null}, polling запускается")
         startPolling()
         if (!chatId.isNullOrBlank()) println("ℹ️ [Telegram] TELEGRAM_CHAT_ID используется только для обратной совместимости")
     }
 
+    fun configuredSystemChatId(): String? = systemChatId
+
+    suspend fun sendSystemMessage(text: String, parseMode: String = "HTML"): Boolean {
+        val chatId = systemChatId
+        if (chatId.isNullOrBlank()) {
+            println("⚠️ [Telegram] system notification skipped: TELEGRAM_CHAT_ID is empty")
+            return false
+        }
+        println("📢 [Telegram] system notification: chatId=$chatId, textLength=${text.length}")
+        return sendMessageToChat(chatId, text, parseMode)
+    }
+
     suspend fun sendMessage(text: String, parseMode: String = "HTML"): Boolean {
-        return NotificationService.broadcastTelegram(text)
+        println("📨 [Telegram] sendMessage/broadcast вызван: textLength=${text.length}, parseMode=$parseMode")
+        val result = NotificationService.broadcastTelegram(text)
+        println("📨 [Telegram] sendMessage/broadcast завершён: success=$result")
+        return result
     }
 
     suspend fun sendMessageToChat(chatId: String, text: String, parseMode: String = "HTML"): Boolean {
@@ -152,8 +169,13 @@ object TelegramService {
             println("⚠️ [Telegram] sendFile пропущен: enabled=$enabled, tokenPresent=${!botToken.isNullOrBlank()}, file=$fileName")
             return false
         }
-        val chats = transaction { TelegramLinksTable.selectAll().map { it[TelegramLinksTable.chatId] }.distinct() }
-        println("📎 [Telegram] sendFile: file=$fileName, bytes=${fileBytes.size}, chats=${chats.size}")
+        val linkedChats = transaction { TelegramLinksTable.selectAll().map { it[TelegramLinksTable.chatId] } }
+        val chats = linkedChats.asSequence()
+            .plus(systemChatId?.let(::sequenceOf) ?: emptySequence())
+            .filter { it.isNotBlank() }
+            .distinct()
+            .toList()
+        println("📎 [Telegram] sendFile: file=$fileName, bytes=${fileBytes.size}, chats=${chats.size}, systemChatIncluded=${systemChatId != null}")
         var ok = false
         chats.forEach { chatId -> ok = sendDocumentToChat(chatId, fileBytes, fileName, caption) || ok }
         println("📎 [Telegram] sendFile завершён: file=$fileName, success=$ok")
