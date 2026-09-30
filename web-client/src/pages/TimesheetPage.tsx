@@ -685,7 +685,7 @@ function StandardTimesheetPage({
       />
 
       {view === 'calendar' ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_300px]">
           <div>
             <TimesheetCalendar
               days={calendarDays}
