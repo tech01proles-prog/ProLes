@@ -170,11 +170,9 @@ object TelegramService {
             return false
         }
         val linkedChats = transaction { TelegramLinksTable.selectAll().map { it[TelegramLinksTable.chatId] } }
-        val chats = linkedChats.asSequence()
-            .plus(systemChatId?.let(::sequenceOf) ?: emptySequence())
-            .filter { it.isNotBlank() }
-            .distinct()
-            .toList()
+        val chats = linkedChats.toMutableSet().apply {
+            systemChatId?.takeIf { it.isNotBlank() }?.let { add(it) }
+        }.toList()
         println("📎 [Telegram] sendFile: file=$fileName, bytes=${fileBytes.size}, chats=${chats.size}, systemChatIncluded=${systemChatId != null}")
         var ok = false
         chats.forEach { chatId -> ok = sendDocumentToChat(chatId, fileBytes, fileName, caption) || ok }
