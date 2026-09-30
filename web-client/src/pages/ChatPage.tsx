@@ -238,55 +238,45 @@ export function ChatPage() {
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">◌</div></div>;
 
   return (
-    <div className="grid h-[calc(100vh-9rem)] min-h-[580px] grid-cols-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 md:grid-cols-[320px_1fr]">
-      <aside className="flex min-h-0 flex-col border-b border-slate-200 dark:border-slate-700 md:border-b-0 md:border-r">
-        <div className="border-b border-slate-200 p-4 dark:border-slate-700">
-          <h1 className="text-xl font-bold">PRO-Chat</h1>
-          <select defaultValue="" onChange={(event) => { if (event.target.value) void startConversation(event.target.value); event.target.value = ''; }} className="input mt-3 w-full bg-white dark:bg-slate-900">
-            <option value="">Новый диалог...</option>
-            {users.map((user) => <option key={user.id} value={user.id}>{user.name}{user.position ? ` — ${user.position}` : ''}</option>)}
+    <div className="flex h-[calc(100dvh-9rem)] min-h-[560px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg md:grid md:grid-cols-[340px_minmax(0,1fr)]">
+      <aside className={`min-h-0 flex-col border-r border-slate-200 bg-slate-50 ${activeId ? 'hidden md:flex' : 'flex'}`}>
+        <div className="border-b border-slate-200 bg-white p-4 sm:p-5">
+          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-500">Мессенджер</div>
+          <div className="mt-1 flex items-center justify-between gap-3"><h1 className="text-xl font-black tracking-tight text-slate-900">PRO-Chat</h1><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-700">онлайн</span></div>
+          <select defaultValue="" onChange={(event) => { if (event.target.value) void startConversation(event.target.value); event.target.value = ''; }} className="input mt-4 w-full border-indigo-100 bg-indigo-50/70 font-semibold">
+            <option value="">＋ Новый диалог</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}{user.position ? ` — ${user.position}` : ''}</option>)}
           </select>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {conversations.map((conversation) => (
-            <button key={conversation.id} type="button" onClick={() => setActiveId(conversation.id)} className={`w-full border-b border-slate-100 p-4 text-left dark:border-slate-800 ${activeId === conversation.id ? 'bg-indigo-50 dark:bg-indigo-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
-              <div className="flex items-center justify-between gap-2"><span className="truncate font-semibold">{conversation.title}</span>{conversation.unreadCount > 0 && <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-xs text-white">{conversation.unreadCount}</span>}</div>
-              <div className="mt-1 truncate text-xs text-slate-500">{conversation.lastMessage?.text || 'Нет сообщений'}</div>
+            <button key={conversation.id} type="button" onClick={() => setActiveId(conversation.id)} className={`w-full border-b border-slate-200/80 p-4 text-left ${activeId === conversation.id ? 'bg-indigo-50' : 'bg-white hover:bg-slate-100'}`}>
+              <div className="flex items-center gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm font-black text-white">{conversation.title.trim().charAt(0).toUpperCase() || '?'}</div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><span className="truncate font-bold text-slate-900">{conversation.title}</span>{conversation.unreadCount > 0 && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-bold text-white">{conversation.unreadCount}</span>}</div><div className="mt-1 truncate text-xs text-slate-500">{conversation.lastMessage?.text || 'Нет сообщений'}</div></div></div>
             </button>
           ))}
-          {conversations.length === 0 && <div className="p-6 text-center text-sm text-slate-500">Выберите сотрудника для начала диалога</div>}
+          {conversations.length === 0 && <div className="p-8 text-center text-sm text-slate-500">Выберите сотрудника для начала диалога.</div>}
         </div>
       </aside>
-
-      <section className="flex min-h-0 flex-col">
-        {!active ? <div className="flex flex-1 items-center justify-center text-slate-500">Диалог не выбран</div> : (
+      <section className={`min-h-0 min-w-0 flex-1 flex-col bg-white ${activeId ? 'flex' : 'hidden md:flex'}`}>
+        {!active ? <div className="flex flex-1 items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-fuchsia-50 p-8 text-center text-slate-500"><div><div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-indigo-100 text-2xl text-indigo-600">◆</div><div className="mt-4 font-bold text-slate-800">Выберите диалог</div><div className="mt-1 text-sm">Ваши сообщения и файлы появятся здесь.</div></div></div> : (
           <>
-            <header className="border-b border-slate-200 px-5 py-4 font-bold dark:border-slate-700">{active.title}</header>
-            <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto p-4">
-              <div className="space-y-3">
-                {messages.map((message) => {
-                  const mine = message.senderId === currentUser?.id;
-                  return (
-                    <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[82%] rounded-2xl px-4 py-3 ${mine ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100'}`}>
-                        {!mine && <div className="mb-1 text-xs font-semibold opacity-70">{message.senderName}</div>}
-                        {message.text && <div className="whitespace-pre-wrap break-words">{message.text}</div>}
-                        {message.attachments.map((attachment) => <button key={attachment.id} type="button" onClick={() => void download(message, attachment.id, attachment.originalName)} className="mt-2 block w-full rounded-xl border border-current/20 px-3 py-2 text-left text-sm"><span className="block truncate font-semibold">{attachment.originalName}</span><span className="text-xs opacity-70">{formatSize(attachment.sizeBytes)}</span></button>)}
-                        <div className="mt-1 text-right text-[10px] opacity-60">{new Date(message.createdAt).toLocaleString('ru-RU')}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {cursor && <button type="button" onClick={() => void loadMessages(activeId, cursor)} className="mx-auto block text-sm font-semibold text-indigo-600">Загрузить предыдущие</button>}
+            <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-5 sm:py-4">
+              <button type="button" onClick={() => setActiveId('')} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-indigo-50 text-lg font-bold text-indigo-600 md:hidden">←</button>
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm font-black text-white">{active.title.trim().charAt(0).toUpperCase() || '?'}</div>
+              <div className="min-w-0"><div className="truncate font-black text-slate-900">{active.title}</div><div className="text-xs text-emerald-600">Личная переписка</div></div>
+            </header>
+            <div className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-slate-50/70 px-3 py-4 sm:p-5">
+              <div className="space-y-2.5">
+                {messages.map((message) => { const mine = message.senderId === currentUser?.id; return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[88%] rounded-[22px] px-4 py-3 shadow-sm sm:max-w-[76%] ${mine ? 'rounded-br-md bg-indigo-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-900'}`}>{!mine && <div className="mb-1 text-xs font-bold text-indigo-600">{message.senderName}</div>}{message.text && <div className="whitespace-pre-wrap break-words text-[15px] leading-6">{message.text}</div>}{message.attachments.map((attachment) => <button key={attachment.id} type="button" onClick={() => void download(message, attachment.id, attachment.originalName)} className="mt-2 block w-full rounded-2xl border border-current/15 bg-white/10 px-3 py-2.5 text-left text-sm"><span className="block truncate font-bold">{attachment.originalName}</span><span className="text-xs opacity-70">{formatSize(attachment.sizeBytes)}</span></button>)}<div className="mt-1 text-right text-[10px] opacity-60">{new Date(message.createdAt).toLocaleString('ru-RU')}</div></div></div>; })}
+                {cursor && <button type="button" onClick={() => void loadMessages(activeId, cursor)} className="mx-auto block rounded-full bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-600">Загрузить предыдущие</button>}
               </div>
             </div>
-            <footer className="border-t border-slate-200 p-3 dark:border-slate-700">
-              {file && <div className="mb-2 flex items-center justify-between rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800"><span className="truncate">{file.name} · {formatSize(file.size)}</span><button type="button" onClick={() => setFile(null)} className="ml-3 font-bold">×</button></div>}
+            <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2.5 pb-[max(0.65rem,var(--safe-area-inset-bottom))] sm:p-3">
+              {file && <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-900"><span className="truncate">{file.name} · {formatSize(file.size)}</span><button type="button" onClick={() => setFile(null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white font-bold text-amber-700 shadow-sm">×</button></div>}
               <div className="flex items-end gap-2">
                 <input ref={fileInput} type="file" className="hidden" onChange={(event) => { const next = event.target.files?.[0] || null; if (next && next.size > 100 * 1024 * 1024) { alert('Максимальный размер файла — 100 MiB'); event.target.value = ''; return; } setFile(next); }} />
-                <button type="button" onClick={() => fileInput.current?.click()} className="btn-outline px-3 py-2" title="Прикрепить файл">＋</button>
-                <textarea value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} rows={1} maxLength={20000} className="input min-h-[42px] flex-1 resize-none" placeholder="Сообщение..." />
-                <button type="button" onClick={() => void send()} disabled={sending || (!text.trim() && !file)} className="rounded-xl bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-50">{sending ? '...' : 'Отправить'}</button>
+                <button type="button" onClick={() => fileInput.current?.click()} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-100 text-xl text-emerald-700 hover:bg-emerald-200">＋</button>
+                <textarea value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} rows={1} maxLength={20000} className="input min-h-[44px] flex-1 resize-none rounded-[22px] border-slate-200 bg-slate-50 px-4 py-2.5 text-[15px] leading-6" placeholder="Сообщение..." />
+                <button type="button" onClick={() => void send()} disabled={sending || (!text.trim() && !file)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-indigo-600 text-lg font-black text-white shadow-md disabled:opacity-40">{sending ? '…' : '➤'}</button>
               </div>
             </footer>
           </>
