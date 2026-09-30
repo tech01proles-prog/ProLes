@@ -298,6 +298,7 @@ export function ChatPage() {
       setText('');
       setFile(null);
       if (fileInput.current) fileInput.current.value = '';
+      if (composerRef.current) composerRef.current.style.height = '44px';
       await loadSidebar();
     } finally {
       setSending(false);
@@ -349,7 +350,11 @@ export function ChatPage() {
     setMessageMenuId('');
   };
 
-  const download = async (message: ChatMessageDto, attachmentId: string, fileName: string) =>
+  const download = async (
+    message: ChatMessageDto,
+    attachmentId: string,
+    fileName: string
+  ) => {
     const attachment = message.attachments.find((item) => item.id === attachmentId);
     if (!attachment) return;
     const path = attachment.downloadUrl.replace(/^\/api\/v1/, '');
