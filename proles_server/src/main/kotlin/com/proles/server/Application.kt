@@ -133,7 +133,7 @@ fun Application.module() {
                 ADD COLUMN IF NOT EXISTS trip_change_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ADD COLUMN IF NOT EXISTS vacation_decision_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ADD COLUMN IF NOT EXISTS ticket_receipt_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-             chat_message_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+             ADD COLUMN IF NOT EXISTS chat_message_enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 ADD COLUMN IF NOT EXISTS privacy_defaults_configured BOOLEAN NOT NULL DEFAULT FALSE,
                 ADD COLUMN IF NOT EXISTS telegram_enabled BOOLEAN NOT NULL DEFAULT FALSE,
                 ADD COLUMN IF NOT EXISTS telegram_link_code VARCHAR(20),
