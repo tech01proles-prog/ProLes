@@ -25,6 +25,7 @@ data class NotificationPreferencesResponseDto(
     val tripChangeEnabled: Boolean,
     val vacationDecisionEnabled: Boolean,
     val ticketReceiptEnabled: Boolean,
+    val chatMessageEnabled: Boolean,
     val telegramEnabled: Boolean,
     val telegramLinked: Boolean,
     val telegramLinkCode: String?,
