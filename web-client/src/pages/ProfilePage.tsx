@@ -17,7 +17,6 @@ export function ProfilePage() {
   // (обычно это админ, но в будущем можно дать сотрудникам право редактировать себя)
   const canEditProfile = !permLoading;
   const isSuperAdmin = !permLoading && can('permissions', 'delete');
-  const canViewAll = !permLoading && can('expenses_all', 'view');
 
   const [form, setForm] = useState({
     firstName: '',
@@ -87,19 +86,11 @@ export function ProfilePage() {
           api.get<IncomeDto[]>(`/incomes?userId=${userId}&dateFrom=${monthStart}&dateTo=${monthEnd}`),
         ]);
         
-        let expData = expRes.status === 'fulfilled' ? expRes.value.data : [];
-        let incData = incRes.status === 'fulfilled' ? incRes.value.data : [];
-        
-        // Если есть право view all, загружаем все данные для сотрудника
-        if (canViewAll) {
-          const [allExpRes, allIncRes] = await Promise.allSettled([
-            api.get<ExpenseDto[]>(`/expenses/all?dateFrom=${monthStart}&dateTo=${monthEnd}&userId=${userId}`),
-            api.get<IncomeDto[]>(`/incomes/all?dateFrom=${monthStart}&dateTo=${monthEnd}&userId=${userId}`),
-          ]);
-          if (allExpRes.status === 'fulfilled') expData = allExpRes.value.data;
-          if (allIncRes.status === 'fulfilled') incData = allIncRes.value.data;
-        }
-        
+        const expData = expRes.status === 'fulfilled' ? expRes.value.data : [];
+        const incData = incRes.status === 'fulfilled' ? incRes.value.data : [];
+
+        // Профиль всегда показывает только финансовые операции текущего пользователя.
+        // Не используем /all: этот endpoint намеренно возвращает данные всей компании.
         setExpenses(expData);
         setIncomes(incData);
       } catch (err) {
@@ -110,7 +101,7 @@ export function ProfilePage() {
     };
 
     loadFinancials();
-  }, [user, currentMonth, canViewAll]);
+  }, [user, currentMonth]);
 
   // Расчет сальдо
   const totalIncome = useMemo(() => incomes.reduce((sum, inc) => sum + inc.amount, 0), [incomes]);
