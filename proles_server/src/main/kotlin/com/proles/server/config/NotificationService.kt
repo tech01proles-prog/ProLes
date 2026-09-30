@@ -49,12 +49,20 @@ object NotificationService {
         preferenceKey: String = ""
     ) {
         val uniqueTargets = targetUserIds.filter { it != senderUserId }.distinct()
-        if (uniqueTargets.isEmpty()) return
+        println("🔔 [Notification] notifyUsers: type=$type, title=$title, targets=${targetUserIds.size}, uniqueTargets=${uniqueTargets.size}, preferenceKey=$preferenceKey")
+        if (uniqueTargets.isEmpty()) {
+            println("🔔 [Notification] skip: no unique targets")
+            return
+        }
 
         val enabledTargets = if (preferenceKey.isBlank()) uniqueTargets else {
             uniqueTargets.filter { preferenceEnabled(it, preferenceKey) }
         }
-        if (enabledTargets.isEmpty()) return
+        println("🔔 [Notification] enabledTargets=${enabledTargets.size}/${uniqueTargets.size}")
+        if (enabledTargets.isEmpty()) {
+            println("🔔 [Notification] skip: all targets disabled by preferences")
+            return
+        }
 
         transaction {
             enabledTargets.forEach { targetId ->
@@ -71,8 +79,10 @@ object NotificationService {
             }
         }
 
+        println("🔔 [Notification] database notification rows created for ${enabledTargets.size} users; async delivery started")
         CoroutineScope(Dispatchers.IO).launch {
             enabledTargets.forEach { userId ->
+                println("🔔 [Notification] delivering: type=$type, userId=$userId")
                 val fcmTokens = transaction {
                     FcmTokensTable.selectAll()
                         .where { FcmTokensTable.userId eq userId }
@@ -109,6 +119,7 @@ object NotificationService {
                     val chatId = pref?.get(NotificationPreferencesTable.telegramChatId)
                     Pair(enabled && !chatId.isNullOrBlank(), chatId)
                 }
+                println("🔔 [Notification] Telegram decision: userId=$userId, enabled=${telegram.first}, chatIdPresent=${!telegram.second.isNullOrBlank()}")
                 if (telegram.first) {
                     telegram.second?.let { chatId ->
                         runCatching {
