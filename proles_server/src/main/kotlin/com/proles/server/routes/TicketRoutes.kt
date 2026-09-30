@@ -192,6 +192,7 @@ internal fun Route.ticketRoutes() {
             }
 
             val session = call.checkTicketSession() ?: return@post
+            println("🎫 [Ticket upload] started: userId=${session.userId}, role=${session.role}")
 
             val request = try {
                 call.receive<TicketUploadRequest>()
@@ -309,6 +310,7 @@ internal fun Route.ticketRoutes() {
             }
 
             val ticketId = UUID.randomUUID()
+            println("🎫 [Ticket upload] validated: projectId=$projectId, recipients=${recipientIds.size}, fileBytes=${fileBytes.size}, receiptBytes=${receiptBytes?.size ?: 0}, amount=${request.amount}")
             val originalFileName =
                 sanitizeTicketFileName(request.fileName)
             val uniqueFileName = "${ticketId}_$originalFileName"
@@ -456,6 +458,7 @@ internal fun Route.ticketRoutes() {
                 throw error
             }
 
+            println("🎫 [Ticket upload] saved: ticketId=$ticketId, file=$uniqueFileName")
             val projectName = transaction {
                 ProjectsTable.selectAll().where { ProjectsTable.id eq projectId }
                     .single()[ProjectsTable.name]
@@ -465,6 +468,10 @@ internal fun Route.ticketRoutes() {
             }
             val recipientUuids = request.recipientIds.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
 
+            println("🎫 [Ticket upload] preparing notifications: ticketId=$ticketId, recipientUuids=${recipientUuids.size}, sendToAccountant=${request.sendToAccountant}")
+            // Важно: загрузка билета сама по себе не вызывает TelegramService.sendFile().
+            // Telegram может отправить текстовое уведомление через NotificationService, если
+            // у получателя включён Telegram и указан telegramChatId.
             //  Отправка email бухгалтеру (если выбрана галочка)
             if (request.sendToAccountant && request.accountantEmail.isNotBlank()) {
                 CoroutineScope(Dispatchers.IO).launch {
@@ -531,6 +538,7 @@ internal fun Route.ticketRoutes() {
                     }
                 }
             }
+            println("🎫 [Ticket upload] calling NotificationService.notifyUsers for TICKET")
             NotificationService.notifyUsers(
                 recipientUuids, session.userId, "TICKET", "🎫 Новый билет",
                 "$senderName загрузил билет по проекту «$projectName»",
@@ -541,6 +549,7 @@ internal fun Route.ticketRoutes() {
                 val financeRecipients = transaction {
                     UsersTable.selectAll().where { (UsersTable.role eq "superadmin") or (UsersTable.role eq "director") or (UsersTable.role eq "admin") }.map { it[UsersTable.id].value }.distinct()
                 }
+                println("🎫 [Ticket upload] calling NotificationService.notifyUsers for TICKET_RECEIPT: recipients=${financeRecipients.size}")
                 NotificationService.notifyUsers(
                     financeRecipients, session.userId, "TICKET_RECEIPT", "🧷 Чек билета сохранён",
                     "Расход на Proles Company: ${"%.2f".format(request.amount)} ${currency}",
@@ -548,6 +557,7 @@ internal fun Route.ticketRoutes() {
                     "ticketReceipt"
                 )
             }
+            println("🎫 [Ticket upload] completed: ticketId=$ticketId")
             call.respond(HttpStatusCode.Created, mapOf("id" to ticketId.toString(), "fileName" to uniqueFileName))
         }
 
