@@ -9,7 +9,7 @@ data class CreateDirectConversationRequest(val userId: String)
 data class SendChatMessageRequest(val text: String, val clientMessageId: String, val replyToMessageId: String? = null)
 
 @Serializable
-data class ChatUserDto(val id: String, val name: String, val role: String, val position: String = "")
+data class ChatUserDto(val id: String, val name: String, val role: String, val position: String = "", val online: Boolean = false)
 
 @Serializable
 data class ChatAttachmentDto(val id: String, val originalName: String, val mimeType: String, val sizeBytes: Long, val downloadUrl: String)
@@ -29,6 +29,7 @@ data class ChatMessageDto(
     val createdAt: Long,
     val editedAt: Long? = null,
     val deletedAt: Long? = null,
+    val deliveryStatus: String = "SENT",
     val attachments: List<ChatAttachmentDto> = emptyList()
 )
 
