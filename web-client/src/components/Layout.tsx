@@ -14,7 +14,6 @@ import {
 import { usePermissions } from '../hooks/usePermissions';
 import { NotificationBell } from './NotificationBell';
 import { PageHeader } from './PageHeader';
-import { ThemeToggle } from './ThemeToggle';
 
 const SIDEBAR_STORAGE_KEY = 'proles_sidebar_expanded';
 
@@ -92,6 +91,7 @@ export function Layout() {
     const isDirector = user?.role?.trim().toLowerCase() === 'director';
     return NAVIGATION_ITEMS.filter((item) => {
       if (isDirector && item.to === '/timesheet') return false;
+      if (item.directorOnly && !isDirector) return false;
       if (item.section === 'management') return hasManagement;
       if (!item.permission || !item.action) return true;
 
@@ -103,7 +103,7 @@ export function Layout() {
         (!permissionsLoading && can(item.permission, item.action))
       );
     });
-  }, [can, hasManagement, permissionsLoading, user?.login]);
+  }, [can, hasManagement, permissionsLoading, user?.login, user?.role]);
 
   const workspaceItems = navigation.filter(
     (item) => item.section === 'workspace',
@@ -274,7 +274,6 @@ export function Layout() {
 
           <div className="flex items-center gap-1 sm:gap-2">
             <NotificationBell />
-            <ThemeToggle />
 
             <NavLink
               to="/profile"
