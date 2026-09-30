@@ -68,6 +68,7 @@ internal fun Route.notificationPreferenceRoutes() {
                 tripChangeEnabled = row?.get(NotificationPreferencesTable.tripChangeEnabled) ?: true,
                 vacationDecisionEnabled = row?.get(NotificationPreferencesTable.vacationDecisionEnabled) ?: true,
                 ticketReceiptEnabled = row?.get(NotificationPreferencesTable.ticketReceiptEnabled) ?: true,
+                chatMessageEnabled = row?.get(NotificationPreferencesTable.chatMessageEnabled) ?: true,
                 telegramEnabled = row?.get(NotificationPreferencesTable.telegramEnabled) ?: false,
                 telegramLinked = row?.get(NotificationPreferencesTable.telegramChatId) != null,
                 telegramLinkCode = row?.get(NotificationPreferencesTable.telegramLinkCode),
