@@ -20,7 +20,28 @@ import kotlinx.serialization.json.*
 object TelegramService {
     private var botToken: String? = null
     private var enabled = false
-    private val httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build()
+    private val httpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .build()
+
+    private val apiBaseUrl =
+        System.getenv("TELEGRAM_API_BASE_URL")?.trim()?.trimEnd('/')
+            ?.takeIf { it.isNotBlank() }
+            ?: "https://api.telegram.org"
+
+    private suspend fun sendTelegramRequest(request: HttpRequest): HttpResponse<String> {
+        var lastError: Exception? = null
+        repeat(3) { attempt ->
+            try {
+                return httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            } catch (e: Exception) {
+                lastError = e
+                println("⚠️ Telegram HTTP attempt ${attempt + 1}/3 failed: ${e::class.simpleName}: ${e.message}")
+                if (attempt < 2) delay(1000L * (attempt + 1))
+            }
+        }
+        throw lastError ?: IllegalStateException("Telegram HTTP request failed")
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun init(token: String?, legacyChatId: String? = null, chatId: String? = legacyChatId) {
@@ -49,12 +70,12 @@ object TelegramService {
                 put("disable_web_page_preview", true)
             }.toString()
             val req = HttpRequest.newBuilder()
-                .uri(URI.create("https://api.telegram.org/bot${botToken}/sendMessage"))
+                .uri(URI.create("${apiBaseUrl}/bot${botToken}/sendMessage"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .timeout(Duration.ofSeconds(30))
                 .build()
-            httpClient.send(req, HttpResponse.BodyHandlers.ofString()).statusCode() == 200
+            sendTelegramRequest(req).let { response -> if (response.statusCode() != 200) println("❌ Telegram sendMessage HTTP ${response.statusCode()}: ${response.body()}"); response.statusCode() == 200 }
         } catch (e: Exception) {
             println("❌ Telegram sendMessage: ${e.message}")
             false
@@ -86,10 +107,10 @@ object TelegramService {
             }.toString().toByteArray()
             val tail = "$crlf--$boundary--$crlf".toByteArray()
             val body = ByteArrayOutputStream(head.size + bytes.size + tail.size).apply { write(head); write(bytes); write(tail) }.toByteArray()
-            val req = HttpRequest.newBuilder().uri(URI.create("https://api.telegram.org/bot${botToken}/sendDocument"))
+            val req = HttpRequest.newBuilder().uri(URI.create("${apiBaseUrl}/bot${botToken}/sendDocument"))
                 .header("Content-Type", "multipart/form-data; boundary=$boundary")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body)).timeout(Duration.ofSeconds(60)).build()
-            httpClient.send(req, HttpResponse.BodyHandlers.ofString()).statusCode() == 200
+            sendTelegramRequest(req).let { response -> if (response.statusCode() != 200) println("❌ Telegram sendDocument HTTP ${response.statusCode()}: ${response.body()}"); response.statusCode() == 200 }
         } catch (e: Exception) { println("❌ Telegram sendDocument: ${e.message}"); false }
     }
 
@@ -144,9 +165,9 @@ object TelegramService {
     }
 
     private fun getUpdates(offset: Long): JsonObject? {
-        val url = "https://api.telegram.org/bot$botToken/getUpdates?timeout=25&allowed_updates=%5B%22message%22%5D&offset=$offset"
+        val url = "${apiBaseUrl}/bot$botToken/getUpdates?timeout=25&allowed_updates=%5B%22message%22%5D&offset=$offset"
         val req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(35)).GET().build()
-        val response = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
+        val response = sendTelegramRequest(req)
         if (response.statusCode() != 200) return null
         return Json.parseToJsonElement(response.body()).jsonObject
     }
