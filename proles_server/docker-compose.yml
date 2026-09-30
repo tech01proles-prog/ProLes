@@ -35,6 +35,9 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - TELEGRAM_API_BASE_URL=${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
       - TELEGRAM_HTTP_PROXY=${TELEGRAM_HTTP_PROXY:-}
+      # In this VPS Telegram DNS resolves to an unreachable API IP.
+      # Override it from .env with TELEGRAM_API_IP when needed.
+      - TELEGRAM_API_IP=${TELEGRAM_API_IP:-149.154.167.220}
       - EMAIL_ENABLED=${EMAIL_ENABLED}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
@@ -51,6 +54,8 @@ services:
         max-file: "3"
     networks:
       - app-net
+    extra_hosts:
+      - "api.telegram.org:${TELEGRAM_API_IP:-149.154.167.220}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
