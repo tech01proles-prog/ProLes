@@ -732,6 +732,7 @@ internal fun Route.payrollRoutes() {
 
         // Обновить статус (approved/paid)
         put("/records/{recordId}/status") {
+            val session = call.checkPayrollSession() ?: return@put
             if (!call.checkPermission(Permission.PAYROLL, "edit")) return@put
             val recordId = runCatching {
                 UUID.fromString(call.parameters["recordId"])
