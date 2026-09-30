@@ -539,7 +539,6 @@ internal fun Route.ticketRoutes() {
                 }
             }
             println("🎫 [Ticket upload] calling NotificationService.notifyUsers for TICKET")
-            println("🎫 [Ticket upload] calling NotificationService.notifyUsers for TICKET")
             NotificationService.notifyUsers(
                 recipientUuids, session.userId, "TICKET", "🎫 Новый билет",
                 "$senderName загрузил билет по проекту «$projectName»",
