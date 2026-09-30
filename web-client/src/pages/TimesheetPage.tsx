@@ -503,7 +503,7 @@ function StandardTimesheetPage({
         subprojectId: value.subprojectId || null,
         date: value.date,
         hours: Number(value.hours),
-        country: formCountry,
+        country: value.country,
         comment: value.description,
       };
 
@@ -885,7 +885,7 @@ function StandardTimesheetPage({
           onSubmit={saveEntry}
         />
 
-dal>
+      </Modal>
     </div>
   );
 }
