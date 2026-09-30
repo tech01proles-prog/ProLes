@@ -34,11 +34,6 @@ import { PersonalTimesheetPage } from '../components/timesheet/PersonalTimesheet
 
 const PERSONAL_TIMESHEET_LOGIN = 'a.ermashkevich';
 
-const COUNTRIES = [
-  { code: 'RF', label: 'Россия' },
-  { code: 'BY', label: 'Беларусь' },
-] as const;
-
 const PROJECT_COLORS = [
   '#3b82f6',
   '#10b981',
