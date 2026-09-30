@@ -72,11 +72,23 @@ object TelegramService {
             ?.takeIf { it.isNotBlank() }
             ?: "https://api.telegram.org"
 
+    private fun maskedBotToken(): String =
+        botToken?.let { token ->
+            if (token.length <= 8) "***" else "${token.take(4)}...${token.takeLast(4)}"
+        } ?: "<empty>"
+
+    private fun safeRequestUri(request: HttpRequest): String =
+        request.uri().toString().replace(Regex("/bot[^/]+/"), "/bot***/")
+
     private suspend fun sendTelegramRequest(request: HttpRequest): HttpResponse<String> {
         var lastError: Exception? = null
         repeat(3) { attempt ->
             try {
-                return httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+                println("📡 [Telegram HTTP] attempt ${attempt + 1}/3 ${request.method()} ${safeRequestUri(request)}")
+                val startedAt = System.currentTimeMillis()
+                val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+                println("📥 [Telegram HTTP] ${response.statusCode()} in ${System.currentTimeMillis() - startedAt} ms for ${safeRequestUri(request)}")
+                return response
             } catch (e: Exception) {
                 lastError = e
                 println("⚠️ Telegram HTTP attempt ${attempt + 1}/3 failed: ${e::class.simpleName}: ${e.message}")
@@ -88,15 +100,16 @@ object TelegramService {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun init(token: String?, legacyChatId: String? = null, chatId: String? = legacyChatId) {
+        println("🔎 [Telegram] init: tokenPresent=${!token.isNullOrBlank()}, apiBaseUrl=$apiBaseUrl, proxyConfigured=${telegramProxySelector() != null}")
         if (token.isNullOrBlank()) {
-            println("⚠️ Telegram: TELEGRAM_BOT_TOKEN не задан. Telegram отключен.")
+            println("⚠️ [Telegram] TELEGRAM_BOT_TOKEN не задан. Telegram отключен.")
             return
         }
         botToken = token
         enabled = true
-        println("✅ Telegram Bot инициализирован")
+        println("✅ [Telegram] Bot инициализирован, token=${maskedBotToken()}, polling запускается")
         startPolling()
-        if (!chatId.isNullOrBlank()) println("ℹ️ TELEGRAM_CHAT_ID используется только для обратной совместимости")
+        if (!chatId.isNullOrBlank()) println("ℹ️ [Telegram] TELEGRAM_CHAT_ID используется только для обратной совместимости")
     }
 
     suspend fun sendMessage(text: String, parseMode: String = "HTML"): Boolean {
@@ -104,7 +117,11 @@ object TelegramService {
     }
 
     suspend fun sendMessageToChat(chatId: String, text: String, parseMode: String = "HTML"): Boolean {
-        if (!enabled || botToken.isNullOrBlank()) return false
+        if (!enabled || botToken.isNullOrBlank()) {
+            println("⚠️ [Telegram] sendMessageToChat пропущен: enabled=$enabled, tokenPresent=${!botToken.isNullOrBlank()}, chatId=$chatId")
+            return false
+        }
+        println("➡️ [Telegram] sendMessageToChat: chatId=$chatId, textLength=${text.length}")
         return try {
             val body = buildJsonObject {
                 put("chat_id", chatId)
@@ -118,18 +135,28 @@ object TelegramService {
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .timeout(Duration.ofSeconds(30))
                 .build()
-            sendTelegramRequest(req).let { response -> if (response.statusCode() != 200) println("❌ Telegram sendMessage HTTP ${response.statusCode()}: ${response.body()}"); response.statusCode() == 200 }
+            sendTelegramRequest(req).let { response ->
+                if (response.statusCode() != 200) println("❌ [Telegram] sendMessage HTTP ${response.statusCode()}: ${response.body()}")
+                val success = response.statusCode() == 200
+                println("⬅️ [Telegram] sendMessageToChat result: chatId=$chatId, success=$success")
+                success
+            }
         } catch (e: Exception) {
-            println("❌ Telegram sendMessage: ${e.message}")
+            println("❌ [Telegram] sendMessageToChat exception: ${e::class.simpleName}: ${e.message}")
             false
         }
     }
 
     suspend fun sendFile(fileBytes: ByteArray, fileName: String, caption: String = ""): Boolean {
-        if (!enabled || botToken.isNullOrBlank()) return false
+        if (!enabled || botToken.isNullOrBlank()) {
+            println("⚠️ [Telegram] sendFile пропущен: enabled=$enabled, tokenPresent=${!botToken.isNullOrBlank()}, file=$fileName")
+            return false
+        }
         val chats = transaction { TelegramLinksTable.selectAll().map { it[TelegramLinksTable.chatId] }.distinct() }
+        println("📎 [Telegram] sendFile: file=$fileName, bytes=${fileBytes.size}, chats=${chats.size}")
         var ok = false
         chats.forEach { chatId -> ok = sendDocumentToChat(chatId, fileBytes, fileName, caption) || ok }
+        println("📎 [Telegram] sendFile завершён: file=$fileName, success=$ok")
         return ok
     }
 
@@ -179,12 +206,15 @@ object TelegramService {
     }.trim()
 
     private fun startPolling() {
+        println("🔄 [Telegram] startPolling() вызван")
         scope.launch {
             var offset = 0L
             while (isActive && enabled) {
                 try {
+                    println("🔄 [Telegram polling] getUpdates offset=$offset")
                     val response = getUpdates(offset)
                     val updates = response?.jsonObject?.get("result")?.jsonArray.orEmpty()
+                    println("🔄 [Telegram polling] updates=${updates.size}")
                     for (item in updates) {
                         val obj = item.jsonObject
                         offset = (obj["update_id"]?.jsonPrimitive?.longOrNull ?: offset) + 1
@@ -193,6 +223,7 @@ object TelegramService {
                         val chatId = chat["id"]?.jsonPrimitive?.contentOrNull ?: continue
                         val username = chat["username"]?.jsonPrimitive?.contentOrNull ?: ""
                         val text = message["text"]?.jsonPrimitive?.contentOrNull?.trim() ?: continue
+                        println("📨 [Telegram polling] message received: chatId=$chatId, username=$username, textLength=${text.length}")
                         if (!linkByCode(text, chatId, username)) {
                             if (text == "/start") {
                                 sendMessageToChat(chatId, "<b>Proles Sys</b>\nЧтобы привязать аккаунт, включите Telegram в настройках системы и отправьте сюда выданный код.")
@@ -200,7 +231,7 @@ object TelegramService {
                         }
                     }
                 } catch (e: Exception) {
-                    println("⚠️ Telegram polling: ${e.message}")
+                    println("⚠️ [Telegram polling] ${e::class.simpleName}: ${e.message}")
                     delay(3000)
                 }
             }
