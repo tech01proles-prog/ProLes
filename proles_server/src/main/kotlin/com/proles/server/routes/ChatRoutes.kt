@@ -1,5 +1,6 @@
 package com.proles.server.routes
 
+import com.proles.server.config.NotificationService
 import com.proles.server.config.SessionManager
 import com.proles.server.data.*
 import com.proles.server.model.*
@@ -533,6 +534,16 @@ private suspend fun publishMessageCreated(
             .let(::messageDto)
     }
 
+    NotificationService.notifyUsers(
+        targetUserIds = memberIds,
+        senderUserId = senderId,
+        type = "CHAT_MESSAGE",
+        title = "💬 Новое сообщение",
+        message = buildChatNotificationMessage(updatedMessage),
+        payload = "{\"conversationId\":\"" + conversationId + "\",\"messageId\":\"" + messageId + "\"}",
+        preferenceKey = "chatMessage"
+    )
+
     memberIds.forEach { memberId ->
         val unreadCount = transaction {
             conversationDto(conversationId, memberId)?.unreadCount ?: 0
@@ -547,6 +558,19 @@ private suspend fun publishMessageCreated(
             )
         )
     }
+}
+
+private fun buildChatNotificationMessage(message: ChatMessageDto): String {
+    val textPreview = message.text.trim()
+        .replace(Regex("\\s+"), " ")
+        .take(800)
+    return buildString {
+        appendLine(message.senderName.trim().ifBlank { "Сотрудник" })
+        if (textPreview.isNotBlank()) appendLine(textPreview)
+        message.attachments.firstOrNull()?.let { attachment ->
+            appendLine("📎 " + attachment.originalName)
+        }
+    }.trim()
 }
 
 private data class DeliveryUpdate(
