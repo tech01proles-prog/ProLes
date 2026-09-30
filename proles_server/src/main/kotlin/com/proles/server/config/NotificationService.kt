@@ -18,6 +18,8 @@ import java.time.LocalDate as JavaLocalDate
 object NotificationService {
     private val deliveryScope = CoroutineScope(Dispatchers.IO)
 
+    private val webAppUrl = System.getenv("PROLES_WEB_URL")?.trim()?.trimEnd('/').takeIf { !it.isNullOrBlank() }
+
     private fun preferenceEnabled(userId: UUID, key: String): Boolean = transaction {
         val row = NotificationPreferencesTable.selectAll()
             .where { NotificationPreferencesTable.userId eq userId }
