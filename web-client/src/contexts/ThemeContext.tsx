@@ -12,11 +12,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-  const stored = localStorage.getItem('proles_theme') as Theme | null;
-  // 🌞 По умолчанию всегда СВЕТЛАЯ тема (у пользователей нет "темного шока" при первом входе)
-  return stored || 'light';
-});
+  const [theme, setThemeState] = useState<Theme>('light');
 
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
@@ -39,24 +35,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (metaTheme) {
       metaTheme.setAttribute('content', isDark ? '#0f172a' : '#ffffff');
     }
-  }, [theme]);
-
-  // Слушаем изменения системной темы
-  useEffect(() => {
-    if (theme !== 'system') return;
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = () => {
-      const root = window.document.documentElement;
-      if (media.matches) {
-        root.classList.add('dark');
-        setResolvedTheme('dark');
-      } else {
-        root.classList.remove('dark');
-        setResolvedTheme('light');
-      }
-    };
-    media.addEventListener('change', handler);
-    return () => media.removeEventListener('change', handler);
   }, [theme]);
 
   const setTheme = (newTheme: Theme) => {
