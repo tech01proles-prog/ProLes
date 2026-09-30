@@ -121,10 +121,29 @@ private fun Route.vacationRoutes() {
             }
             val days = endDate.toEpochDays() - startDate.toEpochDays() + 1
             val payload = absenceJson.encodeToString(mapOf("vacationId" to id.toString(), "userId" to userId.toString()))
+            val employeeDisplayName = NotificationService.userDisplayName(userId)
+
+            NotificationService.notifyUsers(
+                listOf(userId), session.userId, "VACATION_REQUEST", "🏖 Отпуск",
+                "$employeeDisplayName\n📅 ${startDate} — ${endDate}\nСтатус: На рассмотрении",
+                payload, "vacation"
+            )
+
             NotificationService.notifyUsers(
                 approvers, session.userId, "VACATION_REQUEST", "🏖 Новый запрос на отпуск",
-                "👤 $employeeName\n📅 ${startDate} — ${endDate}\n📊 $days дн.\n⏳ Требуется подтверждение",
+                "$employeeDisplayName\n📅 ${startDate} — ${endDate}\n📊 $days дн.\nСтатус: На рассмотрении",
                 payload, "vacation"
+            )
+
+            val vacationLink = System.getenv("PROLES_WEB_URL")?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() }
+                ?.let { "$it/vacations" }
+            NotificationService.notifyDirectorsTelegram(
+                tag = "ОТПУСК",
+                title = "🏖 Новый запрос на отпуск",
+                message = "$employeeDisplayName\n📅 ${startDate} — ${endDate}\nСтатус: На рассмотрении",
+                payload = payload,
+                preferenceKey = "vacation",
+                linkUrl = vacationLink
             )
             call.respond(HttpStatusCode.Created, VacationDto(id.toString(), userId.toString(), startDate.toString(), endDate.toString(), "PENDING", null, null, ""))
         }
