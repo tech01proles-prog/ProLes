@@ -44,6 +44,7 @@ services:
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - EMAIL_FROM=${EMAIL_FROM}
+      - PROLES_WEB_URL=${PROLES_WEB_URL:-}
     depends_on:
       db:
         condition: service_healthy
