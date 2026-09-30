@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
 import type { NotificationPreferencesDto } from '../types';
-import { ThemeToggle } from '../components/ThemeToggle';
 
 const CHANNELS: Array<{ key: keyof NotificationPreferencesDto; label: string; desc: string }> = [
   { key: 'tripEnabled', label: '✈️ Командировки', desc: 'Новые командировки и изменения маршрута' },
