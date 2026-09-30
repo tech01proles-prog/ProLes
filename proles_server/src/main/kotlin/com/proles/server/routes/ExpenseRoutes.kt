@@ -785,7 +785,7 @@ internal fun Route.expenseRoutes() {
                         "expenseScope" to expenseScope
                     )
                 ),
-                "expenseCreated"
+                "expense"
             )
 
             call.respond(HttpStatusCode.Created, created)
