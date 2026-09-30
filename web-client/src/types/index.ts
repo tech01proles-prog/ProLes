@@ -387,10 +387,8 @@ export interface NotificationPreferencesDto {
   payrollEnabled: boolean;
   ticketEnabled: boolean;
   tripVisibleToAll: boolean;
-  tripTelegramBroadcast: boolean;
   tripChangeEnabled: boolean;
   vacationDecisionEnabled: boolean;
-  expenseCreatedEnabled: boolean;
   ticketReceiptEnabled: boolean;
   telegramEnabled: boolean;
   telegramLinked: boolean;
