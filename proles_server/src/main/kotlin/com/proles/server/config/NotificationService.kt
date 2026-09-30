@@ -149,9 +149,12 @@ object NotificationService {
             val pref = NotificationPreferencesTable.selectAll()
                 .where { NotificationPreferencesTable.userId eq userId }
                 .firstOrNull()
-            val enabled = pref?.get(NotificationPreferencesTable.telegramEnabled) ?: false
-            val chatId = pref?.get(NotificationPreferencesTable.telegramChatId)
-            println("🔎 [Notification] user Telegram config: userId=$userId, prefExists=${pref != null}, telegramEnabled=$enabled, chatIdPresent=${!chatId.isNullOrBlank()}, preferenceKey=$preferenceKey")
+            val linkedChatId = TelegramLinksTable.selectAll()
+                .where { TelegramLinksTable.userId eq userId }
+                .firstOrNull()?.get(TelegramLinksTable.chatId)
+            val enabled = if (pref == null) linkedChatId != null else pref[NotificationPreferencesTable.telegramEnabled]
+            val chatId = pref?.get(NotificationPreferencesTable.telegramChatId)?.takeIf { !it.isNullOrBlank() } ?: linkedChatId
+            println("🔎 [Notification] user Telegram config: userId=$userId, prefExists=${pref != null}, telegramEnabled=$enabled, chatIdPresent=${!chatId.isNullOrBlank()}, source=${if (!pref?.get(NotificationPreferencesTable.telegramChatId).isNullOrBlank()) "preferences" else if (linkedChatId != null) "telegram_links" else "none"}, preferenceKey=$preferenceKey")
             enabled to chatId
         }
         if (!config.first || config.second.isNullOrBlank()) {
