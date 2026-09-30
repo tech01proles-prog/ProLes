@@ -84,24 +84,24 @@ export function DashboardPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       {/* Рабочая сводка */}
-      <section className="relative overflow-hidden rounded-3xl bg-slate-950 p-6 text-white shadow-2xl shadow-slate-300/40 md:p-8 dark:bg-slate-900 dark:shadow-none">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-indigo-500/30 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-violet-500/20 blur-3xl" />
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 via-green-600 to-emerald-700 p-7 text-white shadow-2xl shadow-emerald-200/50 md:p-10">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-lime-300/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 left-1/3 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
 
         <div className="relative z-10 grid gap-8 lg:grid-cols-[1fr_340px] lg:items-end">
           <div>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 backdrop-blur">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur">
+              <span className="h-2.5 w-2.5 rounded-full bg-white shadow-sm" />
               Рабочий день
             </div>
 
-            <h2 className="max-w-2xl text-2xl font-bold tracking-tight md:text-4xl">
+            <h2 className="max-w-3xl text-4xl font-black tracking-tight md:text-6xl">
               {user?.firstName
                 ? `Добрый день, ${user.firstName}`
                 : 'Добро пожаловать в ProLes'}
             </h2>
 
-            <p className="mt-2 text-sm capitalize text-slate-300 md:text-base">
+            <p className="mt-3 text-sm capitalize text-emerald-50 md:text-lg">
               {currentDateLabel}
             </p>
 
@@ -126,7 +126,7 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-5 backdrop-blur-md">
+          <div className="rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur-md">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
