@@ -127,7 +127,7 @@ object NotificationService {
                 runCatching {
                     TelegramService.sendMessageToChat(
                         telegram.chatId,
-                        "<b>${escapeTelegram(title)}</b>\n\n${escapeTelegram(message)}"
+                        formatPersonalTelegram(type, title, message)
                     )
                 }.onFailure { error ->
                     println("❌ Telegram personal delivery failed for userId=$userId: ${error::class.simpleName}: ${error.message}")
@@ -363,6 +363,22 @@ object NotificationService {
             .where { TelegramLinksTable.userId eq userId }
             .singleOrNull()
             ?.get(TelegramLinksTable.chatId)
+    }
+
+    private fun formatPersonalTelegram(type: String, title: String, message: String): String {
+        val tag = when (type) {
+            "VACATION_REQUEST", "VACATION_DECISION" -> "#ОТПУСК"
+            "DAYOFF_WEEKDAY" -> "#ВЫХОДНОЙ"
+            "EXPENSE_CREATED" -> "#РАСХОД"
+            "PAYROLL_UPDATED" -> "#ЗАРПЛАТА"
+            "TICKET_RECEIPT" -> "#БИЛЕТ"
+            else -> ""
+        }
+        return listOf(
+            tag,
+            "<b>${escapeTelegram(title)}</b>",
+            escapeTelegram(message)
+        ).filter { it.isNotBlank() }.joinToString("\n")
     }
 
     fun escapeTelegram(value: String): String = value
