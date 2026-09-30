@@ -16,6 +16,7 @@ export interface NavigationItem {
 export const NAVIGATION_ITEMS: NavigationItem[] = [
   {
     to: '/',
+    iconGradient: 'from-emerald-500 to-green-500',
     label: 'Обзор',
     description: 'Главная панель и рабочая сводка',
     icon: '⌂',
@@ -23,6 +24,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   },
   {
     to: '/timesheet',
+    iconGradient: 'from-cyan-500 to-blue-500',
     label: 'Рабочее время',
     shortLabel: 'Табель',
     description: 'Табель и учёт рабочего времени',
@@ -33,6 +35,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   },
   {
     to: '/trips',
+    iconGradient: 'from-violet-500 to-purple-500',
     label: 'Командировки',
     description: 'Поездки, суточные и документы',
     icon: '✈',
@@ -40,6 +43,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   },
   {
     to: '/expenses',
+    iconGradient: 'from-sky-500 to-cyan-500',
     label: 'Финансы',
     description: 'Расходы и доходы проектов',
     icon: '₽',
@@ -47,6 +51,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   },
   {
     to: '/tickets',
+    iconGradient: 'from-orange-500 to-amber-500',
     label: 'Билеты',
     description: 'Билеты и сопроводительные файлы',
     icon: '▣',
@@ -56,6 +61,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   },
   {
     to: '/vacations',
+    iconGradient: 'from-teal-500 to-cyan-500',
     label: 'Отпуска',
     description: 'Отпуска и отсутствия',
     icon: '☼',
@@ -63,6 +69,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   },
   {
     to: '/chat',
+    iconGradient: 'from-fuchsia-500 to-indigo-500',
     label: 'PRO-Chat',
     description: 'Личные сообщения и файлы',
     icon: '◆',
@@ -88,6 +95,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   },
   {
     to: '/management',
+    iconGradient: 'from-indigo-500 to-violet-500',
     label: 'Управление',
     description: 'Проекты, сотрудники и настройки',
     icon: '◇',
