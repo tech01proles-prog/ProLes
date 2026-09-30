@@ -9,6 +9,7 @@ export interface NavigationItem {
   permission?: string;
   action?: NavigationAction;
   directorOnly?: boolean;
+  iconGradient?: string;
   section: 'workspace' | 'management';
 }
 
@@ -78,6 +79,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   },
   {
     to: '/director-expenses',
+    iconGradient: 'from-amber-500 to-orange-500',
     label: 'Расходы учредителей',
     description: 'Личные расходы директоров',
     icon: '₽',
