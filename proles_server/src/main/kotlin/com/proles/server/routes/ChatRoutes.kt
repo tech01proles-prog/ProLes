@@ -295,7 +295,7 @@ fun Route.chatRoutes() {
                         .limit(1)
                         .singleOrNull()
                     ChatConversationsTable.update({ ChatConversationsTable.id eq conversationId }) {
-                        it[lastMessageId] = previous?.get(ChatMessagesTable.id)
+                        it[lastMessageId] = previous?.get(ChatMessagesTable.id)?.value
                         it[updatedAt] = deletedAt
                     }
                 }
