@@ -77,6 +77,14 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     section: 'workspace',
   },
   {
+    to: '/director-expenses',
+    label: 'Расходы учредителей',
+    description: 'Личные расходы директоров',
+    icon: '₽',
+    directorOnly: true,
+    section: 'management',
+  },
+  {
     to: '/management',
     label: 'Управление',
     description: 'Проекты, сотрудники и настройки',
