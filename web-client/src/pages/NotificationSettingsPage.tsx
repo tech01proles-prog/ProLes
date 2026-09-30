@@ -67,8 +67,6 @@ export function NotificationSettingsPage() {
     <div><h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">🔔 Настройки уведомлений</h1><p className="text-sm text-slate-500 mt-1">Каналы, события и конфиденциальность</p></div>
     {message && <div className="p-4 rounded-xl text-sm bg-emerald-50 border border-emerald-200 text-emerald-700">{message}</div>}
 
-    <div className="card p-6"><h3 className="font-bold mb-4">🎨 Тема</h3><ThemeToggle /></div>
-
     <div className="card p-6"><h3 className="font-bold mb-4">📱 События</h3><div className="space-y-1">
       {CHANNELS.map(ch => <div key={ch.key as string} className="flex items-center justify-between p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800">
         <div><div className="font-medium text-sm">{ch.label}</div><div className="text-xs text-slate-500 mt-0.5">{ch.desc}</div></div>
