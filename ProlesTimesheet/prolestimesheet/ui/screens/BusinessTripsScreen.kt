@@ -358,8 +358,10 @@ fun TripDialog(
     // 🔥 Для COMPLETION проект и город read-only из активной командировки
     LaunchedEffect(type, activeTrip) {
         if (type == "COMPLETION" && activeTrip != null) {
-            projectId = activeTrip.projectId
+            projectId = activeTrip.projectId.orEmpty()
             projectName = activeTrip.projectName
+            subprojectId = activeTrip.subprojectId
+            subprojectName = activeTrip.subprojectName
             city = activeTrip.city
         }
     }
