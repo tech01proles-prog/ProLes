@@ -43,6 +43,7 @@ fun HomeScreen(
     onNavigateToProfile: () -> Unit = {},
     onNavigateToMyTickets: () -> Unit,  // 🆕 ДОБАВЛЕНО
     onNavigateToNotifications: () -> Unit = {}, // 🆕 ДОБАВЛЕНО
+    onNavigateToNotificationSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scroll = rememberScrollState()
