@@ -147,6 +147,9 @@ private fun TicketCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
+                    if (ticket.subprojectName.isNotBlank()) {
+                        Text("Подпроект: " + ticket.subprojectName, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
                     Text(formattedDate, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 }
                 Icon(
@@ -208,6 +211,32 @@ private fun TicketCard(
                     }
                 }
             )
+
+            if (ticket.hasReceipt && !ticket.receiptDownloadUrl.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            val uri = com.example.prolestimesheet.network.DownloadManager.download(
+                                context,
+                                ticket.receiptDownloadUrl!!,
+                                "receipt_" + ticket.id,
+                                "application/octet-stream"
+                            )
+                            if (uri != null) {
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    android.widget.Toast.makeText(context, "✅ Чек сохранён", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.ReceiptLong, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Скачать чек")
+                }
+            }
         }
     }
 }
