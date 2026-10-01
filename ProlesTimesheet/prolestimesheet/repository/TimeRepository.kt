@@ -803,7 +803,8 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
                 val isImage = mimeType.startsWith("image/")
                 val updated = expense.copy(
                     hasReceiptPhoto = expense.hasReceiptPhoto || isImage,
-                    receiptSubmitted = true
+                    receiptSubmitted = true,
+                    receiptCount = expense.receiptCount + 1
                 )
                 _expenses.value = _expenses.value.map { if (it.id == expenseId) updated else it }
             }
