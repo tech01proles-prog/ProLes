@@ -19,15 +19,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
-val ProlesCanvas = Color(0xFFF6F7FF)
+val ProlesCanvas = Color(0xFFF7FAF1)
 val ProlesSurface = Color(0xFFFFFFFF)
-val ProlesBorder = Color(0xFFD9E0EE)
-val ProlesText = Color(0xFF172033)
-val ProlesMuted = Color(0xFF667085)
-val ProlesPrimary = Color(0xFF7C3AED)
-val ProlesPrimarySoft = Color(0xFFF3E8FF)
-val ProlesSecondary = Color(0xFF0284C7)
-val ProlesSecondarySoft = Color(0xFFE0F2FE)
+val ProlesBorder = Color(0xFFD6E1C5)
+val ProlesText = Color(0xFF17200F)
+val ProlesMuted = Color(0xFF64705A)
+val ProlesPrimary = Color(0xFF84CC16)
+val ProlesPrimarySoft = Color(0xFFECFCCB)
+val ProlesSecondary = Color(0xFF22C55E)
+val ProlesSecondarySoft = Color(0xFFDCFCE7)
 val ProlesExpense = Color(0xFFE11D48)
 val ProlesExpenseSoft = Color(0xFFFFE4E6)
 val ProlesRestSoft = Color(0xFFFFF7ED)
@@ -302,7 +302,7 @@ fun ProlesHero(
     title: String,
     subtitle: String,
     icon: ImageVector,
-    gradient: List<Color> = listOf(Color(0xFF059669), Color(0xFF0EA5E9), Color(0xFF4F46E5)),
+    gradient: List<Color> = listOf(Color(0xFF65A30D), Color(0xFF22C55E), Color(0xFF84CC16)),
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(22.dp)
