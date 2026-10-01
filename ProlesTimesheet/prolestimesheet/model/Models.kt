@@ -45,6 +45,21 @@ data class User(
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
+data class Subproject(
+    val id: String = "",
+    val projectId: String = "",
+    val name: String = "",
+    val code: String = "",
+    val description: String = "",
+    val isActive: Boolean = true,
+    val sortOrder: Int = 0,
+    val createdAt: Long = 0L,
+    val updatedAt: Long = 0L,
+    val archivedAt: Long? = null
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
 data class Project(
     val id: String = "",
     val name: String = "",
@@ -69,7 +84,8 @@ data class Project(
     val customer: String = "",
     val productionCost: Double = 0.0,
     val transportToClient: Double = 0.0,
-    val sellingPrice: Double = 0.0
+    val sellingPrice: Double = 0.0,
+    val subprojects: List<Subproject> = emptyList()
 )
 
 @SuppressLint("UnsafeOptInUsageError")
@@ -78,6 +94,8 @@ data class TimeEntry(
     val id: String = UUID.randomUUID().toString(),
     val userId: String,
     val projectId: String,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val projectName: String = "",
     val date: LocalDate,
     val hours: Float = 0f,
@@ -109,6 +127,8 @@ data class Income(
     val id: String = "",
     val userId: String = "",
     val projectId: String? = null,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val projectName: String = "",
     val date: LocalDate = LocalDate(2026, 1, 1),
     val name: String = "",
@@ -125,7 +145,9 @@ data class Income(
 data class Expense(
     val id: String = UUID.randomUUID().toString(),
     val userId: String,
-    val projectId: String,
+    val projectId: String? = null,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val projectName: String = "",
     val date: LocalDate,
     val type: String,          // ROAD или OTHER
@@ -135,8 +157,12 @@ data class Expense(
     val comment: String = "",
     val receiptSubmitted: Boolean = false,
     val hasReceiptPhoto: Boolean = false,
-    val category: String = "WORK",         // 🆕 Надкатегория: WORK | PERSONAL
-    val subcategory: String? = null        // 🆕 Подкатегория типа расхода
+    val category: String = "WITH_RECEIPT",
+    val subcategory: String? = null,
+    val receiptCount: Int = 0,
+    val expenseScope: String = "GENERAL",
+    val creatorRole: String = "",
+    val createdAt: Long = 0L
 )
 
 @SuppressLint("UnsafeOptInUsageError")
@@ -153,7 +179,9 @@ data class Waypoint(
 data class BusinessTrip(
     val id: String = UUID.randomUUID().toString(),
     val userId: String,
-    val projectId: String,
+    val projectId: String? = null,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val projectName: String = "",
     val type: String = "DEPARTURE", // DEPARTURE, TRANSFER, COMPLETION
     val date: LocalDate,
@@ -163,7 +191,10 @@ data class BusinessTrip(
     val transport: String = "",
     val notes: String = "",
     val createdAt: Long = 0L,
-    val perDiemRate: Double = 750.0  // 🆕 Размер суточных
+    val perDiemRate: Double = 750.0,
+    val startDate: LocalDate = date,
+    val endDate: LocalDate? = null,
+    val status: String = if (endDate == null) "ACTIVE" else "COMPLETED"
 )
 
 @SuppressLint("UnsafeOptInUsageError")
@@ -182,3 +213,33 @@ data class Notification(
 )
 enum class RateType { FIXED, HOURLY, PER_PROJECT, PER_DAY }
 enum class Currency { RUB, BYN, USD, EUR }
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class ExpenseReceipt(
+    val id: String,
+    val expenseId: String,
+    val url: String,
+    val fileName: String,
+    val uploadedAt: Long
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class NotificationPreferences(
+    val tripEnabled: Boolean = true,
+    val vacationEnabled: Boolean = true,
+    val dayoffEnabled: Boolean = true,
+    val expenseEnabled: Boolean = true,
+    val payrollEnabled: Boolean = true,
+    val ticketEnabled: Boolean = true,
+    val tripVisibleToAll: Boolean = true,
+    val tripChangeEnabled: Boolean = true,
+    val vacationDecisionEnabled: Boolean = true,
+    val ticketReceiptEnabled: Boolean = true,
+    val chatMessageEnabled: Boolean = true,
+    val telegramEnabled: Boolean = false,
+    val telegramLinked: Boolean = false,
+    val telegramLinkCode: String? = null,
+    val emailEnabled: Boolean = false,
+    val email: String = ""
+)
