@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +22,7 @@ import com.example.prolestimesheet.model.Currency
 import com.example.prolestimesheet.model.RateType
 import com.example.prolestimesheet.model.User
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
+import com.example.prolestimesheet.ui.theme.ProlesCanvas
 import java.util.UUID
 import androidx.compose.material3.HorizontalDivider
 
@@ -37,8 +39,10 @@ fun EmployeesScreen(
     var showAddDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        containerColor = ProlesCanvas,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ProlesCanvas),
                 title = { Text("Сотрудники") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") } }
             )
