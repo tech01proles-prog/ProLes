@@ -2,24 +2,24 @@ package com.example.prolestimesheet.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val PrimaryLight = Color(0xFF84CC16)
+val PrimaryLight = Color(0xFF4D7C0F)
 val OnPrimaryLight = Color.White
-val PrimaryContainerLight = Color(0xFFECFCCB)
-val OnPrimaryContainerLight = Color(0xFF3F6212)
+val PrimaryContainerLight = Color(0xFFEAF4D3)
+val OnPrimaryContainerLight = Color(0xFF365314)
 
-val PrimaryDark = Color(0xFFBEF264)
-val OnPrimaryDark = Color(0xFF1A2E05)
-val PrimaryContainerDark = Color(0xFF365314)
+val PrimaryDark = Color(0xFFA3D65C)
+val OnPrimaryDark = Color(0xFF17220B)
+val PrimaryContainerDark = Color(0xFF2F4A12)
 val OnPrimaryContainerDark = Color(0xFFECFCCB)
 
-val SecondaryLight = Color(0xFF22C55E)
+val SecondaryLight = Color(0xFF15803D)
 val OnSecondaryLight = Color.White
-val SecondaryContainerLight = Color(0xFFDCFCE7)
-val OnSecondaryContainerLight = Color(0xFF166534)
+val SecondaryContainerLight = Color(0xFFE4F3E8)
+val OnSecondaryContainerLight = Color(0xFF14532D)
 
-val SecondaryDark = Color(0xFF4ADE80)
+val SecondaryDark = Color(0xFF4DB978)
 val OnSecondaryDark = Color(0xFF052E16)
-val SecondaryContainerDark = Color(0xFF14532D)
+val SecondaryContainerDark = Color(0xFF123F24)
 val OnSecondaryContainerDark = Color(0xFFBBF7D0)
 
 val TertiaryLight = Color(0xFFF43F5E)
@@ -42,26 +42,26 @@ val OnErrorDark = Color(0xFF450A0A)
 val ErrorContainerDark = Color(0xFF7F1D1D)
 val OnErrorContainerDark = Color(0xFFFECACA)
 
-val BackgroundLight = Color(0xFFF7FAF1)
+val BackgroundLight = Color(0xFFF7F9F2)
 val BackgroundDark = Color(0xFF0F172A)
 val SurfaceLight = Color.White
 val SurfaceDark = Color(0xFF111827)
-val SurfaceVariantLight = Color(0xFFF0F5E8)
+val SurfaceVariantLight = Color(0xFFEDF3E5)
 val SurfaceVariantDark = Color(0xFF1E293B)
-val OutlineLight = Color(0xFFD6E1C5)
+val OutlineLight = Color(0xFFD2DCC3)
 val OutlineDark = Color(0xFF475569)
-val OutlineVariantLight = Color(0xFFE2E8D5)
+val OutlineVariantLight = Color(0xFFE0E7D8)
 val OutlineVariantDark = Color(0xFF334155)
-val OnSurfaceLight = Color(0xFF17200F)
+val OnSurfaceLight = Color(0xFF1D2616)
 val OnSurfaceDark = Color(0xFFF8FAFC)
-val OnSurfaceVariantLight = Color(0xFF64705A)
+val OnSurfaceVariantLight = Color(0xFF65715D)
 val OnSurfaceVariantDark = Color(0xFF94A3B8)
 
-val SuccessLight = PrimaryLight
+val SuccessLight = Color(0xFF15803D)
 val SuccessDark = PrimaryDark
 val WarningLight = Color(0xFFF59E0B)
 val WarningDark = Color(0xFFFBBF24)
-val InfoLight = Color(0xFF65A30D)
-val InfoDark = Color(0xFFA3E635)
+val InfoLight = Color(0xFF4D7C0F)
+val InfoDark = Color(0xFFA3D65C)
 val CompanyExpenseLight = Color(0xFFF59E0B)
 val CompanyExpenseDark = Color(0xFFFBBF24)
