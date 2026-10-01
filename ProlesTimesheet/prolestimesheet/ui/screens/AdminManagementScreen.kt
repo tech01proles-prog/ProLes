@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -160,20 +161,6 @@ fun AdminManagementScreen(
             }
         }
 
-        ProlesCard(containerColor = ProlesSecondarySoft.copy(alpha = 0.62f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ProlesIconBadge(Icons.Default.AutoAwesome, ProlesSecondary)
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text("Фокус на главном", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Шесть рабочих разделов без лишней перегрузки.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ProlesMuted
-                    )
-                }
-            }
-        }
     }
 }
 
