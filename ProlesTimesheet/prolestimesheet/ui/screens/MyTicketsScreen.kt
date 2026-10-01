@@ -53,8 +53,7 @@ fun MyTicketsScreen(
                     }
                 }
             )
-        }
-    ),
+        },
         floatingActionButton = {
             if (viewModel.canCreate("tickets")) {
                 FloatingActionButton(onClick = { showUploadDialog = true }) {
