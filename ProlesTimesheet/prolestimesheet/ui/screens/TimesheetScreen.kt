@@ -322,50 +322,52 @@ fun TimesheetScreen(
 
             Text("Действия", style = MaterialTheme.typography.titleSmall, color = ProlesMuted)
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                TimesheetActionTile(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.AutoMirrored.Filled.TrendingUp,
-                    title = "Доход",
-                    subtitle = "Поступление",
-                    tint = ProlesSecondary,
-                    onClick = { showIncomeDialog = true }
-                )
-                TimesheetActionTile(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Train,
-                    title = "Командировка",
-                    subtitle = "Добавить поездку",
-                    tint = ProlesExpense,
-                    enabled = !isOnVacation,
-                    onClick = { showTripDialog = true }
-                )
-            }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    TimesheetActionTile(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.AutoMirrored.Filled.TrendingUp,
+                        title = "Доход",
+                        subtitle = "Поступление",
+                        tint = ProlesSecondary,
+                        onClick = { showIncomeDialog = true }
+                    )
+                    TimesheetActionTile(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Train,
+                        title = "Командировка",
+                        subtitle = "Добавить поездку",
+                        tint = ProlesExpense,
+                        enabled = !isOnVacation,
+                        onClick = { showTripDialog = true }
+                    )
+                }
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                TimesheetActionTile(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Receipt,
-                    title = "Расход",
-                    subtitle = "Добавить расход",
-                    tint = ProlesExpense,
-                    onClick = { showExpenseDialog = true }
-                )
-                TimesheetActionTile(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.AutoMirrored.Filled.EventNote,
-                    title = if (isCurrentlyDayOff) "Рабочий" else "Выходной",
-                    subtitle = if (isCurrentlyDayOff) "Вернуть день" else "Отметить отгул",
-                    tint = Color(0xFFF59E0B),
-                    enabled = !isOnVacation,
-                    onClick = { viewModel.toggleDayOff(selectedDate) }
-                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    TimesheetActionTile(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Receipt,
+                        title = "Расход",
+                        subtitle = "Добавить расход",
+                        tint = ProlesExpense,
+                        onClick = { showExpenseDialog = true }
+                    )
+                    TimesheetActionTile(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.AutoMirrored.Filled.EventNote,
+                        title = if (isCurrentlyDayOff) "Рабочий" else "Выходной",
+                        subtitle = if (isCurrentlyDayOff) "Вернуть день" else "Отметить отгул",
+                        tint = Color(0xFFF59E0B),
+                        enabled = !isOnVacation,
+                        onClick = { viewModel.toggleDayOff(selectedDate) }
+                    )
+                }
             }
 
             Spacer(Modifier.height(4.dp))
