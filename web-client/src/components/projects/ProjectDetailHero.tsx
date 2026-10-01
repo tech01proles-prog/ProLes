@@ -8,6 +8,7 @@ interface ProjectDetailHeroProps {
   project: ProjectDto;
   totalHours: number;
   onBack: () => void;
+  onEdit?: () => void;
 }
 
 const STATUS_CONFIG: Record<
@@ -30,6 +31,7 @@ export function ProjectDetailHero({
   project,
   totalHours,
   onBack,
+  onEdit,
 }: ProjectDetailHeroProps) {
   const status =
     STATUS_CONFIG[project.status] ?? STATUS_CONFIG.new;
@@ -41,13 +43,24 @@ export function ProjectDetailHero({
 
       <div className="relative">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/10"
-          >
-            ← Все проекты
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/10"
+            >
+              ← Все проекты
+            </button>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-950 shadow-lg transition-transform hover:-translate-y-0.5"
+              >
+                ✎ Изменить
+              </button>
+            )}
+          </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={status.tone} dot>
