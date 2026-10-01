@@ -29,6 +29,8 @@ fun MyTicketsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val projects by viewModel.projects.collectAsState()
+    var showUploadDialog by remember { mutableStateOf(false) }
     var tickets by remember { mutableStateOf<List<com.example.prolestimesheet.network.TicketDto>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
@@ -51,6 +53,14 @@ fun MyTicketsScreen(
                     }
                 }
             )
+        }
+    ),
+        floatingActionButton = {
+            if (viewModel.canCreate("tickets")) {
+                FloatingActionButton(onClick = { showUploadDialog = true }) {
+                    Icon(Icons.Default.Add, "Добавить билет")
+                }
+            }
         }
     ) { padding ->
         Box(
@@ -91,6 +101,21 @@ fun MyTicketsScreen(
                 }
             }
         }
+    }
+
+    if (showUploadDialog) {
+        MyTicketUploadDialog(
+            projects = projects,
+            onDismiss = { showUploadDialog = false },
+            onUploaded = {
+                showUploadDialog = false
+                isLoading = true
+                loadTickets { list ->
+                    tickets = list
+                    isLoading = false
+                }
+            }
+        )
     }
 }
 
