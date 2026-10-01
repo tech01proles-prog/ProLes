@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.prolestimesheet.model.User
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
+import com.example.prolestimesheet.ui.theme.ProlesCanvas
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
@@ -98,8 +100,10 @@ fun EmployeeProfileScreen(
         .filterValues { it > 0.0 }
 
     Scaffold(
+        containerColor = ProlesCanvas,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ProlesCanvas),
                 title = { Text("Профиль сотрудника") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
