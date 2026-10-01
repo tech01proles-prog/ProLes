@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +22,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.Expense
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
+import com.example.prolestimesheet.ui.theme.ProlesCanvas
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -168,8 +170,10 @@ fun AdminExpensesScreen(
     val withoutReceipt = sortedExpenses.count { !it.receiptSubmitted }
 
     Scaffold(
+        containerColor = ProlesCanvas,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ProlesCanvas),
                 title = {
                     Column {
                         Text("Расходы сотрудников", style = MaterialTheme.typography.titleLarge)
