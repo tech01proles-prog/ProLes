@@ -205,6 +205,14 @@ fun EmployeeExpensesScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
             ) {
+                item {
+                    ProlesHero(
+                        title = "Мои расходы",
+                        subtitle = "Чеки, вложения и подтверждение расходов",
+                        icon = Icons.Default.ReceiptLong,
+                        gradient = listOf(Color(0xFFE11D48), Color(0xFFF97316), Color(0xFFF59E0B))
+                    )
+                }
                 items(filteredExpenses, key = { it.id }) { expense ->
                     // 🆕 Проверяем, является ли расход расходом компании
                     val isCompanyExpense = companyUserId != null && expense.userId == companyUserId
