@@ -61,6 +61,12 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
     private val _notifications = MutableStateFlow<List<Notification>>(emptyList())
     val notificationsFlow: StateFlow<List<Notification>> = _notifications.asStateFlow()
 
+    private val _notificationPreferences = MutableStateFlow(NotificationPreferences())
+    val notificationPreferencesFlow: StateFlow<NotificationPreferences> = _notificationPreferences.asStateFlow()
+
+    private val _expenseReceipts = MutableStateFlow<Map<String, List<com.example.prolestimesheet.network.ExpenseReceiptDto>>>(emptyMap())
+    val expenseReceiptsFlow: StateFlow<Map<String, List<com.example.prolestimesheet.network.ExpenseReceiptDto>>> = _expenseReceipts.asStateFlow()
+
     private val _roles = MutableStateFlow<List<Role>>(emptyList())
     val rolesFlow: StateFlow<List<Role>> = _roles.asStateFlow()
 
@@ -726,26 +732,16 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
     }
 
     // 🔥 Отправка токена на сервер
-    private suspend fun registerFcmToken(userId: String, token: String) {
-        Log.d("Repository", "🔥 Начинаем регистрацию FCM токена для userId=$userId")
-
-        val token = getFcmToken()
-        if (token.isNullOrBlank()) {
+    suspend fun registerFcmToken(userId: String, token: String) {
+        if (token.isBlank()) {
             Log.w("Repository", "⚠️ FCM токен пустой, пропускаем регистрацию")
             return
         }
-
-        Log.d("Repository", "🔑 FCM токен получен: ${token.take(30)}... (длина ${token.length})")
-        Log.d("Repository", "📤 Отправляем токен на сервер...")
-
-        val result = apiClient.registerFcmToken(userId, token)
-        result.onSuccess {
-            Log.d("Repository", "✅✅✅ FCM токен успешно зарегистрирован на сервере!")
-        }.onFailure { e ->
-            Log.e("Repository", "❌❌❌ Ошибка отправки на сервер: ${e.message}", e)
-        }
+        Log.d("Repository", "📤 Регистрируем FCM токен для userId=" + userId)
+        apiClient.registerFcmToken(userId, token)
+            .onSuccess { Log.d("Repository", "✅ FCM токен зарегистрирован") }
+            .onFailure { e -> Log.e("Repository", "❌ Ошибка регистрации FCM токена", e) }
     }
-
 
     // ═══════════════════════════════════════════════════════════
     // 💰 SALARY COMPONENTS
