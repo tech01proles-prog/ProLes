@@ -32,6 +32,7 @@ import {
   ProjectActivityList,
   ProjectDetailHero,
   ProjectTabs,
+  ProjectForm,
   SubprojectForm,
   SubprojectList,
   TnpaDocumentList,
