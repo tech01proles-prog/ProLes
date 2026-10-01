@@ -19,19 +19,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
-val ProlesCanvas = Color(0xFFF8FAFC)
+val ProlesCanvas = Color(0xFFF6F7FF)
 val ProlesSurface = Color(0xFFFFFFFF)
-val ProlesBorder = Color(0xFFE2E8F0)
-val ProlesText = Color(0xFF0F172A)
-val ProlesMuted = Color(0xFF64748B)
-val ProlesPrimary = Color(0xFF059669)
-val ProlesPrimarySoft = Color(0xFFECFDF5)
-val ProlesSecondary = Color(0xFF4F46E5)
-val ProlesSecondarySoft = Color(0xFFEEF2FF)
+val ProlesBorder = Color(0xFFD9E0EE)
+val ProlesText = Color(0xFF172033)
+val ProlesMuted = Color(0xFF667085)
+val ProlesPrimary = Color(0xFF7C3AED)
+val ProlesPrimarySoft = Color(0xFFF3E8FF)
+val ProlesSecondary = Color(0xFF0284C7)
+val ProlesSecondarySoft = Color(0xFFE0F2FE)
 val ProlesExpense = Color(0xFFE11D48)
-val ProlesExpenseSoft = Color(0xFFFFF1F2)
-val ProlesRestSoft = Color(0xFFF1F5F9)
-val ProlesRestText = Color(0xFF475569)
+val ProlesExpenseSoft = Color(0xFFFFE4E6)
+val ProlesRestSoft = Color(0xFFFFF7ED)
+val ProlesRestText = Color(0xFF7C2D12)
+
+fun incomeTypeLabel(type: String): String = when (type.uppercase()) {
+    "HOUSEHOLD" -> "🏠 Хоз.нужды"
+    "CARD" -> "💳 По карте"
+    "CASH" -> "💵 Наличными"
+    else -> type
+}
 
 @Composable
 fun ProlesCard(
@@ -166,6 +173,52 @@ fun ProlesQuickAction(
                         style = MaterialTheme.typography.labelSmall
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProlesCompactAction(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    tint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .height(78.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = tint.copy(alpha = 0.055f)
+        ),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.16f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ProlesIconBadge(icon, tint, size = 32.dp)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = ProlesText,
+                    maxLines = 1
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ProlesMuted,
+                    maxLines = 2
+                )
             }
         }
     }
