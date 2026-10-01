@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import com.example.prolestimesheet.model.BusinessTrip
@@ -50,6 +51,7 @@ fun BusinessTripsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val user by viewModel.user.collectAsState()
     val trips by viewModel.trips.collectAsState()
     val employees by viewModel.employees.collectAsState()
@@ -150,7 +152,10 @@ fun BusinessTripsScreen(
                 viewModel.updateBusinessTrip(updated)
                 editingTrip = null
             }
-        )    completingTrip?.let { trip ->
+        )
+    }
+
+    completingTrip?.let { trip ->
         TripCompletionDialog(
             trip = trip,
             onDismiss = { completingTrip = null },
@@ -158,7 +163,7 @@ fun BusinessTripsScreen(
                 viewModel.completeBusinessTrip(trip.id, endDate) { ok ->
                     if (!ok) {
                         android.widget.Toast.makeText(
-                            null,
+                            context,
                             "Не удалось завершить командировку",
                             android.widget.Toast.LENGTH_LONG
                         ).show()
