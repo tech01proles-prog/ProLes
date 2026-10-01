@@ -28,11 +28,16 @@ data class IncomeDto(
     val id: String = "",
     val userId: String = "",
     val projectId: String? = null,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val projectName: String = "",
     val date: String = "",
+    val type: String = "WORK",
     val name: String = "",
     val amount: Double = 0.0,
     val currency: String = "RUB",
+    val category: String = "WITH_RECEIPT",
+    val subcategory: String? = null,
     val createdAt: Long = 0L
 )
 
@@ -125,6 +130,7 @@ data class AuthResponse(val token: String, val expiresAt: Long, val user: User)
 @Serializable
 data class TicketUploadRequest(
     val projectId: String,
+    val subprojectId: String? = null,
     val description: String,
     val sendToAccountant: Boolean,
     val accountantEmail: String,
@@ -152,6 +158,8 @@ data class TicketDto(
     val id: String,
     val projectId: String,
     val projectName: String,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
     val fileName: String,
     val fileType: String,
     val fileSize: Long,
@@ -161,8 +169,10 @@ data class TicketDto(
     val downloadUrl: String,
     val sendToAccountant: Boolean = false,
     val accountantEmail: String = "",
-    val amount: Double = 0.0,        // 🆕
-    val currency: String = "RUB",    // 🆕
+    val amount: Double = 0.0,
+    val currency: String = "RUB",
+    val hasReceipt: Boolean = false,
+    val receiptDownloadUrl: String? = null,
     val recipients: List<TicketRecipientDto> = emptyList()
 )
 
@@ -184,6 +194,37 @@ data class SendNotificationRequest(
     val title: String,
     val message: String,
     val payload: String = ""
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class NotificationPreferencesDto(
+    val tripEnabled: Boolean = true,
+    val vacationEnabled: Boolean = true,
+    val dayoffEnabled: Boolean = true,
+    val expenseEnabled: Boolean = true,
+    val payrollEnabled: Boolean = true,
+    val ticketEnabled: Boolean = true,
+    val tripVisibleToAll: Boolean = true,
+    val tripChangeEnabled: Boolean = true,
+    val vacationDecisionEnabled: Boolean = true,
+    val ticketReceiptEnabled: Boolean = true,
+    val chatMessageEnabled: Boolean = true,
+    val telegramEnabled: Boolean = false,
+    val telegramLinked: Boolean = false,
+    val telegramLinkCode: String? = null,
+    val emailEnabled: Boolean = false,
+    val email: String = ""
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class ExpenseReceiptDto(
+    val id: String,
+    val expenseId: String,
+    val url: String,
+    val fileName: String,
+    val uploadedAt: Long
 )
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
