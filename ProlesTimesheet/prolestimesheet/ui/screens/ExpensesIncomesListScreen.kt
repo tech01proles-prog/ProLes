@@ -43,6 +43,7 @@ private data class BalanceItem(
     val currency: String,
     val name: String,
     val projectName: String?,
+    val subprojectName: String? = null,
     val expense: Expense? = null
 )
 
@@ -96,6 +97,7 @@ fun ExpensesIncomesListScreen(
                     currency = exp.currency,
                     name = if (exp.type == "ROAD") "🚗 Дорога" else exp.name.ifBlank { "Прочий расход" },
                     projectName = exp.projectName,
+                    subprojectName = exp.subprojectName,
                     expense = exp
                 )
             )
@@ -109,7 +111,8 @@ fun ExpensesIncomesListScreen(
                     amount = inc.amount,
                     currency = inc.currency,
                     name = inc.name.ifBlank { "Доход" },
-                    projectName = inc.projectName
+                    projectName = inc.projectName,
+                    subprojectName = inc.subprojectName
                 )
             )
         }
@@ -279,7 +282,7 @@ private fun BalanceRow(
     val background = when {
         !isExpense -> Color(0xFFF4FBF5)
         expense?.category == "WITHOUT_RECEIPT" -> Color(0xFFE8F5E9)
-        expense?.hasReceiptPhoto == true || expense?.receiptCount ?: 0 > 0 -> Color(0xFFE8F5E9)
+        expense?.hasReceiptPhoto == true || (expense?.receiptCount ?: 0) > 0 -> Color(0xFFE8F5E9)
         else -> Color(0xFFFFF7F7)
     }
     val accent = if (isExpense) Color(0xFFC62828) else Color(0xFF2E7D32)
@@ -326,6 +329,15 @@ private fun BalanceRow(
                     Text(
                         text = item.projectName!!,
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (!item.subprojectName.isNullOrBlank()) {
+                    Text(
+                        text = "Подпроект: " + item.subprojectName,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
