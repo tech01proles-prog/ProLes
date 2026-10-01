@@ -20,6 +20,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -95,8 +97,10 @@ import com.example.prolestimesheet.model.TimeEntry
 import com.example.prolestimesheet.model.VacationPeriod
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
 import com.example.prolestimesheet.ui.theme.*
+import kotlinx.datetime.Clock
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import java.time.YearMonth
 import java.time.format.TextStyle
