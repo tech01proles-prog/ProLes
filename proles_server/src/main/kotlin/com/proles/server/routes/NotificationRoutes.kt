@@ -1,6 +1,7 @@
 package com.proles.server.routes
 
 import com.proles.server.config.FirebaseService
+import com.proles.server.config.NotificationService
 import com.proles.server.config.PermissionMiddleware
 import com.proles.server.config.SessionManager
 import com.proles.server.data.*
