@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.Expense
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
+import com.example.prolestimesheet.ui.theme.ProlesCanvas
 import androidx.activity.result.PickVisualMediaRequest
 import android.content.ContentValues
 import android.net.Uri
@@ -166,8 +168,10 @@ fun EmployeeExpensesScreen(
     }
 
     Scaffold(
+        containerColor = ProlesCanvas,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ProlesCanvas),
                 title = { Text(if (effectiveIsAdminView) "Расходы сотрудника" else "Мои расходы") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
