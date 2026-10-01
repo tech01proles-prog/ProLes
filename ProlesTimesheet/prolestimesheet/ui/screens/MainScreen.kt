@@ -37,6 +37,7 @@ sealed class Screen(val title: String, val icon: ImageVector) {
     object EmployeeProfile : Screen("Профиль сотрудника", Icons.Default.Person)
     object BusinessTrips : Screen("Командировки", Icons.Default.Train)
     object Notifications : Screen("Уведомления", Icons.Default.Notifications)
+    object NotificationSettings : Screen("Настройки уведомлений", Icons.Default.Settings)
     object Permissions : Screen("Права доступа", Icons.Default.AdminPanelSettings)
     object MyTickets : Screen("Мои билеты", Icons.Default.ConfirmationNumber)
     object AdminTickets : Screen("Билеты", Icons.Default.UploadFile)
@@ -280,7 +281,13 @@ fun MainScreen(
                 Screen.Notifications -> NotificationsScreen(
                     viewModel = viewModel,
                     onBack = { goBack() },
-                    initialPayload = PendingNavigationHolder.get()?.second  // передаём payload для автооткрытия
+                    onOpenSettings = { navigateTo(Screen.NotificationSettings) },
+                    initialPayload = PendingNavigationHolder.get()?.second
+                )
+
+                Screen.NotificationSettings -> NotificationSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { goBack() }
                 )
 
                 Screen.EmployeeStats -> EmployeeStatsScreen(
