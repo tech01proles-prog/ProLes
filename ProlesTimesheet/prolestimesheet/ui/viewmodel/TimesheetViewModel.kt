@@ -677,7 +677,14 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         fileName: String,
         mimeType: String,
         context: Context,
-        onFinished: (Boolean) -> Unit = {}
+        onFinished: (Boolean) -> Unit = {
+        val expense = expenses.value.firstOrNull { it.id == expenseId }
+        if (expense?.category == "WITHOUT_RECEIPT") {
+            Toast.makeText(context, "Для расхода без чека прикрепление запрещено", Toast.LENGTH_LONG).show()
+            onFinished(false)
+            return
+        }
+}
     ) {
         viewModelScope.launch {
             val currentUser = user.value
