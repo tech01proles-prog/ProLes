@@ -17,7 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.network.ApiClient
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
+import com.example.prolestimesheet.ui.theme.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -94,6 +94,14 @@ fun MyTicketsScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    item {
+                        ProlesHero(
+                            title = "Мои билеты",
+                            subtitle = "Документы для командировок",
+                            icon = Icons.Default.ConfirmationNumber,
+                            gradient = listOf(Color(0xFF0EA5E9), Color(0xFF4F46E5), Color(0xFF7C3AED))
+                        )
+                    }
                     items(tickets) { ticket ->
                         TicketCard(
                             ticket = ticket,
