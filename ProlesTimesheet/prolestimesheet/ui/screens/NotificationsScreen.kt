@@ -67,6 +67,11 @@ fun NotificationsScreen(
                     }
                 },
                 actions = {
+                    if (onOpenSettings != null) {
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Default.Settings, "Настройки уведомлений")
+                        }
+                    }
                     val hasUnread = notifications.any { !it.isRead }
                     if (hasUnread) {
                         // Кнопка "Прочитать все"
