@@ -28,7 +28,7 @@ import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.model.User
 import com.example.prolestimesheet.network.ApiClient
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
+import com.example.prolestimesheet.ui.theme.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -141,7 +141,15 @@ fun AdminTicketsScreen(
                 }
                 else -> {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                        item {
+                            ProlesHero(
+                                title = "Билеты",
+                                subtitle = "Загрузка и контроль документов по поездкам",
+                                icon = Icons.Default.ConfirmationNumber,
+                                gradient = listOf(Color(0xFF0EA5E9), Color(0xFF4F46E5), Color(0xFF7C3AED))
+                            )
+                        }
+                        items(tickets, key = { it.id }) { ticket ->
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
