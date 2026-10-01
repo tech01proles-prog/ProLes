@@ -931,8 +931,17 @@ fun TimesheetScreen(
                         false
                     }
                     val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                    val fileName = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null }
-                        ?: "attachment_${System.currentTimeMillis()}"
+                    val fileName = context.contentResolver.query(
+                        uri,
+                        arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                        null,
+                        null,
+                        null
+                    )?.use { cursor ->
+                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+                    } ?: uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null }
+                        ?: "attachment_" + System.currentTimeMillis()
                     viewModel.addPendingExpenseFile(
                         tempId = tempExpenseId,
                         uri = uri,
@@ -962,8 +971,17 @@ fun TimesheetScreen(
                     false
                 }
                 val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                val fileName = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null }
-                    ?: "attachment_${System.currentTimeMillis()}"
+                val fileName = context.contentResolver.query(
+                    uri,
+                    arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )?.use { cursor ->
+                    val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
+                } ?: uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null }
+                    ?: "attachment_" + System.currentTimeMillis()
                 viewModel.addPendingExpenseFile(
                     tempId = tempExpenseId,
                     uri = uri,
