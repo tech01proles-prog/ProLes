@@ -13,14 +13,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.filled.Calculate
+import com.example.prolestimesheet.ui.theme.*
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
 
 @Composable
@@ -32,15 +29,14 @@ fun AdminManagementScreen(
     onNavigateToEmployees: () -> Unit,
     onNavigateToAdminExpenses: () -> Unit,
     onNavigateToCostCalculation: () -> Unit,
-    onNavigateToTickets: () -> Unit,       // 🆕
-    onNavigateToPermissions: () -> Unit,    // 🆕
+    onNavigateToTickets: () -> Unit,
+    onNavigateToPermissions: () -> Unit,
     onNavigateToProjectExpenses: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scroll = rememberScrollState()
     val userPermissions by viewModel.userPermissions.collectAsState()
 
-    // 🆕 Helper: проверка права на просмотр раздела
     @Composable
     fun canView(permissionKey: String): Boolean {
         val user = viewModel.user.collectAsState().value ?: return false
@@ -50,119 +46,134 @@ fun AdminManagementScreen(
 
     Column(
         modifier = modifier
-            .padding(12.dp)
             .fillMaxSize()
+            .background(ProlesCanvas)
             .verticalScroll(scroll)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Панель управления", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-        Text("Администратор", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(12.dp))
+        ProlesCard(
+            shape = RoundedCornerShape(22.dp),
+            containerColor = Color.Transparent
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                Color(0xFF4F46E5),
+                                Color(0xFF7C3AED),
+                                Color(0xFFEC4899)
+                            )
+                        ),
+                        RoundedCornerShape(22.dp)
+                    )
+                    .padding(20.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ProlesIconBadge(Icons.Default.Dashboard, Color.White, size = 44.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Управление", color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                        Text(
+                            "Основные инструменты команды",
+                            color = Color.White.copy(alpha = 0.82f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            "Рабочее меню",
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (canView("analytics")) {
                 ManagementTile(
-                    title = "Аналитика",
-                    subtitle = "Статистика",
-                    icon = Icons.Default.BarChart,
-                    gradientColors = listOf(Color(0xFF667eea), Color(0xFF764ba2)),
-                    onClick = onNavigateToAnalytics,
-                    modifier = Modifier.weight(1f)
+                    "Аналитика",
+                    "Показатели и динамика",
+                    Icons.Default.BarChart,
+                    listOf(Color(0xFF4F46E5), Color(0xFF7C3AED)),
+                    onNavigateToAnalytics,
+                    Modifier.weight(1f)
                 )
             }
             if (canView("expenses_all")) {
                 ManagementTile(
-                    title = "Расходы",
-                    subtitle = "Сотрудники",
-                    icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                    gradientColors = listOf(Color(0xFFf093fb), Color(0xFFf5576c)),
-                    onClick = onNavigateToAdminExpenses,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            // 💰 Расходы по проектам (только для admin/director/superadmin)
-            if (canView("expenses")) {
-                ManagementTile(
-                    title = "Расходы",
-                    subtitle = "Проекты",
-                    icon = Icons.Default.AttachMoney,
-                    gradientColors = listOf(Color(0xFF11998e), Color(0xFF38ef7d)),  // 💚 Изумрудный (финансы)
-                    onClick = onNavigateToProjectExpenses,
-                    modifier = Modifier.weight(1f)
+                    "Расходы",
+                    "По сотрудникам",
+                    Icons.AutoMirrored.Filled.ReceiptLong,
+                    listOf(Color(0xFFE11D48), Color(0xFFF97316)),
+                    onNavigateToAdminExpenses,
+                    Modifier.weight(1f)
                 )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (canView("employees")) {
                 ManagementTile(
-                    title = "Сотр-ки",
-                    subtitle = "Профили",
-                    icon = Icons.Default.People,
-                    gradientColors = listOf(Color(0xFF43e97b), Color(0xFF38f9d7)),
-                    onClick = onNavigateToEmployees,
-                    modifier = Modifier.weight(1f)
+                    "Сотрудники",
+                    "Профили и состав",
+                    Icons.Default.People,
+                    listOf(Color(0xFF059669), Color(0xFF14B8A6)),
+                    onNavigateToEmployees,
+                    Modifier.weight(1f)
                 )
             }
             if (canView("permissions")) {
                 ManagementTile(
-                    title = "Доступ",
-                    subtitle = "Роли",
-                    icon = Icons.Default.AdminPanelSettings,
-                    gradientColors = listOf(Color(0xFF5C6BC0), Color(0xFF3949AB)),
-                    onClick = onNavigateToPermissions,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            if (canView("payroll")) {
-                ManagementTile(
-                    title = "Зарплата",
-                    subtitle = "Финансы",
-                    icon = Icons.Default.Payments,
-                    gradientColors = listOf(Color(0xFF667eea), Color(0xFF764ba2)),
-                    onClick = onNavigateToPayroll,
-                    modifier = Modifier.weight(1f)
+                    "Доступ",
+                    "Роли и права",
+                    Icons.Default.AdminPanelSettings,
+                    listOf(Color(0xFF2563EB), Color(0xFF06B6D4)),
+                    onNavigateToPermissions,
+                    Modifier.weight(1f)
                 )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (canView("projects")) {
                 ManagementTile(
-                    title = "Проекты",
-                    subtitle = "Управление",
-                    icon = Icons.Default.Folder,
-                    gradientColors = listOf(Color(0xFF4facfe), Color(0xFF00f2fe)),
-                    onClick = onNavigateToProjects,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            if (canView("cost_calculation")) {
-                ManagementTile(
-                    title = "С/С",
-                    subtitle = "Расчёт",
-                    icon = Icons.Default.Calculate,
-                    gradientColors = listOf(Color(0xFFfa709a), Color(0xFFfee140)),
-                    onClick = onNavigateToCostCalculation,
-                    modifier = Modifier.weight(1f)
+                    "Проекты",
+                    "Объекты и подпроекты",
+                    Icons.Default.Folder,
+                    listOf(Color(0xFFF59E0B), Color(0xFFF97316)),
+                    onNavigateToProjects,
+                    Modifier.weight(1f)
                 )
             }
             if (canView("tickets")) {
                 ManagementTile(
-                    title = "Билеты",
-                    subtitle = "Загрузка",
-                    icon = Icons.Default.ConfirmationNumber,
-                    gradientColors = listOf(Color(0xFFFF8A65), Color(0xFFFF5722)),
-                    onClick = onNavigateToTickets,
-                    modifier = Modifier.weight(1f)
+                    "Билеты",
+                    "Документы поездок",
+                    Icons.Default.ConfirmationNumber,
+                    listOf(Color(0xFF0EA5E9), Color(0xFF4F46E5)),
+                    onNavigateToTickets,
+                    Modifier.weight(1f)
                 )
             }
-
         }
-        Spacer(Modifier.height(12.dp))
+
+        ProlesCard(containerColor = ProlesSecondarySoft.copy(alpha = 0.62f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ProlesIconBadge(Icons.Default.AutoAwesome, ProlesSecondary)
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("Фокус на главном", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Шесть рабочих разделов без лишней перегрузки.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ProlesMuted
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -177,25 +188,49 @@ private fun ManagementTile(
 ) {
     Card(
         modifier = modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(16.dp))
+            .height(148.dp)
+            .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Brush.linearGradient(gradientColors))
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
+                .padding(16.dp)
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
-                Spacer(Modifier.height(6.dp))
-                Text(text = title, style = MaterialTheme.typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(4.dp))
-                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.9f), textAlign = TextAlign.Center, fontSize = 12.sp)
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(alpha = 0.18f)
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.padding(9.dp).size(24.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.82f),
+                        maxLines = 2
+                    )
+                }
             }
         }
     }
