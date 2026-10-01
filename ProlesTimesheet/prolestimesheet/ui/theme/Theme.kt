@@ -3,6 +3,7 @@ package com.example.prolestimesheet.ui.theme
 import android.app.Activity
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
