@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import type { NotificationPreferencesDto } from '../types';
 
+const TELEGRAM_BOT_URL = 'https://t.me/PROLES_MGR_BOT';
+
 const CHANNELS: Array<{ key: keyof NotificationPreferencesDto; label: string; desc: string }> = [
   { key: 'tripEnabled', label: '✈️ Командировки', desc: 'Внутренние уведомления о ваших командировках' },
   { key: 'vacationEnabled', label: '🏖 Отпуска', desc: 'Запросы на отпуск для руководителей' },
@@ -89,7 +91,7 @@ export function NotificationSettingsPage() {
         <button onClick={() => toggle('telegramEnabled')} disabled={saving} className={`relative w-12 h-7 rounded-full ${prefs.telegramEnabled ? 'bg-cyan-600' : 'bg-slate-300'}`}><div className="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform" style={{ transform: prefs.telegramEnabled ? 'translateX(20px)' : 'translateX(0)' }} /></button>
       </div>
       {prefs.telegramEnabled && <div className="mt-3 p-4 bg-amber-50 rounded-lg border border-amber-200 text-sm text-amber-800">
-        {prefs.telegramLinked ? <span>✅ Telegram уже привязан. Уведомления будут отправляться в ваш связанный чат.</span> : <><div>1. Откройте Telegram-бот Proles Sys.</div><div>2. Отправьте ему этот код:</div><div className="mt-2 text-2xl font-mono font-black tracking-widest">{prefs.telegramLinkCode || 'генерируется…'}</div><div className="mt-2 text-xs">Код выдаётся один раз. После привязки повторно вводить его не требуется.</div></>}
+        {prefs.telegramLinked ? <span>✅ Telegram уже привязан. Уведомления будут отправляться в ваш связанный чат.</span> : <><div>1. Откройте <a href={TELEGRAM_BOT_URL} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2 hover:text-amber-950">ТГ бот</a> Proles Sys.</div><div>2. Отправьте ему этот код:</div><div className="mt-2 text-2xl font-mono font-black tracking-widest">{prefs.telegramLinkCode || 'генерируется…'}</div><div className="mt-2 text-xs">Код выдаётся один раз. После привязки повторно вводить его не требуется.</div></>}
       </div>}
     </div>
 
