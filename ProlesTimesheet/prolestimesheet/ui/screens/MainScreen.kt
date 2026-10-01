@@ -69,10 +69,14 @@ fun MainScreen(
     // 🆕 Динамическое меню: видимость экранов определяется правами
     val userPermissions by viewModel.userPermissions.collectAsState()
     val visibleScreens = remember(user?.role, userPermissions) {
-        val base = listOf(Screen.Home, Screen.Timesheet, Screen.Profile)
-        val hasAnyAdminPermission = user?.role == "superadmin" ||
-                userPermissions.values.any { it.canView }  // есть хотя бы одно право на просмотр
-        if (hasAnyAdminPermission) base + Screen.Admin else base
+        val isDirector = user?.role == "director"
+        val base = if (isDirector) {
+            listOf(Screen.Home, Screen.Profile)
+        } else {
+            listOf(Screen.Home, Screen.Timesheet, Screen.Profile)
+        }
+        val hasManagementRole = user?.role in setOf("admin", "director", "superadmin")
+        if (hasManagementRole) base + Screen.Admin else base
     }
 
     // 🆕 АВТОПЕРЕХОД: слушаем StateFlow и user одновременно
