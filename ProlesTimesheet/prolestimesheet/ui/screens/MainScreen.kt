@@ -169,6 +169,7 @@ fun MainScreen(
                     onNavigateToTimesheet = { navigateTo(Screen.Timesheet) },
                     onNavigateToProfile = { navigateTo(Screen.Profile) },
                     onNavigateToNotifications = { navigateTo(Screen.Notifications) },
+                    onNavigateToNotificationSettings = { navigateTo(Screen.NotificationSettings) },
                     onNavigateToMyTickets = { navigateTo(Screen.MyTickets) },
                 )
 
