@@ -276,13 +276,17 @@ private fun BalanceRow(
 ) {
     val expense = item.expense
     val isExpense = item.isExpense
-    val background = if (isExpense) Color(0xFFFFF7F7) else Color(0xFFF4FBF5)
-    val accent = if (isExpense) Color(0xFFC62828) else Color(0xFF2E7D32)
-    val receiptColor = when {
-        !isExpense -> MaterialTheme.colorScheme.onSurfaceVariant
-        expense?.hasReceiptPhoto == true -> Color(0xFF2E7D32)
-        else -> Color(0xFFC62828)
+    val background = when {
+        !isExpense -> Color(0xFFF4FBF5)
+        expense?.category == "WITHOUT_RECEIPT" -> Color(0xFFE8F5E9)
+        expense?.hasReceiptPhoto == true || expense?.receiptCount ?: 0 > 0 -> Color(0xFFE8F5E9)
+        else -> Color(0xFFFFF7F7)
     }
+    val accent = if (isExpense) Color(0xFFC62828) else Color(0xFF2E7D32)
+    val receiptRequired = isExpense && expense?.category != "WITHOUT_RECEIPT"
+    val receiptColor = if (!isExpense || !receiptRequired) Color(0xFF2E7D32)
+        else if (expense?.hasReceiptPhoto == true || (expense?.receiptCount ?: 0) > 0) Color(0xFF2E7D32)
+        else Color(0xFFC62828)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -333,18 +337,22 @@ private fun BalanceRow(
             if (isExpense) {
                 IconButton(
                     onClick = onReceiptClick,
+                    enabled = receiptRequired,
                     modifier = Modifier.size(36.dp)
                 ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ReceiptLong,
-                        contentDescription = if (expense?.hasReceiptPhoto == true) {
-                            "Чек прикреплён"
-                        } else {
-                            "Прикрепить чек"
-                        },
-                        tint = receiptColor,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    if (!receiptRequired) {
+                        Box(Modifier.size(24.dp)) {
+                            Icon(Icons.AutoMirrored.Filled.ReceiptLong, "Без чека", tint = receiptColor, modifier = Modifier.fillMaxSize())
+                            Icon(Icons.Default.Close, "Прикрепление запрещено", tint = receiptColor, modifier = Modifier.size(12.dp).align(Alignment.TopEnd))
+                        }
+                    } else {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ReceiptLong,
+                            if (expense?.hasReceiptPhoto == true || (expense?.receiptCount ?: 0) > 0) "Просмотреть чеки" else "Прикрепить чек",
+                            tint = receiptColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
             }
 
@@ -390,7 +398,13 @@ private fun ReceiptAttachmentsDialog(
     val context = androidx.compose.ui.platform.LocalContext.current
     var busy by remember { mutableStateOf(false) }
     var selectedCount by remember { mutableStateOf(0) }
+    val receiptsMap by viewModel.expenseReceipts.collectAsState()
+    val receipts = receiptsMap[expense.id].orEmpty()
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    LaunchedEffect(expense.id) {
+        viewModel.loadExpenseReceipts(expense.id)
+    }
 
     fun createCameraUri(): Uri? {
         val values = ContentValues().apply {
@@ -459,6 +473,11 @@ private fun ReceiptAttachmentsDialog(
         }
     }
 
+    if (expense.category == "WITHOUT_RECEIPT") {
+        onDismiss()
+        return
+    }
+
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text("Чеки и вложения") },
@@ -473,6 +492,22 @@ private fun ReceiptAttachmentsDialog(
                 }
                 if (selectedCount > 0) {
                     Text("Загружено сейчас: $selectedCount", style = MaterialTheme.typography.bodySmall)
+                }
+                if (receipts.isNotEmpty()) {
+                    Text("Загруженные вложения:", style = MaterialTheme.typography.labelMedium)
+                    receipts.forEach { receipt ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(18.dp))
+                            Text(receipt.fileName, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            IconButton(onClick = {
+                                viewModel.deleteExpenseReceipt(expense.id, receipt.id)
+                            }) { Icon(Icons.Default.Delete, "Удалить", tint = MaterialTheme.colorScheme.error) }
+                        }
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
