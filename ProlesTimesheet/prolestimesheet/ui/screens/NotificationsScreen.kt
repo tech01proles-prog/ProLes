@@ -19,7 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.Notification
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
+import com.example.prolestimesheet.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -117,6 +117,14 @@ fun NotificationsScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
             ) {
+                item {
+                    ProlesHero(
+                        title = "Уведомления",
+                        subtitle = "События, решения и важные изменения",
+                        icon = Icons.Default.NotificationsActive,
+                        gradient = listOf(Color(0xFFF59E0B), Color(0xFFE11D48), Color(0xFF7C3AED))
+                    )
+                }
                 items(notifications, key = { it.id }) { notif ->
                     NotificationCard(
                         notification = notif,
