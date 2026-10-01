@@ -129,6 +129,9 @@ fun TimesheetScreen(
     LaunchedEffect(selectedDate) { currentMonth = YearMonth.of(selectedDate.year, selectedDate.monthNumber) }
 
     var selectedProject by remember { mutableStateOf<Project?>(null) }
+    var selectedSubprojectId by remember { mutableStateOf<String?>(null) }
+    var selectedSubprojectName by remember { mutableStateOf("") }
+    var showSubprojectDropdown by remember { mutableStateOf(false) }
     var hours by remember { mutableStateOf("") }
     var comment by remember { mutableStateOf("") }
     var totalH by remember { mutableStateOf("") }
@@ -153,6 +156,9 @@ fun TimesheetScreen(
 
     fun clearAll() {
         selectedProject = null
+        selectedSubprojectId = null
+        selectedSubprojectName = ""
+        showSubprojectDropdown = false
         hours = ""
         comment = ""
         totalH = ""
@@ -244,6 +250,21 @@ fun TimesheetScreen(
                     Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(selectedProject?.name ?: "Добавить часы", fontSize = 16.sp, maxLines = 1)
+                }
+            }
+            if (selectedProject?.subprojects?.any { it.isActive } == true) {
+                OutlinedButton(
+                    onClick = { showSubprojectDropdown = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isOnVacation
+                ) {
+                    Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        selectedSubprojectName.ifBlank { "Без подпроекта" },
+                        fontSize = 14.sp,
+                        maxLines = 1
+                    )
                 }
             }
 
@@ -405,7 +426,9 @@ fun TimesheetScreen(
                                     selectedProject!!.name,
                                     hours.toFloatOrNull() ?: 0f,
                                     selectedCountry,
-                                    comment
+                                    comment,
+                                    selectedSubprojectId,
+                                    selectedSubprojectName
                                 )
                                 if (result is TimesheetViewModel.AddEntryResult.Error) {
                                     Toast.makeText(context, "❌ ${result.message}", Toast.LENGTH_LONG).show()
@@ -665,6 +688,8 @@ fun TimesheetScreen(
                                     .fillMaxWidth()
                                     .clickable {
                                         selectedProject = proj
+                                        selectedSubprojectId = null
+                                        selectedSubprojectName = ""
                                         showProjectDropdown = false
                                     }
                                     .padding(vertical = 6.dp, horizontal = 4.dp),
@@ -727,6 +752,44 @@ fun TimesheetScreen(
                 TextButton(onClick = { showProjectDropdown = false }) {
                     Text("Отмена")
                 }
+            }
+        )
+    }
+
+    if (showSubprojectDropdown) {
+        AlertDialog(
+            onDismissRequest = { showSubprojectDropdown = false },
+            title = { Text("Выберите подпроект") },
+            text = {
+                LazyColumn {
+                    item {
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                selectedSubprojectId = null
+                                selectedSubprojectName = ""
+                                showSubprojectDropdown = false
+                            }.padding(vertical = 12.dp)
+                        ) { Text("Без подпроекта") }
+                    }
+                    items(selectedProject?.subprojects?.filter { it.isActive }.orEmpty()) { sub ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                selectedSubprojectId = sub.id
+                                selectedSubprojectName = sub.name
+                                showSubprojectDropdown = false
+                            }.padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(sub.name)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showSubprojectDropdown = false }) { Text("Отмена") }
             }
         )
     }
