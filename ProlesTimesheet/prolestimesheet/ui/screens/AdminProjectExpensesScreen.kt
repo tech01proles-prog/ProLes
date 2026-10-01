@@ -81,6 +81,14 @@ fun AdminProjectExpensesScreen(
         }
     ) { padding ->
         Column(modifier = modifier.padding(padding).fillMaxSize()) {
+            ProlesHero(
+                title = "Расходы по проектам",
+                subtitle = "Проектные бюджеты и операции в одном месте",
+                icon = Icons.Default.AccountBalanceWallet,
+                gradient = listOf(Color(0xFFF97316), Color(0xFFE11D48), Color(0xFF7C3AED))
+            )
+            Spacer(Modifier.height(6.dp))
+
             // Выпадающий список проектов
             Card(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
