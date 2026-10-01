@@ -99,6 +99,7 @@ fun ProfileScreen(
     onNavigateToMyExpenses: () -> Unit,
     onNavigateToMyTrips: () -> Unit,
     onNavigateToNotifications: () -> Unit,
+    onNavigateToNotificationSettings: () -> Unit,
     onNavigateToMyTickets: () -> Unit,  // 🆕
     onNavigateToStats: () -> Unit,  // 🆕 Статистика сотрудника
     onNavigateToExpensesIncomes: () -> Unit,  // 🆕 Расходы/Доходы
@@ -403,6 +404,15 @@ fun ProfileScreen(
         }
 
         Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = onNavigateToNotificationSettings,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Настройки уведомлений")
+        }
 
         // Строка 3: Статистика + Выход
         Row(
