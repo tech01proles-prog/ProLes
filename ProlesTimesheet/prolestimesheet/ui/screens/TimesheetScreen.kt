@@ -102,7 +102,7 @@ import java.time.format.TextStyle
 import java.util.Locale
 import androidx.compose.ui.graphics.RectangleShape
 import android.content.ContentValues
-import android.net.Uri
+
 import android.provider.MediaStore
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -258,7 +258,7 @@ fun TimesheetScreen(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isOnVacation
                 ) {
-                    Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
                         selectedSubprojectName.ifBlank { "Без подпроекта" },
@@ -780,7 +780,7 @@ fun TimesheetScreen(
                             }.padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(sub.name)
                         }
@@ -1041,7 +1041,7 @@ fun TimesheetScreen(
                             onClick = { showExpenseSubprojectPicker = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(dialogSubprojectName.ifBlank { "Без подпроекта" })
                         }
@@ -1335,7 +1335,6 @@ fun TimesheetScreen(
                 confirmButton = {}
             )
         }
-    }
 
         if (showExpenseSubprojectPicker) {
             AlertDialog(
@@ -1363,7 +1362,7 @@ fun TimesheetScreen(
                                 }.padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text(sub.name)
                             }
@@ -1373,8 +1372,7 @@ fun TimesheetScreen(
                 confirmButton = {}
             )
         }
-
-    // 💵 Диалог добавления дохода
+    }    // 💵 Диалог добавления дохода
     if (showIncomeDialog) {
         var incomeName by remember { mutableStateOf("") }
         var incomeAmount by remember { mutableStateOf("") }
@@ -1411,7 +1409,7 @@ fun TimesheetScreen(
                             onClick = { showIncomeSubprojectPicker = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.AccountTree, null, Modifier.size(18.dp))
+                            Icon(Icons.Default.Folder, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(incomeSubprojectName.ifBlank { "Без подпроекта" })
                         }
@@ -2010,7 +2008,7 @@ fun VacationPickerDialog(
                                 }.padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text(sub.name)
                             }
