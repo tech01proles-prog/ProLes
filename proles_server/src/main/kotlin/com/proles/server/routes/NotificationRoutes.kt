@@ -66,61 +66,48 @@ internal fun Route.notificationRoutes() {
 
         post {
             val session = call.checkSession() ?: return@post
-            val req = try { call.receive<CreateNotificationRequest>() }
-            catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest) }
+            val req = try {
+                call.receive<CreateNotificationRequest>()
+            } catch (e: Exception) {
+                return@post call.respond(HttpStatusCode.BadRequest)
+            }
+
+            val preferenceKey = when (req.type.uppercase()) {
+                "VACATION", "VACATION_CREATED", "VACATION_UPDATED" -> "vacation"
+                "TRIP", "TRIP_CREATED" -> "trip"
+                "TRIP_COMPLETED", "TRIP_UPDATED" -> "tripChange"
+                "DAYOFF_WEEKDAY" -> "dayoff"
+                "TICKET", "TICKET_CREATED" -> "ticket"
+                "TICKET_RECEIPT" -> "ticketReceipt"
+                "EXPENSE", "EXPENSE_CREATED", "EXPENSE_UPDATED" -> "expense"
+                "PAYROLL", "SALARY" -> "payroll"
+                "CHAT", "CHAT_MESSAGE" -> "chatMessage"
+                "VACATION_DECISION" -> "vacationDecision"
+                else -> ""
+            }
 
             val targetUserIds = transaction {
-                if (req.type in listOf("VACATION", "TRIP", "DAYOFF_WEEKDAY")) {
-                    UsersTable.selectAll()
-                        .where { (UsersTable.role eq "admin") or (UsersTable.role eq "director") }
-                        .map { it[UsersTable.id].value }
-                        .filter { it != session.userId }
-                } else emptyList()
+                UsersTable.selectAll()
+                    .map { it[UsersTable.id].value }
+                    .filter { it != session.userId }
             }
 
-            transaction {
-                val targets = if (targetUserIds.isEmpty()) listOf<UUID?>(null)
-                else targetUserIds.map { it }
-                targets.forEach { targetId ->
-                    NotificationsTable.insert {
-                        it[id] = UUID.randomUUID()
-                        it[targetUserId] = targetId
-                        it[senderUserId] = session.userId
-                        it[type] = req.type
-                        it[title] = req.title
-                        it[message] = req.message
-                        it[payload] = req.payload
-                        it[createdAt] = System.currentTimeMillis()
-                    }
-                }
-            }
+            NotificationService.notifyUsers(
+                targetUserIds = targetUserIds,
+                senderUserId = session.userId,
+                type = req.type,
+                title = req.title,
+                message = req.message,
+                payload = req.payload,
+                preferenceKey = preferenceKey,
+                deliverTelegram = false
+            )
 
-            // ✅ ОТПРАВКА ПУШЕЙ С ЛОГИРОВАНИЕМ
-            CoroutineScope(Dispatchers.IO).launch {
-                println("🔔 Начинаем отправку FCM пушей для уведомления типа ${req.type}")
-
-                val tokens = transaction {
-                    FcmTokensTable.selectAll().map { it[FcmTokensTable.token] }
-                }
-
-                println("📱 Найдено токенов в БД: ${tokens.size}")
-                if (tokens.isEmpty()) {
-                    println("⚠️ В БД нет ни одного FCM токена! Клиенты не зарегистрировались.")
-                }
-
-                tokens.forEach { token ->
-                    FirebaseService.sendPush(
-                        token = token,
-                        title = req.title,
-                        body = req.message,
-                        data = mapOf("type" to req.type, "payload" to req.payload)
-                    )
-                }
-            }
-
-            call.respond(HttpStatusCode.Created, mapOf("sent" to targetUserIds.size))
+            call.respond(
+                HttpStatusCode.Created,
+                mapOf("sent" to targetUserIds.size)
+            )
         }
-
         post("/mark-read") {
             val session = call.checkSession() ?: return@post
             val body = call.receive<Map<String, String>>()
