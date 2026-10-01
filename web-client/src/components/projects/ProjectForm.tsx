@@ -14,6 +14,7 @@ export interface ProjectFormValue {
 }
 
 interface ProjectFormProps {
+  initialValue?: ProjectDto | null;
   submitting?: boolean;
   onCancel: () => void;
   onSubmit: (value: ProjectFormValue) => void | Promise<void>;
@@ -39,12 +40,35 @@ const FIELD_CLASS_NAME = [
 ].join(' ');
 
 export function ProjectForm({
+  initialValue = null,
   submitting = false,
   onCancel,
   onSubmit,
 }: ProjectFormProps) {
-  const [value, setValue] = useState(INITIAL_VALUE);
+  const toFormValue = (project: ProjectDto | null): ProjectFormValue =>
+    project
+      ? {
+          name: project.name,
+          client: project.client,
+          location: project.location,
+          productService: project.productService,
+          quantity: String(project.quantity || 1),
+          deliveryDate: project.deliveryDate || '',
+          contract: project.contract,
+          status: project.status,
+          isActive: project.isActive,
+        }
+      : INITIAL_VALUE;
+
+  const [value, setValue] = useState<ProjectFormValue>(
+    toFormValue(initialValue),
+  );
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setValue(toFormValue(initialValue));
+    setError('');
+  }, [initialValue]);
 
   const update = <K extends keyof ProjectFormValue>(
     field: K,
