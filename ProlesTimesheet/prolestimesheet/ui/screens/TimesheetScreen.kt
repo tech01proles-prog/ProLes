@@ -340,7 +340,7 @@ fun TimesheetScreen(
                         icon = Icons.Default.Train,
                         title = "Командировка",
                         subtitle = "Добавить поездку",
-                        tint = ProlesExpense,
+                        tint = ProlesPrimary,
                         enabled = !isOnVacation,
                         onClick = { showTripDialog = true }
                     )
