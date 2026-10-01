@@ -1032,6 +1032,75 @@ object ApiClient {
     // 🔔 NOTIFICATIONS
     // ═══════════════════════════════════════════════════════════
 
+    suspend fun fetchNotificationPreferences(): Result<NotificationPreferencesDto> {
+        return try {
+            val response = client.get("$BASE_URL/notification-preferences") {
+                authToken?.let { header("X-Session-Token", it) }
+            }
+            if (response.status == HttpStatusCode.OK) Result.success(response.body())
+            else Result.failure(Exception("Server error " + response.status))
+        } catch (e: Exception) {
+            Log.e("ApiClient", "💥 fetchNotificationPreferences", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateNotificationPreferences(prefs: NotificationPreferencesDto): Result<NotificationPreferencesDto> {
+        return try {
+            val body = buildMap<String, String> {
+                put("tripEnabled", prefs.tripEnabled.toString())
+                put("vacationEnabled", prefs.vacationEnabled.toString())
+                put("dayoffEnabled", prefs.dayoffEnabled.toString())
+                put("expenseEnabled", prefs.expenseEnabled.toString())
+                put("payrollEnabled", prefs.payrollEnabled.toString())
+                put("ticketEnabled", prefs.ticketEnabled.toString())
+                put("tripVisibleToAll", prefs.tripVisibleToAll.toString())
+                put("tripChangeEnabled", prefs.tripChangeEnabled.toString())
+                put("vacationDecisionEnabled", prefs.vacationDecisionEnabled.toString())
+                put("ticketReceiptEnabled", prefs.ticketReceiptEnabled.toString())
+                put("chatMessageEnabled", prefs.chatMessageEnabled.toString())
+                put("telegramEnabled", prefs.telegramEnabled.toString())
+                put("emailEnabled", prefs.emailEnabled.toString())
+                put("email", prefs.email)
+            }
+            val response = client.put("$BASE_URL/notification-preferences") {
+                contentType(ContentType.Application.Json)
+                setBody(body)
+                authToken?.let { header("X-Session-Token", it) }
+            }
+            if (response.status == HttpStatusCode.OK) fetchNotificationPreferences()
+            else Result.failure(Exception("Server error " + response.status + ": " + response.bodyAsText()))
+        } catch (e: Exception) {
+            Log.e("ApiClient", "💥 updateNotificationPreferences", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchExpenseReceipts(expenseId: String): Result<List<ExpenseReceiptDto>> {
+        return try {
+            val response = client.get("$BASE_URL/expenses/receipts?expenseId=$expenseId") {
+                authToken?.let { header("X-Session-Token", it) }
+            }
+            if (response.status == HttpStatusCode.OK) Result.success(response.body())
+            else Result.failure(Exception("Server error " + response.status))
+        } catch (e: Exception) {
+            Log.e("ApiClient", "💥 fetchExpenseReceipts", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteExpenseReceipt(receiptId: String): Result<Unit> {
+        return try {
+            val response = client.delete("$BASE_URL/expenses/receipt?receiptId=$receiptId") {
+                authToken?.let { header("X-Session-Token", it) }
+            }
+            if (response.status == HttpStatusCode.NoContent || response.status == HttpStatusCode.OK) Result.success(Unit)
+            else Result.failure(Exception("Server error " + response.status))
+        } catch (e: Exception) {
+            Log.e("ApiClient", "💥 deleteExpenseReceipt", e)
+            Result.failure(e)
+        }
+    }
     suspend fun markAllNotificationsRead(): Result<Unit> {
         return try {
             val response = client.post("$BASE_URL/notifications/mark-all-read") {
@@ -1439,6 +1508,7 @@ object ApiClient {
     suspend fun uploadTicket(
         context: android.content.Context,
         projectId: String,
+        subprojectId: String? = null,
         description: String,
         amount: Double,          // 🆕
         currency: String,        // 🆕
@@ -1499,6 +1569,7 @@ object ApiClient {
             // Формируем JSON
             val requestBody = TicketUploadRequest(
                 projectId = projectId,
+                subprojectId = subprojectId,
                 description = description,
                 sendToAccountant = sendToAccountant,
                 accountantEmail = accountantEmail,
