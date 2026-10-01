@@ -2,6 +2,7 @@ package com.example.prolestimesheet.ui.theme
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -240,5 +241,43 @@ fun ProlesDestructiveButton(
             Spacer(Modifier.width(8.dp))
         }
         Text(text)
+    }
+}
+
+@Composable
+fun ProlesHero(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    gradient: List<Color> = listOf(Color(0xFF059669), Color(0xFF0EA5E9), Color(0xFF4F46E5)),
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(22.dp)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Brush.linearGradient(gradient), shape)
+            .padding(18.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = Color.White.copy(alpha = 0.18f)
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.padding(10.dp).size(24.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.headlineMedium, color = Color.White)
+                Spacer(Modifier.height(2.dp))
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.82f))
+            }
+        }
     }
 }
