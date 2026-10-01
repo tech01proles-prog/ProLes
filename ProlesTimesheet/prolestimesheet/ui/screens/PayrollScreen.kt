@@ -143,14 +143,13 @@ fun PayrollScreen(
                         .fillMaxWidth()
                         .background(
                             Brush.linearGradient(
-                                listOf(Color(0xFF059669), Color(0xFF0EA5E9), Color(0xFF4F46E5)),
-                                RoundedCornerShape(22.dp)
+                                listOf(Color(0xFF059669), Color(0xFF0EA5E9), Color(0xFF4F46E5))
                             )
                         )
                         .padding(18.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        ProlesIconBadge(Icons.Default.Payments, Color.White, size = 42.dp)
+                        ProlesIconBadge(Icons.Default.AccountBalanceWallet, Color.White, size = 42.dp)
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text("Расчёт зарплаты", style = MaterialTheme.typography.headlineMedium, color = Color.White)
