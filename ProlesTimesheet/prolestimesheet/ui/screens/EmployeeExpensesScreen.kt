@@ -305,57 +305,82 @@ fun EmployeeExpensesScreen(
             }
         )
     }
-}
 
-
-// Просмотр уже загруженных чеков/вложений
-viewingExpense?.let { expense ->
-    val receipts = expenseReceipts[expense.id].orEmpty()
-    AlertDialog(
-        onDismissRequest = { viewingExpense = null },
-        title = { Text("Чеки: " + (expense.name.ifBlank { "расход" })) },
-        text = {
-            if (receipts.isEmpty()) {
-                Text("Вложения пока не найдены.")
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(receipts, key = { it.id }) { receipt ->
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(18.dp))
-                            Text(receipt.fileName, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            IconButton(onClick = {
-                                scope.launch(Dispatchers.IO) {
-                                    val uri = com.example.prolestimesheet.network.DownloadManager.download(
-                                        context, receipt.url, receipt.fileName, "application/octet-stream"
-                                    )
-                                    if (uri != null) {
-                                        withContext(Dispatchers.Main) {
-                                            runCatching {
-                                                context.startActivity(Intent(Intent.ACTION_VIEW).apply {
-                                                    setDataAndType(uri, context.contentResolver.getType(uri) ?: "application/octet-stream")
-                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                })
+    // Просмотр уже загруженных чеков/вложений
+    viewingExpense?.let { expense ->
+        val receipts = expenseReceipts[expense.id].orEmpty()
+        AlertDialog(
+            onDismissRequest = { viewingExpense = null },
+            title = { Text("Чеки: " + (expense.name.ifBlank { "расход" })) },
+            text = {
+                if (receipts.isEmpty()) {
+                    Text("Вложения пока не найдены.")
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(receipts, key = { it.id }) { receipt ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Text(
+                                    receipt.fileName,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                IconButton(
+                                    onClick = {
+                                        scope.launch(Dispatchers.IO) {
+                                            val uri = com.example.prolestimesheet.network.DownloadManager.download(
+                                                context,
+                                                receipt.url,
+                                                receipt.fileName,
+                                                "application/octet-stream"
+                                            )
+                                            if (uri != null) {
+                                                withContext(Dispatchers.Main) {
+                                                    runCatching {
+                                                        context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                                                            setDataAndType(
+                                                                uri,
+                                                                context.contentResolver.getType(uri)
+                                                                    ?: "application/octet-stream"
+                                                            )
+                                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                        })
+                                                    }
+                                                }
                                             }
                                         }
                                     }
-                                }) { Icon(Icons.Default.OpenInNew, "Открыть") }
-                            IconButton(onClick = {
-                                viewModel.deleteExpenseReceipt(expense.id, receipt.id)
-                            }) { Icon(Icons.Default.Delete, "Удалить", tint = MaterialTheme.colorScheme.error) }
+                                ) {
+                                    Icon(Icons.Default.OpenInNew, "Открыть")
+                                }
+                                IconButton(
+                                    onClick = {
+                                        viewModel.deleteExpenseReceipt(expense.id, receipt.id)
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        "Удалить",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewingExpense = null }) {
+                    Text("Готово")
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = { viewingExpense = null }) { Text("Готово") }
-        }
-    )
-}
+        )
+    }
 
 // 🔹 Заголовок таблицы для админа
 @Composable
