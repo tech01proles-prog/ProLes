@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.Expense
 import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
+import com.example.prolestimesheet.ui.theme.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
