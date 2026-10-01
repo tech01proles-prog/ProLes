@@ -1,5 +1,6 @@
 package com.example.prolestimesheet.ui.theme
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -207,7 +208,7 @@ fun ProlesSecondaryButton(
         onClick = onClick,
         modifier = modifier.fillMaxWidth().height(48.dp),
         shape = RoundedCornerShape(14.dp),
-        border = ButtonDefaults.outlinedButtonBorder.copy(color = ProlesBorder)
+        border = BorderStroke(1.dp, ProlesBorder)
     ) {
         if (icon != null) {
             Icon(icon, null, modifier = Modifier.size(18.dp))
@@ -232,7 +233,7 @@ fun ProlesDestructiveButton(
             containerColor = ProlesExpenseSoft,
             contentColor = ProlesExpense
         ),
-        border = ButtonDefaults.outlinedButtonBorder.copy(color = ProlesExpense.copy(alpha = 0.15f))
+        border = BorderStroke(1.dp, ProlesExpense.copy(alpha = 0.15f))
     ) {
         if (icon != null) {
             Icon(icon, null, modifier = Modifier.size(18.dp))
