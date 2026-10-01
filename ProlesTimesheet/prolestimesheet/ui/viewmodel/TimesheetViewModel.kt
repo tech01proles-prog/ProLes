@@ -794,7 +794,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         name: String,
         amount: Double,
         currency: String,
-        type: String = "WORK",
+        type: String = "HOUSEHOLD",
         category: String = "SALARY",
         subcategory: String? = null,
         subprojectId: String? = null,
