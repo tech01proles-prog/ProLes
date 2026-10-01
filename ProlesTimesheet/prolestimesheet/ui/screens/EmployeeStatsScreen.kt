@@ -157,6 +157,15 @@ fun EmployeeStatsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
+            item {
+                ProlesHero(
+                    title = "Моя статистика",
+                    subtitle = "Часы, доходы, расходы и баланс",
+                    icon = Icons.Default.AutoGraph,
+                    gradient = listOf(Color(0xFF7C3AED), Color(0xFF4F46E5), Color(0xFF0EA5E9))
+                )
+            }
+
             // Переключатель периода
             item {
                 Row(
