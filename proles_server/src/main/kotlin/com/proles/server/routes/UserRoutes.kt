@@ -93,7 +93,9 @@ internal fun Route.userRoutes() {
                     it[passwordHash] = hash
                     it[role] = user.role
                     it[position] = user.position
-                    it[positionId] = user.positionId?.let(UUID::fromString)
+                    it[positionId] = user.positionId?.trim()?.takeIf { value -> value.isNotBlank() }?.let {
+                        runCatching { UUID.fromString(it) }.getOrNull()
+                    }
                     it[UsersTable.isRemote] = user.isRemote
                     it[defaultRateType] = user.defaultRateType
                     it[defaultRate] = user.defaultRate
@@ -122,8 +124,8 @@ internal fun Route.userRoutes() {
                     it[phone] = body.phone
                     it[telegramUsername] = body.telegramUsername
                     it[birthDate] = body.birthDate?.trim()?.takeIf { value -> value.isNotBlank() }?.let {
-                    runCatching { KtLocalDate.parse(it) }.getOrNull()
-                }
+                        runCatching { KtLocalDate.parse(it) }.getOrNull()
+                    }
                 }
                 body.copy(id = session.userId.toString())
             }
@@ -152,14 +154,18 @@ internal fun Route.userRoutes() {
                     it[passwordHash] = hash
                     it[role] = user.role
                     it[position] = user.position
-                    it[positionId] = user.positionId?.let(UUID::fromString)
+                    it[positionId] = user.positionId?.trim()?.takeIf { value -> value.isNotBlank() }?.let {
+                        runCatching { UUID.fromString(it) }.getOrNull()
+                    }
                     it[UsersTable.isRemote] = user.isRemote
                     it[defaultRateType] = user.defaultRateType
                     it[defaultRate] = user.defaultRate
                     it[defaultCurrency] = user.defaultCurrency
                     it[phone] = user.phone
                     it[telegramUsername] = user.telegramUsername
-                    it[birthDate] = user.birthDate?.let(KtLocalDate::parse)
+                    it[birthDate] = user.birthDate?.trim()?.takeIf { value -> value.isNotBlank() }?.let {
+                        runCatching { KtLocalDate.parse(it) }.getOrNull()
+                    }
                 }
                 user
             }
