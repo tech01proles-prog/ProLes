@@ -1011,6 +1011,21 @@ object ApiClient {
     }
 
     // 🆕 Удалить командировку
+    suspend fun completeBusinessTrip(tripId: String, endDate: LocalDate): Result<BusinessTrip> {
+        return try {
+            val response = client.post("$BASE_URL/business-trips/$tripId/complete") {
+                contentType(ContentType.Application.Json)
+                setBody(mapOf("endDate" to endDate.toString()))
+                authToken?.let { header("X-Session-Token", it) }
+            }
+            if (response.status == HttpStatusCode.OK) Result.success(response.body())
+            else Result.failure(Exception("Server error " + response.status + ": " + response.bodyAsText()))
+        } catch (e: Exception) {
+            Log.e("ApiClient", "💥 completeBusinessTrip", e)
+            Result.failure(e)
+        }
+    }
+
     suspend fun deleteBusinessTrip(tripId: String): Result<Unit> {
         return try {
             val response = client.delete("$BASE_URL/business-trips?tripId=$tripId") {
