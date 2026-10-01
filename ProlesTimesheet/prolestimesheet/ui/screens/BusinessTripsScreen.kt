@@ -57,6 +57,7 @@ fun BusinessTripsScreen(
 
     var showAddDialog by remember { mutableStateOf(false) }
     var editingTrip by remember { mutableStateOf<BusinessTrip?>(null) }
+    var completingTrip by remember { mutableStateOf<BusinessTrip?>(null) }
     // 🔥 Если нет прав на просмотр всех — принудительно выключаем isAdminView
     val effectiveIsAdminView = isAdminView && canViewAll
 
@@ -111,7 +112,8 @@ fun BusinessTripsScreen(
                         employeeName = empName,
                         isAdminView = effectiveIsAdminView,
                         onEdit = { editingTrip = trip },
-                        onDelete = { viewModel.removeBusinessTrip(trip.id) }
+                        onDelete = { viewModel.removeBusinessTrip(trip.id) },
+                        onComplete = { completingTrip = trip }
                     )
                 }
             }
@@ -148,7 +150,25 @@ fun BusinessTripsScreen(
                 viewModel.updateBusinessTrip(updated)
                 editingTrip = null
             }
+        )    completingTrip?.let { trip ->
+        TripCompletionDialog(
+            trip = trip,
+            onDismiss = { completingTrip = null },
+            onConfirm = { endDate ->
+                viewModel.completeBusinessTrip(trip.id, endDate) { ok ->
+                    if (!ok) {
+                        android.widget.Toast.makeText(
+                            null,
+                            "Не удалось завершить командировку",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    completingTrip = null
+                }
+            }
         )
+    }
+
     }
 }
 
@@ -158,7 +178,8 @@ private fun TripCard(
     employeeName: String,
     isAdminView: Boolean,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onComplete: () -> Unit
 ) {
     val (typeLabel, typeColor, typeIcon) = when (trip.type) {
         "DEPARTURE" -> Triple("🚆 Отъезд", Color(0xFF0277BD), Icons.Default.Train)
@@ -244,6 +265,16 @@ private fun TripCard(
             if (!isAdminView) {
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    if (trip.status != "COMPLETED") {
+                        TextButton(
+                            onClick = onComplete,
+                            colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF2E7D32))
+                        ) {
+                            Icon(Icons.Default.TaskAlt, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Завершить")
+                        }
+                    }
                     TextButton(onClick = onEdit) {
                         Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
@@ -312,7 +343,10 @@ fun TripDialog(
     // 🔥 Проект: для TRANSFER и COMPLETION подтягивается из активной командировки
     var projectId by remember { mutableStateOf(trip?.projectId ?: activeTrip?.projectId ?: "") }
     var projectName by remember { mutableStateOf(trip?.projectName ?: activeTrip?.projectName ?: "") }
-    var date by remember { mutableStateOf(trip?.date ?: today) }
+    var subprojectId by remember { mutableStateOf(trip?.subprojectId) }
+    var subprojectName by remember { mutableStateOf(trip?.subprojectName ?: "") }
+    var date by remember { mutableStateOf(trip?.startDate ?: trip?.date ?: today) }
+    var endDate by remember { mutableStateOf(trip?.endDate) }
     var city by remember { mutableStateOf(trip?.city ?: "") }
     // 🆕 Пункты следования (waypoints)
     var waypoints by remember { mutableStateOf(trip?.waypoints ?: emptyList()) }
@@ -349,7 +383,9 @@ fun TripDialog(
     var transport by remember { mutableStateOf(trip?.transport ?: "") }
     var notes by remember { mutableStateOf(trip?.notes ?: "") }
     var showProjectPicker by remember { mutableStateOf(false) }
+    var showSubprojectPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
 
     // 🆕 Размер суточных
     var perDiemRate by remember { mutableStateOf(trip?.perDiemRate ?: 750.0) }
@@ -459,6 +495,18 @@ fun TripDialog(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                if (projectId.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = { if (type != "COMPLETION") showSubprojectPicker = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = type != "COMPLETION"
+                    ) {
+                        Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(subprojectName.ifBlank { "Без подпроекта" })
+                    }
+                }
+
                 }
 
                 // 🔥 ДАТА
@@ -478,6 +526,20 @@ fun TripDialog(
                     Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(formattedDate)
+                }
+
+                if (type != "COMPLETION") {
+                    OutlinedButton(
+                        onClick = { showEndDatePicker = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Event, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (endDate == null) "Дата окончания (необязательно)"
+                            else "Окончание: %02d.%02d.%04d".format(endDate!!.dayOfMonth, endDate!!.monthNumber, endDate!!.year)
+                        )
+                    }
                 }
 
                 // 🔥 ГОРОД (кроме COMPLETION — там read-only)
@@ -663,10 +725,14 @@ fun TripDialog(
                     val newTrip = BusinessTrip(
                         id = trip?.id ?: java.util.UUID.randomUUID().toString(),
                         userId = userId,
-                        projectId = projectId,
+                        projectId = projectId.ifBlank { null },
+                        subprojectId = subprojectId,
+                        subprojectName = subprojectName,
                         projectName = projectName,
                         type = type,
                         date = date,
+                        startDate = date,
+                        endDate = endDate,
                         city = city.trim(),
                         waypoints = waypoints,  // 🆕 Пункты следования
                         participants = selectedParticipants.toList(),
@@ -677,7 +743,7 @@ fun TripDialog(
                     )
                     onConfirm(newTrip)
                 },
-                enabled = projectId.isNotBlank() || type == "COMPLETION"
+                enabled = type == "COMPLETION" || date <= today
             ) { Text("Сохранить") }
         },
         dismissButton = {
@@ -692,11 +758,24 @@ fun TripDialog(
             title = { Text("Куда едете?") },
             text = {
                 LazyColumn {
+                    item {
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                projectId = ""
+                                projectName = "Без проекта"
+                                subprojectId = null
+                                subprojectName = ""
+                                showProjectPicker = false
+                            }.padding(vertical = 10.dp)
+                        ) { Text("Без проекта") }
+                    }
                     items(projects.filter { it.isActive }) { proj ->
                         Row(
                             modifier = Modifier.fillMaxWidth().clickable {
                                 projectId = proj.id
                                 projectName = proj.name
+                                subprojectId = null
+                                subprojectName = ""
                                 showProjectPicker = false
                             }.padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -709,6 +788,41 @@ fun TripDialog(
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(proj.name, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    if (showSubprojectPicker) {
+        AlertDialog(
+            onDismissRequest = { showSubprojectPicker = false },
+            title = { Text("Выберите подпроект") },
+            text = {
+                LazyColumn {
+                    item {
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                subprojectId = null
+                                subprojectName = ""
+                                showSubprojectPicker = false
+                            }.padding(vertical = 10.dp)
+                        ) { Text("Без подпроекта") }
+                    }
+                    items(projects.firstOrNull { it.id == projectId }?.subprojects?.filter { it.isActive }.orEmpty()) { sub ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                subprojectId = sub.id
+                                subprojectName = sub.name
+                                showSubprojectPicker = false
+                            }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(sub.name)
                         }
                     }
                 }
@@ -763,6 +877,31 @@ fun TripDialog(
         )
     }
 
+    if (showEndDatePicker) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = endDate?.let {
+                java.time.LocalDate.of(it.year, it.monthNumber, it.dayOfMonth)
+                    .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let { millis ->
+                        val jd = java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                        val picked = LocalDate(jd.year, jd.monthValue, jd.dayOfMonth)
+                        if (picked >= date) endDate = picked
+                    }
+                    showEndDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) { Text("Отмена") }
+            }
+        ) { DatePicker(state = pickerState) }
+    }
+
     // Диалог выбора даты
     if (showDatePicker) {
         val pickerState = rememberDatePickerState(
@@ -790,6 +929,56 @@ fun TripDialog(
         ) { DatePicker(state = pickerState) }
     }
 }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TripCompletionDialog(
+    trip: BusinessTrip,
+    onDismiss: () -> Unit,
+    onConfirm: (LocalDate) -> Unit
+) {
+    var selectedDate by remember { mutableStateOf(trip.endDate ?: Clock.System.todayIn(TimeZone.currentSystemDefault())) }
+    var showPicker by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("✅ Завершить командировку") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Дата начала: %02d.%02d.%04d".format(trip.startDate.dayOfMonth, trip.startDate.monthNumber, trip.startDate.year))
+                OutlinedButton(onClick = { showPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Event, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Дата окончания: %02d.%02d.%04d".format(selectedDate.dayOfMonth, selectedDate.monthNumber, selectedDate.year))
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(selectedDate) }, enabled = selectedDate >= trip.startDate) { Text("Завершить") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
+    )
+
+    if (showPicker) {
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = java.time.LocalDate.of(selectedDate.year, selectedDate.monthNumber, selectedDate.dayOfMonth)
+                .atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { millis ->
+                        val jd = java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                        selectedDate = LocalDate(jd.year, jd.monthValue, jd.dayOfMonth)
+                    }
+                    showPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showPicker = false }) { Text("Отмена") } }
+        ) { DatePicker(state = state) }
+    }
+}
+
 // 🆕 Список для пунктов следования (без Drag-and-Drop, т.к. библиотека не подключена)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
