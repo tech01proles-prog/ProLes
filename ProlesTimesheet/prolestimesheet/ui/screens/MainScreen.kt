@@ -130,7 +130,6 @@ fun MainScreen(
             NavigationBar(
                 containerColor = Color.White.copy(alpha = 0.96f),
                 tonalElevation = 0.dp,
-                windowInsets = NavigationBarDefaults.windowInsets
             ) {
                 visibleScreens.take(4).forEach { screen ->
                     NavigationBarItem(
