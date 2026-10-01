@@ -22,7 +22,7 @@ import com.example.prolestimesheet.model.Currency
 import com.example.prolestimesheet.model.RateType
 import com.example.prolestimesheet.model.User
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
+import com.example.prolestimesheet.ui.theme.*
 import java.util.UUID
 import androidx.compose.material3.HorizontalDivider
 
