@@ -70,6 +70,7 @@ fun NotificationSettingsScreen(
 
             val items = listOf(
                 "tripEnabled" to "✈️ Командировки",
+                "tripVisibleToAll" to "👥 Показывать командировки коллегам",
                 "vacationEnabled" to "🏖 Отпуска",
                 "dayoffEnabled" to "🌞 Выходные",
                 "expenseEnabled" to "💸 Расходы",
@@ -84,6 +85,7 @@ fun NotificationSettingsScreen(
             items.forEach { (key, label) ->
                 val checked = when (key) {
                     "tripEnabled" -> prefs.tripEnabled
+                    "tripVisibleToAll" -> prefs.tripVisibleToAll
                     "vacationEnabled" -> prefs.vacationEnabled
                     "dayoffEnabled" -> prefs.dayoffEnabled
                     "expenseEnabled" -> prefs.expenseEnabled
@@ -103,6 +105,7 @@ fun NotificationSettingsScreen(
                                 onCheckedChange = { value ->
                                     prefs = when (key) {
                                         "tripEnabled" -> prefs.copy(tripEnabled = value)
+                                        "tripVisibleToAll" -> prefs.copy(tripVisibleToAll = value)
                                         "vacationEnabled" -> prefs.copy(vacationEnabled = value)
                                         "dayoffEnabled" -> prefs.copy(dayoffEnabled = value)
                                         "expenseEnabled" -> prefs.copy(expenseEnabled = value)
