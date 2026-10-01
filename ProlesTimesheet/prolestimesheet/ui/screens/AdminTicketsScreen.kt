@@ -154,10 +154,6 @@ fun AdminTicketsScreen(
                             )
                         }
                         items(tickets, key = { it.id }) { ticket ->
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(tickets, key = { it.id }) { ticket ->
                             AdminTicketCard(
                                 ticket = ticket,
                                 context = context,
