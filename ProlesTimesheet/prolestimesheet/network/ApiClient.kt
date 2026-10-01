@@ -830,11 +830,16 @@ object ApiClient {
                         id = dto.id,
                         userId = dto.userId,
                         projectId = dto.projectId,
+                        subprojectId = dto.subprojectId,
+                        subprojectName = dto.subprojectName,
                         projectName = dto.projectName,
                         date = LocalDate.parse(dto.date),
                         name = dto.name,
                         amount = dto.amount,
                         currency = dto.currency,
+                        type = dto.type,
+                        category = dto.category,
+                        subcategory = dto.subcategory,
                         createdAt = dto.createdAt
                     )
                 }
@@ -884,11 +889,16 @@ object ApiClient {
                 id = income.id,
                 userId = income.userId,
                 projectId = income.projectId,
+                subprojectId = income.subprojectId,
+                subprojectName = income.subprojectName,
                 projectName = income.projectName,
                 date = income.date.toString(),
+                type = income.type,
                 name = income.name,
                 amount = income.amount,
                 currency = income.currency,
+                category = income.category,
+                subcategory = income.subcategory,
                 createdAt = income.createdAt
             )
             val response = client.post("$BASE_URL/incomes") {
