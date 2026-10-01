@@ -485,11 +485,6 @@ private fun ReceiptAttachmentsDialog(
         }
     }
 
-    if (expense.category == "WITHOUT_RECEIPT") {
-        onDismiss()
-        return
-    }
-
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text("Чеки и вложения") },
