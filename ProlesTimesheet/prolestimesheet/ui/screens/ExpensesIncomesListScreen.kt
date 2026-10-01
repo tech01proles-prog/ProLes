@@ -46,6 +46,7 @@ private data class BalanceItem(
     val name: String,
     val projectName: String?,
     val subprojectName: String? = null,
+    val incomeType: String? = null,
     val expense: Expense? = null
 )
 
@@ -114,7 +115,8 @@ fun ExpensesIncomesListScreen(
                     currency = inc.currency,
                     name = inc.name.ifBlank { incomeTypeLabel(inc.type) },
                     projectName = inc.projectName,
-                    subprojectName = inc.subprojectName
+                    subprojectName = inc.subprojectName,
+                    incomeType = inc.type
                 )
             )
         }
@@ -258,9 +260,9 @@ private fun BalanceSummaryCard(
         Column(Modifier.padding(14.dp)) {
             Text("Сальдо за выбранный месяц", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
-            BalanceAmountsLine("Доходы", income, Color(0xFF2E7D32))
+            BalanceAmountsLine("Доходы", income, ProlesPrimary)
             Spacer(Modifier.height(4.dp))
-            BalanceAmountsLine("Расходы", expense, Color(0xFFC62828))
+            BalanceAmountsLine("Расходы", expense, ProlesExpense)
             Spacer(Modifier.height(8.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
@@ -327,6 +329,12 @@ private fun BalanceRow(
                     )
                 }
 
+                if (!isExpense && !item.incomeType.isNullOrBlank()) {
+                    ProlesPill(
+                        incomeTypeLabel(item.incomeType!!),
+                        tint = ProlesSecondary
+                    )
+                }
                 Text(
                     text = item.name,
                     style = MaterialTheme.typography.bodyLarge,
