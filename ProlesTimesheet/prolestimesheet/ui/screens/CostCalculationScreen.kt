@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
+import com.example.prolestimesheet.ui.theme.*
 import com.example.prolestimesheet.ui.components.NoAccessView
 import com.example.prolestimesheet.ui.components.WipBanner
 
