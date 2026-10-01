@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import type { ProjectDto } from '../../types';
 
 export interface ProjectFormValue {
   name: string;
@@ -243,7 +244,7 @@ export function ProjectForm({
           disabled={submitting}
           className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 disabled:opacity-50"
         >
-          {submitting ? 'Создание…' : 'Создать проект'}
+          {submitting ? 'Сохранение…' : initialValue ? 'Сохранить изменения' : 'Создать проект'}
         </button>
       </div>
     </form>
