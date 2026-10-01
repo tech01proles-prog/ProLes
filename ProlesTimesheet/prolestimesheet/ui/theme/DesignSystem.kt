@@ -260,7 +260,7 @@ fun ProlesSecondaryButton(
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(48.dp),
+        modifier = modifier.fillMaxWidth().height(44.dp),
         shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, ProlesBorder)
     ) {
