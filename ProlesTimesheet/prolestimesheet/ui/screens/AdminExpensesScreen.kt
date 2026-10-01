@@ -259,6 +259,14 @@ fun AdminExpensesScreen(
                 .padding(padding)
                 .fillMaxSize()
         ) {
+            ProlesHero(
+                title = "Расходы сотрудников",
+                subtitle = "Контроль сумм, фильтров и подтверждающих документов",
+                icon = Icons.Default.ReceiptLong,
+                gradient = listOf(Color(0xFFE11D48), Color(0xFFF97316), Color(0xFFF59E0B))
+            )
+            Spacer(Modifier.height(6.dp))
+
             // 🔹 Сводка
             Card(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
