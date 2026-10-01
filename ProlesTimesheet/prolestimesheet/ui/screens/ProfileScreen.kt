@@ -29,6 +29,10 @@ import androidx.compose.ui.unit.sp
 import com.example.prolestimesheet.model.RateType
 import com.example.prolestimesheet.model.User
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
+import kotlin.math.roundToInt
 
 
 // 🔹 Модель периода статистики
@@ -110,6 +114,13 @@ fun ProfileScreen(
     val freshProfile = viewModel.getFreshProfile(user?.id) ?: user
     val expenses by viewModel.expenses.collectAsState()
     val incomes by viewModel.incomes.collectAsState()
+    val currentDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
+    val currentYear = currentDate.year
+    val currentMonth = currentDate.monthNumber
+    val monthDisplayName = listOf(
+        "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+        "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+    )[currentMonth - 1]
 
     Column(
         modifier = modifier
@@ -360,7 +371,7 @@ fun ProfileScreen(
         ) {
             NavigationTile(
                 title = "Сальдо",
-                subtitle = "${userExpenses.size + incomes.filter { it.userId == user?.id }.size} операций",
+                subtitle = "${myExpensesAll.size + myIncomesAll.size} операций",
                 emoji = "💰",
                 gradientColors = listOf(Color(0xFFB3E5FC), Color(0xFF81D4FA)),
                 onClick = onNavigateToExpensesIncomes,
