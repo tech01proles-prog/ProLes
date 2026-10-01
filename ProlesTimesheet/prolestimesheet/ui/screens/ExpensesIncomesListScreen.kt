@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.Expense
 import com.example.prolestimesheet.model.Income
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
+import com.example.prolestimesheet.ui.theme.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -170,6 +170,12 @@ fun ExpensesIncomesListScreen(
                 .padding(padding)
                 .fillMaxSize()
         ) {
+            ProlesHero(
+                title = "Сальдо",
+                subtitle = "Доходы, расходы и баланс за выбранный период",
+                icon = Icons.Default.AccountBalanceWallet,
+                gradient = listOf(Color(0xFF059669), Color(0xFF0EA5A4), Color(0xFF2563EB))
+            )
             BalanceSummaryCard(
                 income = totalIncome,
                 expense = totalExpense,
