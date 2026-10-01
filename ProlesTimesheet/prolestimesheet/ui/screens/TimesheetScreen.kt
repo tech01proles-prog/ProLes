@@ -1477,7 +1477,9 @@ fun TimesheetScreen(
                                 currency = incomeCurrency,
                                 type = incomeType,
                                 category = incomeCategory,
-                                subcategory = incomeSubcategory
+                                subcategory = incomeSubcategory,
+                                subprojectId = incomeSubprojectId,
+                                subprojectName = incomeSubprojectName
                             )
                             showIncomeDialog = false
                         }
