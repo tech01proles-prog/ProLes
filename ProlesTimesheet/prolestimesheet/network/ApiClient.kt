@@ -865,11 +865,16 @@ object ApiClient {
                         id = dto.id,
                         userId = dto.userId,
                         projectId = dto.projectId,
+                        subprojectId = dto.subprojectId,
+                        subprojectName = dto.subprojectName,
                         projectName = dto.projectName,
                         date = LocalDate.parse(dto.date),
                         name = dto.name,
                         amount = dto.amount,
                         currency = dto.currency,
+                        type = dto.type,
+                        category = dto.category,
+                        subcategory = dto.subcategory,
                         createdAt = dto.createdAt
                     )
                 }
