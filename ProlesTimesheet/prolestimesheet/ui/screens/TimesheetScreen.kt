@@ -1625,6 +1625,43 @@ fun TimesheetScreen(
                 confirmButton = {}
             )
         }
+
+if (showIncomeSubprojectPicker) {
+            AlertDialog(
+                onDismissRequest = { showIncomeSubprojectPicker = false },
+                title = { Text("Выберите подпроект") },
+                text = {
+                    LazyColumn {
+                        item {
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    incomeSubprojectId = null
+                                    incomeSubprojectName = ""
+                                    showIncomeSubprojectPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("Без подпроекта") }
+                        }
+                        items(
+                            projects.firstOrNull { it.id == incomeProjectId }?.subprojects?.filter { it.isActive }.orEmpty()
+                        ) { sub ->
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    incomeSubprojectId = sub.id
+                                    incomeSubprojectName = sub.name
+                                    showIncomeSubprojectPicker = false
+                                }.padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(sub.name)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
     }
 
 }
@@ -1982,45 +2019,7 @@ fun VacationPickerDialog(
             TextButton(onClick = onDismiss) { Text("Отмена") }
         },
         modifier = Modifier.widthIn(max = 400.dp)
-    )        if (showIncomeSubprojectPicker) {
-            AlertDialog(
-                onDismissRequest = { showIncomeSubprojectPicker = false },
-                title = { Text("Выберите подпроект") },
-                text = {
-                    LazyColumn {
-                        item {
-                            Row(
-                                Modifier.fillMaxWidth().clickable {
-                                    incomeSubprojectId = null
-                                    incomeSubprojectName = ""
-                                    showIncomeSubprojectPicker = false
-                                }.padding(vertical = 12.dp)
-                            ) { Text("Без подпроекта") }
-                        }
-                        items(
-                            projects.firstOrNull { it.id == incomeProjectId }?.subprojects?.filter { it.isActive }.orEmpty()
-                        ) { sub ->
-                            Row(
-                                Modifier.fillMaxWidth().clickable {
-                                    incomeSubprojectId = sub.id
-                                    incomeSubprojectName = sub.name
-                                    showIncomeSubprojectPicker = false
-                                }.padding(vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text(sub.name)
-                            }
-                        }
-                    }
-                },
-                confirmButton = {}
-            )
-        }
-
-
-}
+    )}
 
 @Composable
 private fun LegendItem(color: Color, label: String) {
