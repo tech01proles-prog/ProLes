@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.NotificationPreferences
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
+import com.example.prolestimesheet.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +62,12 @@ fun NotificationSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            ProlesHero(
+                title = "Настройки уведомлений",
+                subtitle = "Управляйте каналами и типами уведомлений",
+                icon = Icons.Default.NotificationsActive,
+                gradient = listOf(Color(0xFFF59E0B), Color(0xFFE11D48), Color(0xFF7C3AED))
+            )
             Text(
                 "Настройки применяются к уведомлениям внутри ProLes и к FCM-пушам. Telegram — отдельный канал.",
                 style = MaterialTheme.typography.bodyMedium,
