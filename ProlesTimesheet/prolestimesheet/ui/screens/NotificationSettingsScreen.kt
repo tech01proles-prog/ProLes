@@ -5,10 +5,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.NotificationPreferences
@@ -65,7 +67,7 @@ fun NotificationSettingsScreen(
             ProlesHero(
                 title = "Настройки уведомлений",
                 subtitle = "Управляйте каналами и типами уведомлений",
-                icon = Icons.Default.NotificationsActive,
+                icon = Icons.Default.Notifications,
                 gradient = listOf(Color(0xFFF59E0B), Color(0xFFE11D48), Color(0xFF7C3AED))
             )
             Text(
