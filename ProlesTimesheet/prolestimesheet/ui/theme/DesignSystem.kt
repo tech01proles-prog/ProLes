@@ -18,16 +18,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 
-val ProlesCanvas = Color(0xFFF7FAF1)
+val ProlesCanvas = Color(0xFFF7F9F2)
 val ProlesSurface = Color(0xFFFFFFFF)
-val ProlesBorder = Color(0xFFD6E1C5)
-val ProlesText = Color(0xFF17200F)
-val ProlesMuted = Color(0xFF64705A)
-val ProlesPrimary = Color(0xFF84CC16)
-val ProlesPrimarySoft = Color(0xFFECFCCB)
-val ProlesSecondary = Color(0xFF22C55E)
-val ProlesSecondarySoft = Color(0xFFDCFCE7)
+val ProlesBorder = Color(0xFFD2DCC3)
+val ProlesText = Color(0xFF1D2616)
+val ProlesMuted = Color(0xFF65715D)
+val ProlesPrimary = Color(0xFF4D7C0F)
+val ProlesPrimarySoft = Color(0xFFEAF4D3)
+val ProlesSecondary = Color(0xFF15803D)
+val ProlesSecondarySoft = Color(0xFFE4F3E8)
 val ProlesExpense = Color(0xFFE11D48)
 val ProlesExpenseSoft = Color(0xFFFFE4E6)
 val ProlesRestSoft = Color(0xFFFFF7ED)
@@ -189,8 +190,8 @@ fun ProlesCompactAction(
 ) {
     Card(
         modifier = modifier
-            .height(78.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .height(72.dp)
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = tint.copy(alpha = 0.055f)
@@ -201,17 +202,18 @@ fun ProlesCompactAction(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ProlesIconBadge(icon, tint, size = 32.dp)
+            ProlesIconBadge(icon, tint, size = 30.dp)
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     title,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelMedium,
                     color = ProlesText,
-                    maxLines = 1
+                    maxLines = 2,
+                    overflow = TextOverflow.Clip
                 )
                 Text(
                     subtitle,
@@ -302,7 +304,7 @@ fun ProlesHero(
     title: String,
     subtitle: String,
     icon: ImageVector,
-    gradient: List<Color> = listOf(Color(0xFF65A30D), Color(0xFF22C55E), Color(0xFF84CC16)),
+    gradient: List<Color> = listOf(Color(0xFF365314), Color(0xFF15803D), Color(0xFF4D7C0F)),
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(22.dp)
