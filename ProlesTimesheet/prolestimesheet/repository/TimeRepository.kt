@@ -646,6 +646,12 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
         }
     }
 
+    suspend fun completeBusinessTrip(tripId: String, endDate: kotlinx.datetime.LocalDate): Result<BusinessTrip> {
+        return apiClient.completeBusinessTrip(tripId, endDate).onSuccess { updated ->
+            _trips.value = _trips.value.map { if (it.id == updated.id) updated else it }
+        }
+    }
+
     suspend fun updateBusinessTrip(trip: BusinessTrip) {
         apiClient.updateBusinessTrip(trip).onSuccess { updated ->
             _trips.value = _trips.value.map { if (it.id == updated.id) updated else it }
