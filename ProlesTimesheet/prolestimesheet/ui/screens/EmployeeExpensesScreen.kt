@@ -93,7 +93,7 @@ fun EmployeeExpensesScreen(
                 }
 
                 val bytes = source.first
-                if (bytes.isNullOrEmpty()) {
+                if (bytes == null || bytes.isEmpty()) {
                     uploadingExpenseId = null
                     Toast.makeText(context, "Не удалось прочитать фото", Toast.LENGTH_SHORT).show()
                     return@launch
