@@ -174,7 +174,6 @@ fun BusinessTripsScreen(
         )
     }
 
-    }
 }
 
 @Composable
