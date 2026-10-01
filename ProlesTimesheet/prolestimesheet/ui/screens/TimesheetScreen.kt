@@ -1744,18 +1744,33 @@ private fun TimesheetActionTile(
     onClick: () -> Unit
 ) {
     ProlesCard(
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        containerColor = tint.copy(alpha = 0.08f),
+        modifier = modifier.height(72.dp),
+        shape = RoundedCornerShape(16.dp),
+        containerColor = tint.copy(alpha = 0.07f),
         onClick = if (enabled) onClick else null
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ProlesIconBadge(icon, tint, size = 38.dp)
-            Spacer(Modifier.width(9.dp))
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ProlesIconBadge(icon, tint, size = 32.dp)
+            Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = ProlesText, maxLines = 1)
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = ProlesText,
+                    maxLines = 2,
+                    overflow = TextOverflow.Clip
+                )
                 Spacer(Modifier.height(1.dp))
-                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = ProlesMuted, maxLines = 2)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ProlesMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
