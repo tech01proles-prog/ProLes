@@ -507,7 +507,7 @@ fun TripDialog(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = type != "COMPLETION"
                     ) {
-                        Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(subprojectName.ifBlank { "Без подпроекта" })
                     }
@@ -826,7 +826,7 @@ fun TripDialog(
                             }.padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(sub.name)
                         }
