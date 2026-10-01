@@ -27,7 +27,8 @@ import java.util.Locale
 fun NotificationsScreen(
     viewModel: TimesheetViewModel,
     onBack: () -> Unit,
-    initialPayload: String? = null,  // 🆕 ДОБАВЛЕНО
+    initialPayload: String? = null,
+    onOpenSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val notifications by viewModel.notifications.collectAsState()
