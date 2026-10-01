@@ -200,23 +200,73 @@ fun ProfileScreen(
         }
 
         ProlesSectionTitle(title = "Быстрый доступ")
-        ProlesQuickAction(Icons.AutoMirrored.Filled.ReceiptLong, "Расходы и доходы", myExpenses.size.plus(myIncomes.size).toString() + " операций", ProlesExpense, onNavigateToExpensesIncomes)
-        ProlesQuickAction(Icons.Default.Train, "Командировки", tripCount.toString() + " поездок", ProlesSecondary, onNavigateToMyTrips)
-        ProlesQuickAction(Icons.Default.NotificationsNone, "Уведомления", if (unreadCount > 0) unreadCount.toString() + " непрочитанных" else "Все прочитаны", ProlesSecondary, onNavigateToNotifications, badge = unreadCount)
-        ProlesQuickAction(Icons.Default.ConfirmationNumber, "Мои билеты", "Документы поездок", ProlesPrimary, onNavigateToMyTickets)
-        ProlesQuickAction(Icons.Default.Analytics, "Статистика", "Доходы, расходы и активность", ProlesSecondary, onNavigateToStats)
-        ProlesQuickAction(Icons.Default.ReceiptLong, "Мои расходы", "Чеки и операции", ProlesExpense, onNavigateToMyExpenses)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ProlesCompactAction(
+                Icons.AutoMirrored.Filled.ReceiptLong,
+                "Расходы и доходы",
+                myExpenses.size.plus(myIncomes.size).toString() + " операций",
+                ProlesExpense,
+                onNavigateToExpensesIncomes,
+                Modifier.weight(1f)
+            )
+            ProlesCompactAction(
+                Icons.Default.Train,
+                "Командировки",
+                tripCount.toString() + " поездок",
+                ProlesSecondary,
+                onNavigateToMyTrips,
+                Modifier.weight(1f)
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ProlesCompactAction(
+                Icons.Default.NotificationsNone,
+                "Уведомления",
+                if (unreadCount > 0) unreadCount.toString() + " непрочитанных" else "Все прочитаны",
+                ProlesSecondary,
+                onNavigateToNotifications,
+                Modifier.weight(1f)
+            )
+            ProlesCompactAction(
+                Icons.Default.ConfirmationNumber,
+                "Мои билеты",
+                "Документы поездок",
+                ProlesPrimary,
+                onNavigateToMyTickets,
+                Modifier.weight(1f)
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ProlesCompactAction(
+                Icons.Default.Analytics,
+                "Статистика",
+                "Доходы, расходы и активность",
+                ProlesSecondary,
+                onNavigateToStats,
+                Modifier.weight(1f)
+            )
+            ProlesCompactAction(
+                Icons.Default.ReceiptLong,
+                "Мои расходы",
+                "Чеки и операции",
+                ProlesExpense,
+                onNavigateToMyExpenses,
+                Modifier.weight(1f)
+            )
+        }
 
         ProlesSecondaryButton(
             text = "Настройки уведомлений",
             onClick = onNavigateToNotificationSettings,
-            icon = Icons.Default.Settings
+            icon = Icons.Default.Settings,
+            modifier = Modifier.height(44.dp)
         )
 
         ProlesDestructiveButton(
             text = "Выйти из аккаунта",
             onClick = onLogout,
-            icon = Icons.AutoMirrored.Filled.Logout
+            icon = Icons.AutoMirrored.Filled.Logout,
+            modifier = Modifier.height(44.dp)
         )
         Spacer(Modifier.height(4.dp))
     }
