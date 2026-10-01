@@ -1581,26 +1581,26 @@ fun TimesheetScreen(
                         item {
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable {
-                                    incomeType = "WORK"
+                                    incomeType = "HOUSEHOLD"
                                     showIncomeTypePicker = false
                                 }.padding(vertical = 12.dp)
-                            ) { Text("💼 Доход от работы", style = MaterialTheme.typography.bodyMedium) }
+                            ) { Text("🏠 Хоз.нужды", style = MaterialTheme.typography.bodyMedium) }
                         }
                         item {
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable {
-                                    incomeType = "PERSONAL"
+                                    incomeType = "CARD"
                                     showIncomeTypePicker = false
                                 }.padding(vertical = 12.dp)
-                            ) { Text("👤 Личный доход", style = MaterialTheme.typography.bodyMedium) }
+                            ) { Text("💳 По карте", style = MaterialTheme.typography.bodyMedium) }
                         }
                         item {
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable {
-                                    incomeType = "OTHER"
+                                    incomeType = "CASH"
                                     showIncomeTypePicker = false
                                 }.padding(vertical = 12.dp)
-                            ) { Text("📦 Прочий доход", style = MaterialTheme.typography.bodyMedium) }
+                            ) { Text("💵 Наличными", style = MaterialTheme.typography.bodyMedium) }
                         }
                     }
                 },
