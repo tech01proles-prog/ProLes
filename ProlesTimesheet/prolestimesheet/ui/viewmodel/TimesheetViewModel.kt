@@ -790,14 +790,18 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         currency: String,
         type: String = "WORK",
         category: String = "SALARY",
-        subcategory: String? = null
+        subcategory: String? = null,
+        subprojectId: String? = null,
+        subprojectName: String = ""
     ) {
         val currentUser = user.value ?: return
         viewModelScope.launch {
             val income = Income(
                 userId = currentUser.id,
                 projectId = projectId,
-                subprojectId = null,
+                subprojectId = subprojectId,
+                subprojectName = subprojectName,
+
                 projectName = projectName,
                 date = date,
                 name = name,
