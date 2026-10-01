@@ -1544,7 +1544,7 @@ object ApiClient {
             val contentResolver = context.contentResolver
 
             // Читаем файл билета в ByteArray
-            val inputStream = contentResolver.openInputStream(fileUri) ?: return false
+            val inputStream = contentResolver.openInputStream(fileUri) ?: return@withContext false
             val fileBytes = inputStream.readBytes()
             inputStream.close()
 
