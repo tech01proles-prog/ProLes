@@ -1,6 +1,7 @@
 package com.example.prolestimesheet.ui.screens
 
 import android.widget.Toast
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -57,6 +58,8 @@ fun EmployeeExpensesScreen(
 
     // 🆕 Состояние для отслеживания процесса загрузки фото
     var uploadingExpenseId by remember { mutableStateOf<String?>(null) }
+    var viewingExpense by remember { mutableStateOf<Expense?>(null) }
+    val expenseReceipts by viewModel.expenseReceipts.collectAsState()
 
     // 📷 Текущий расход, для которого делается фото
     var currentPhotoExpenseId by remember { mutableStateOf<String?>(null) }
@@ -210,8 +213,14 @@ fun EmployeeExpensesScreen(
                             viewModel.toggleReceiptSubmitted(expense.id, newStatus)
                         },
                         onTakePhoto = {
-                            currentPhotoExpenseId = expense.id
-                            showPhotoSourceDialog = true
+                            if (expense.category == "WITH_RECEIPT") {
+                                currentPhotoExpenseId = expense.id
+                                showPhotoSourceDialog = true
+                            }
+                        },
+                        onViewReceipts = {
+                            viewingExpense = expense
+                            viewModel.loadExpenseReceipts(expense.id)
                         },
                         onDelete = { viewModel.removeExpense(expense.id) }  // 🆕 ДОБАВЛЕНО
                     )
@@ -298,6 +307,56 @@ fun EmployeeExpensesScreen(
     }
 }
 
+
+// Просмотр уже загруженных чеков/вложений
+viewingExpense?.let { expense ->
+    val receipts = expenseReceipts[expense.id].orEmpty()
+    AlertDialog(
+        onDismissRequest = { viewingExpense = null },
+        title = { Text("Чеки: " + (expense.name.ifBlank { "расход" })) },
+        text = {
+            if (receipts.isEmpty()) {
+                Text("Вложения пока не найдены.")
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(receipts, key = { it.id }) { receipt ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(18.dp))
+                            Text(receipt.fileName, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            IconButton(onClick = {
+                                scope.launch(Dispatchers.IO) {
+                                    val uri = com.example.prolestimesheet.network.DownloadManager.download(
+                                        context, receipt.url, receipt.fileName, "application/octet-stream"
+                                    )
+                                    if (uri != null) {
+                                        withContext(Dispatchers.Main) {
+                                            runCatching {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                                                    setDataAndType(uri, context.contentResolver.getType(uri) ?: "application/octet-stream")
+                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                })
+                                            }
+                                        }
+                                    }
+                                }) { Icon(Icons.Default.OpenInNew, "Открыть") }
+                            IconButton(onClick = {
+                                viewModel.deleteExpenseReceipt(expense.id, receipt.id)
+                            }) { Icon(Icons.Default.Delete, "Удалить", tint = MaterialTheme.colorScheme.error) }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { viewingExpense = null }) { Text("Готово") }
+        }
+    )
+}
+
 // 🔹 Заголовок таблицы для админа
 @Composable
 private fun AdminExpensesHeader() {
@@ -351,13 +410,14 @@ private fun ExpenseRow(
     isUploading: Boolean,
     onToggleReceipt: (Boolean) -> Unit,
     onTakePhoto: () -> Unit,
+    onViewReceipts: () -> Unit,
     onDelete: () -> Unit  // 🆕 ДОБАВЛЕНО
 ) {
-    // 🆕 Зеленый фон, если есть фото чека
+    val noReceiptRequired = expense.category == "WITHOUT_RECEIPT"
     val bgColor = when {
-        expense.hasReceiptPhoto -> Color(0xFFE8F5E9) // ✅ Зеленый
-        expense.receiptSubmitted -> Color(0xFFE3F2FD)  // 🔵 Голубой
-        else -> Color(0xFFFFEBEE)  // 🔴 Красный
+        noReceiptRequired -> Color(0xFFE8F5E9)
+        expense.hasReceiptPhoto || expense.receiptCount > 0 -> Color(0xFFE8F5E9)
+        else -> Color(0xFFFFEBEE)
     }
     val typeLabel = if (expense.type == "ROAD") "🚗 Дорога" else "📦 ${expense.name}"
     Card(
@@ -407,16 +467,33 @@ private fun ExpenseRow(
                     )
                 } else {
                     IconButton(
-                        onClick = onTakePhoto,
+                        onClick = if (expense.hasReceiptPhoto || expense.receiptCount > 0) onViewReceipts else onTakePhoto,
                         modifier = Modifier.size(32.dp),
-                        enabled = !expense.hasReceiptPhoto
+                        enabled = noReceiptRequired || !isUploading
                     ) {
-                        Icon(
-                            imageVector = if (expense.hasReceiptPhoto) Icons.Default.CheckCircle else Icons.Default.CameraAlt,
-                            contentDescription = if (expense.hasReceiptPhoto) "Фото загружено" else "Сфотографировать чек",
-                            tint = if (expense.hasReceiptPhoto) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        if (noReceiptRequired) {
+                            Box(Modifier.size(22.dp)) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ReceiptLong,
+                                    null,
+                                    tint = Color(0xFF2E7D32),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Icon(
+                                    Icons.Default.Close,
+                                    null,
+                                    tint = Color(0xFF2E7D32),
+                                    modifier = Modifier.size(12.dp).align(Alignment.TopEnd)
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = if (expense.hasReceiptPhoto || expense.receiptCount > 0) Icons.Default.Visibility else Icons.Default.CameraAlt,
+                                contentDescription = if (expense.hasReceiptPhoto || expense.receiptCount > 0) "Просмотреть чеки" else "Прикрепить чек",
+                                tint = if (expense.hasReceiptPhoto || expense.receiptCount > 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -426,7 +503,10 @@ private fun ExpenseRow(
                     modifier = Modifier.width(50.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (expense.hasReceiptPhoto) {
+                    if (noReceiptRequired) {
+                        Icon(Icons.AutoMirrored.Filled.ReceiptLong, "Без чека", tint = Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Close, "Прикрепление не требуется", tint = Color(0xFF2E7D32), modifier = Modifier.size(12.dp))
+                    } else if (expense.hasReceiptPhoto || expense.receiptCount > 0) {
                         Surface(
                             color = Color(0xFF2E7D32).copy(alpha = 0.15f),
                             shape = MaterialTheme.shapes.small,
