@@ -297,7 +297,8 @@ fun MainScreen(
                     userId = user?.id ?: "",
                     isAdminView = false,
                     canViewAll = viewModel.canView("business_trips_all"),
-                    onBack = { goBack() }
+                    onBack = { goBack() },
+                    onNavigateToTickets = { navigateTo(Screen.MyTickets) }
                 )
 
                 Screen.Notifications -> NotificationsScreen(
