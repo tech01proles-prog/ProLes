@@ -7,11 +7,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.NotificationPreferences
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
+import com.example.prolestimesheet.ui.theme.ProlesCanvas
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,9 +40,11 @@ fun NotificationSettingsScreen(
     }
 
     Scaffold(
+        containerColor = ProlesCanvas,
         modifier = modifier,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ProlesCanvas),
                 title = { Text("Настройки уведомлений") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
