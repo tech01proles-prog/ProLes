@@ -100,7 +100,9 @@ internal fun Route.userRoutes() {
                     it[defaultCurrency] = user.defaultCurrency
                     it[phone] = user.phone
                     it[telegramUsername] = user.telegramUsername
-                    it[birthDate] = user.birthDate?.let(KtLocalDate::parse)
+                    it[birthDate] = user.birthDate?.trim()?.takeIf { value -> value.isNotBlank() }?.let {
+                        runCatching { KtLocalDate.parse(it) }.getOrNull()
+                    }
                 }
                 user
             }
@@ -119,7 +121,9 @@ internal fun Route.userRoutes() {
                     it[email] = body.email
                     it[phone] = body.phone
                     it[telegramUsername] = body.telegramUsername
-                    it[birthDate] = body.birthDate?.let(KtLocalDate::parse)
+                    it[birthDate] = body.birthDate?.trim()?.takeIf { value -> value.isNotBlank() }?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                }
                 }
                 body.copy(id = session.userId.toString())
             }
