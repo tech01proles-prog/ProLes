@@ -661,6 +661,94 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
     suspend fun loadNotifications() {
         _notifications.value = apiClient.fetchNotifications().getOrDefault(emptyList())
     }
+    suspend fun loadNotificationPreferences() {
+        apiClient.fetchNotificationPreferences().onSuccess { dto ->
+            _notificationPreferences.value = NotificationPreferences(
+                tripEnabled = dto.tripEnabled,
+                vacationEnabled = dto.vacationEnabled,
+                dayoffEnabled = dto.dayoffEnabled,
+                expenseEnabled = dto.expenseEnabled,
+                payrollEnabled = dto.payrollEnabled,
+                ticketEnabled = dto.ticketEnabled,
+                tripVisibleToAll = dto.tripVisibleToAll,
+                tripChangeEnabled = dto.tripChangeEnabled,
+                vacationDecisionEnabled = dto.vacationDecisionEnabled,
+                ticketReceiptEnabled = dto.ticketReceiptEnabled,
+                chatMessageEnabled = dto.chatMessageEnabled,
+                telegramEnabled = dto.telegramEnabled,
+                telegramLinked = dto.telegramLinked,
+                telegramLinkCode = dto.telegramLinkCode,
+                emailEnabled = dto.emailEnabled,
+                email = dto.email
+            )
+        }
+    }
+
+    suspend fun saveNotificationPreferences(prefs: NotificationPreferences): Result<NotificationPreferences> {
+        val dto = com.example.prolestimesheet.network.NotificationPreferencesDto(
+            tripEnabled = prefs.tripEnabled,
+            vacationEnabled = prefs.vacationEnabled,
+            dayoffEnabled = prefs.dayoffEnabled,
+            expenseEnabled = prefs.expenseEnabled,
+            payrollEnabled = prefs.payrollEnabled,
+            ticketEnabled = prefs.ticketEnabled,
+            tripVisibleToAll = prefs.tripVisibleToAll,
+            tripChangeEnabled = prefs.tripChangeEnabled,
+            vacationDecisionEnabled = prefs.vacationDecisionEnabled,
+            ticketReceiptEnabled = prefs.ticketReceiptEnabled,
+            chatMessageEnabled = prefs.chatMessageEnabled,
+            telegramEnabled = prefs.telegramEnabled,
+            telegramLinked = prefs.telegramLinked,
+            telegramLinkCode = prefs.telegramLinkCode,
+            emailEnabled = prefs.emailEnabled,
+            email = prefs.email
+        )
+        return apiClient.updateNotificationPreferences(dto).map { saved ->
+            val result = NotificationPreferences(
+                tripEnabled = saved.tripEnabled,
+                vacationEnabled = saved.vacationEnabled,
+                dayoffEnabled = saved.dayoffEnabled,
+                expenseEnabled = saved.expenseEnabled,
+                payrollEnabled = saved.payrollEnabled,
+                ticketEnabled = saved.ticketEnabled,
+                tripVisibleToAll = saved.tripVisibleToAll,
+                tripChangeEnabled = saved.tripChangeEnabled,
+                vacationDecisionEnabled = saved.vacationDecisionEnabled,
+                ticketReceiptEnabled = saved.ticketReceiptEnabled,
+                chatMessageEnabled = saved.chatMessageEnabled,
+                telegramEnabled = saved.telegramEnabled,
+                telegramLinked = saved.telegramLinked,
+                telegramLinkCode = saved.telegramLinkCode,
+                emailEnabled = saved.emailEnabled,
+                email = saved.email
+            )
+            _notificationPreferences.value = result
+            result
+        }
+    }
+
+    suspend fun loadExpenseReceipts(expenseId: String) {
+        apiClient.fetchExpenseReceipts(expenseId).onSuccess { receipts ->
+            _expenseReceipts.value = _expenseReceipts.value + (expenseId to receipts)
+        }
+    }
+
+    suspend fun deleteExpenseReceipt(expenseId: String, receiptId: String): Result<Unit> {
+        return apiClient.deleteExpenseReceipt(receiptId).onSuccess {
+            _expenseReceipts.value = _expenseReceipts.value.mapValues { (id, receipts) ->
+                if (id == expenseId) receipts.filter { it.id != receiptId } else receipts
+            }
+            val expense = _expenses.value.firstOrNull { it.id == expenseId }
+            if (expense != null) {
+                val count = _expenseReceipts.value[expenseId].orEmpty().size
+                _expenses.value = _expenses.value.map {
+                    if (it.id == expenseId) it.copy(receiptCount = count, hasReceiptPhoto = count > 0)
+                    else it
+                }
+            }
+        }
+    }
+
 
     suspend fun markNotificationRead(id: String) {
         val notif = _notifications.value.firstOrNull { it.id == id } ?: return
