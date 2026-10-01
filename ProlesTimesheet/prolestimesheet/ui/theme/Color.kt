@@ -2,90 +2,66 @@ package com.example.prolestimesheet.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// 🎨 Primary Palette
-val PrimaryLight = Color(0xFF2E7D32)
+val PrimaryLight = Color(0xFF059669)
 val OnPrimaryLight = Color.White
-val PrimaryContainerLight = Color(0xFFA5D6A7)
-val OnPrimaryContainerLight = Color(0xFF1B5E20)
+val PrimaryContainerLight = Color(0xFFECFDF5)
+val OnPrimaryContainerLight = Color(0xFF047857)
 
-val PrimaryDark = Color(0xFF81C784)
-val OnPrimaryDark = Color(0xFF1B5E20)
-val PrimaryContainerDark = Color(0xFF2E7D32)
-val OnPrimaryContainerDark = Color(0xFFA5D6A7)
+val PrimaryDark = Color(0xFF10B981)
+val OnPrimaryDark = Color(0xFF022C22)
+val PrimaryContainerDark = Color(0xFF064E3B)
+val OnPrimaryContainerDark = Color(0xFFA7F3D0)
 
-// 🎨 Secondary Palette
-val SecondaryLight = Color(0xFF388E3C)
+val SecondaryLight = Color(0xFF4F46E5)
 val OnSecondaryLight = Color.White
-val SecondaryContainerLight = Color(0xFFC8E6C9)
-val OnSecondaryContainerLight = Color(0xFF1B5E20)
+val SecondaryContainerLight = Color(0xFFEEF2FF)
+val OnSecondaryContainerLight = Color(0xFF3730A3)
 
-val SecondaryDark = Color(0xFF66BB6A)
-val OnSecondaryDark = Color(0xFF1B5E20)
-val SecondaryContainerDark = Color(0xFF2E7D32)
-val OnSecondaryContainerDark = Color(0xFFA5D6A7)
+val SecondaryDark = Color(0xFF818CF8)
+val OnSecondaryDark = Color(0xFF1E1B4B)
+val SecondaryContainerDark = Color(0xFF312E81)
+val OnSecondaryContainerDark = Color(0xFFE0E7FF)
 
-// 🎨 Tertiary Palette
-val TertiaryLight = Color(0xFF0277BD)
+val TertiaryLight = Color(0xFFE11D48)
 val OnTertiaryLight = Color.White
-val TertiaryContainerLight = Color(0xFFB3E5FC)
-val OnTertiaryContainerLight = Color(0xFF01579B)
+val TertiaryContainerLight = Color(0xFFFFF1F2)
+val OnTertiaryContainerLight = Color(0xFFBE123C)
 
-val TertiaryDark = Color(0xFF4FC3F7)
-val OnTertiaryDark = Color(0xFF01579B)
-val TertiaryContainerDark = Color(0xFF0277BD)
-val OnTertiaryContainerDark = Color(0xFFB3E5FC)
+val TertiaryDark = Color(0xFFFB7185)
+val OnTertiaryDark = Color(0xFF4C0519)
+val TertiaryContainerDark = Color(0xFF881337)
+val OnTertiaryContainerDark = Color(0xFFFFE4E6)
 
-// 🎨 Error Palette
-val ErrorLight = Color(0xFFC62828)
+val ErrorLight = Color(0xFFB91C1C)
 val OnErrorLight = Color.White
-val ErrorContainerLight = Color(0xFFFFCDD2)
-val OnErrorContainerLight = Color(0xFFB71C1C)
+val ErrorContainerLight = Color(0xFFFEE2E2)
+val OnErrorContainerLight = Color(0xFF991B1B)
 
-val ErrorDark = Color(0xFFEF5350)
-val OnErrorDark = Color(0xFFB71C1C)
-val ErrorContainerDark = Color(0xFFC62828)
-val OnErrorContainerDark = Color(0xFFFFCDD2)
+val ErrorDark = Color(0xFFF87171)
+val OnErrorDark = Color(0xFF450A0A)
+val ErrorContainerDark = Color(0xFF7F1D1D)
+val OnErrorContainerDark = Color(0xFFFECACA)
 
-// 🎨 Status Colors (Success, Warning, Info)
-val SuccessLight = Color(0xFF2E7D32)
-val SuccessDark = Color(0xFF81C784)
-
-val WarningLight = Color(0xFFFFA000)
-val WarningDark = Color(0xFFFFCA28)
-
-val InfoLight = Color(0xFF0288D1)
-val InfoDark = Color(0xFF4FC3F7)
-
-// 🎨 Company Expenses Color
-val CompanyExpenseLight = Color(0xFFFFA000)
-val CompanyExpenseDark = Color(0xFFFFCA28)
-
-// 🎨 Background & Surface (Deep Black for Dark Theme)
-val BackgroundLight = Color(0xFFFAFAFA)
-val BackgroundDark = Color(0xFF121212)
-
+val BackgroundLight = Color(0xFFF8FAFC)
+val BackgroundDark = Color(0xFF0F172A)
 val SurfaceLight = Color.White
-val SurfaceDark = Color(0xFF121212)
+val SurfaceDark = Color(0xFF111827)
+val SurfaceVariantLight = Color(0xFFF1F5F9)
+val SurfaceVariantDark = Color(0xFF1E293B)
+val OutlineLight = Color(0xFFCBD5E1)
+val OutlineDark = Color(0xFF475569)
+val OutlineVariantLight = Color(0xFFE2E8F0)
+val OutlineVariantDark = Color(0xFF334155)
+val OnSurfaceLight = Color(0xFF0F172A)
+val OnSurfaceDark = Color(0xFFF8FAFC)
+val OnSurfaceVariantLight = Color(0xFF64748B)
+val OnSurfaceVariantDark = Color(0xFF94A3B8)
 
-val SurfaceVariantLight = Color(0xFFF5F5F5)
-val SurfaceVariantDark = Color(0xFF1E1E24)
-
-// 🎨 Elevation Colors (for card shadows in dark theme)
-val ElevationOverlayDark = Color(0xFFFFFFFF).copy(alpha = 0.08f)
-val ElevationLevel1Dark = Color(0xFF1E1E1E)
-val ElevationLevel2Dark = Color(0xFF252525)
-val ElevationLevel3Dark = Color(0xFF2D2D2D)
-
-// 🎨 Outline & Border
-val OutlineLight = Color(0xFF757575)
-val OutlineDark = Color(0xFF9E9E9E)
-
-val OutlineVariantLight = Color(0xFFBDBDBD)
-val OutlineVariantDark = Color(0xFF616161)
-
-// 🎨 On Surface Variants
-val OnSurfaceLight = Color(0xFF1B1B1F)
-val OnSurfaceDark = Color(0xFFE6E6E6)
-
-val OnSurfaceVariantLight = Color(0xFF424242)
-val OnSurfaceVariantDark = Color(0xFFBDBDBD)
+val SuccessLight = PrimaryLight
+val SuccessDark = PrimaryDark
+val WarningLight = Color(0xFFF59E0B)
+val WarningDark = Color(0xFFFBBF24)
+val InfoLight = Color(0xFF3B82F6)
+val InfoDark = Color(0xFF60A5FA)
+val CompanyExpenseLight = Color(0xFFF59E0B)
+val CompanyExpenseDark = Color(0xFFFBBF24)
