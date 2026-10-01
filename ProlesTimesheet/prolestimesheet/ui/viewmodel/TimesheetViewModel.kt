@@ -59,6 +59,8 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
     )
 
     val notifications: StateFlow<List<Notification>> = repository.notificationsFlow
+    val notificationPreferences: StateFlow<NotificationPreferences> = repository.notificationPreferencesFlow
+    val expenseReceipts: StateFlow<Map<String, List<com.example.prolestimesheet.network.ExpenseReceiptDto>>> = repository.expenseReceiptsFlow
     // 🔥 Реактивный unreadCount — Compose автоматически отслеживает изменения
     val unreadCount: StateFlow<Int> = notifications
         .map { list -> list.count { !it.isRead } }
@@ -237,6 +239,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                 val cachedVacations = LocalDataStore.getVacations(context, savedUser.id)
                 val cachedIncomes = LocalDataStore.getIncomes(context, savedUser.id)
                 repository.restoreSession(savedUser, cachedEntries, cachedVacations)
+                repository.loadNotificationPreferences()
                 // Восстанавливаем доходы из кэша
                 repository.incomes.value = cachedIncomes
 
@@ -254,6 +257,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
                         repository.loadDayOffs(savedUser.id)
                         repository.loadUserPermissions()
                         repository.loadIncomes(savedUser.id)  // 🆕 Загружаем доходы
+                        repository.loadNotificationPreferences()
                         android.util.Log.d("ViewModel", "✅ Background sync completed")
                     } catch (e: Exception) {
                         // Ожидаемо при офлайне — просто логируем, не роняем пользователя
@@ -337,7 +341,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         return getTotalHoursForDate(date, userId) + additionalHours <= 24f
     }
 
-    fun addEntry(projectId: String, projectName: String, hours: Float, country: String, comment: String): AddEntryResult {
+    fun addEntry(projectId: String, projectName: String, hours: Float, country: String, comment: String, subprojectId: String? = null, subprojectName: String = ""): AddEntryResult {
         val currentUser = user.value ?: return AddEntryResult.Error("Пользователь не авторизован")
         val date = _selectedDate.value
 
@@ -355,7 +359,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         }
 
         val existingEntry = entries.value.find {
-            it.userId == currentUser.id && it.projectId == projectId && it.date == date
+            it.userId == currentUser.id && it.projectId == projectId && it.subprojectId == subprojectId && it.date == date
         }
 
         // 🔥 КРИТИЧНО: создаём entry для отправки на сервер
@@ -366,6 +370,8 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
             userId = currentUser.id,
             projectId = projectId,
             projectName = projectName,
+            subprojectId = subprojectId,
+            subprojectName = subprojectName,
             date = date,
             hours = hours,
             country = country,
@@ -615,15 +621,17 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
 
     // ➕ Добавление нового расхода
     fun addExpense(
-        projectId: String,
+        projectId: String?,
         projectName: String,
+        subprojectId: String? = null,
+        subprojectName: String = "",
         date: LocalDate,
         type: String, // "ROAD" или "OTHER"
         name: String = "", // название для OTHER
         amount: Double,
         currency: String = "RUB",
         comment: String = "",
-        category: String = "WORK",
+        category: String = "WITH_RECEIPT",
         subcategory: String? = null,
         tempId: String? = null, // Временный ID для прикрепления файлов
         context: Context? = null // Контекст для загрузки файлов
@@ -632,8 +640,10 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         viewModelScope.launch {
             val expense = Expense(
                 userId = currentUser.id,
-                projectId = projectId.ifBlank { getOtherProjectId() },
-                projectName = projectName.ifBlank { "ДРУГОЕ" },
+                projectId = projectId,
+                subprojectId = subprojectId,
+                subprojectName = subprojectName,
+                projectName = projectName.ifBlank { "Без проекта" },
                 date = date,
                 type = type,
                 name = name,
@@ -733,12 +743,6 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
         }
     }
 
-    // 🔧 Вспомогательная функция для получения ID проекта "ДРУГОЕ"
-    private fun getOtherProjectId(): String {
-        val otherProject = projects.value.firstOrNull { it.name == "ДРУГОЕ" }
-        return otherProject?.id ?: "00000000-0000-0000-0000-000000000001"
-    }
-
     fun uploadReceiptPhoto(expenseId: String, imageBytes: ByteArray) {
         viewModelScope.launch {
             val currentUser = user.value
@@ -786,6 +790,7 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
             val income = Income(
                 userId = currentUser.id,
                 projectId = projectId,
+                subprojectId = null,
                 projectName = projectName,
                 date = date,
                 name = name,
@@ -801,6 +806,30 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
 
     fun removeIncome(incomeId: String) {
         viewModelScope.launch { repository.removeIncome(incomeId) }
+    }
+
+    fun loadNotificationPreferences() {
+        viewModelScope.launch { repository.loadNotificationPreferences() }
+    }
+
+    fun saveNotificationPreferences(prefs: NotificationPreferences, onFinished: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            repository.saveNotificationPreferences(prefs)
+                .onSuccess { onFinished(true) }
+                .onFailure { onFinished(false) }
+        }
+    }
+
+    fun loadExpenseReceipts(expenseId: String) {
+        viewModelScope.launch { repository.loadExpenseReceipts(expenseId) }
+    }
+
+    fun deleteExpenseReceipt(expenseId: String, receiptId: String, onFinished: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            repository.deleteExpenseReceipt(expenseId, receiptId)
+                .onSuccess { onFinished(true) }
+                .onFailure { onFinished(false) }
+        }
     }
 
     // 🗑 Удаление билета
