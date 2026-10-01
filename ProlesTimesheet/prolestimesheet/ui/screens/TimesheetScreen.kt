@@ -1048,6 +1048,11 @@ fun TimesheetScreen(
 
         AlertDialog(
             onDismissRequest = { showExpenseDialog = false },
+            icon = {
+                Surface(shape = RoundedCornerShape(16.dp), color = ProlesExpenseSoft) {
+                    Icon(Icons.Default.Receipt, null, tint = ProlesExpense, modifier = Modifier.padding(10.dp).size(24.dp))
+                }
+            },
             title = {
                 Text(
                     if (expenseType == "ROAD") "Расход на дорогу" else "Прочий расход",
@@ -1447,7 +1452,12 @@ fun TimesheetScreen(
 
         AlertDialog(
             onDismissRequest = { showIncomeDialog = false },
-            title = { Text("💵 Новый доход") },
+            icon = {
+                Surface(shape = RoundedCornerShape(16.dp), color = ProlesSecondarySoft) {
+                    Icon(Icons.AutoMirrored.Filled.TrendingUp, null, tint = ProlesSecondary, modifier = Modifier.padding(10.dp).size(24.dp))
+                }
+            },
+            title = { Text("Новый доход") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedButton(
@@ -1537,7 +1547,7 @@ fun TimesheetScreen(
                                 projectId = incomeProjectId,
                                 projectName = incomeProjectName,
                                 date = selectedDate,
-                                name = incomeName,
+                                name = incomeName.ifBlank { incomeTypeLabel(incomeType) },
                                 amount = amount,
                                 currency = incomeCurrency,
                                 type = incomeType,
@@ -1553,6 +1563,12 @@ fun TimesheetScreen(
                 ) { Text("Добавить") }
             },
             dismissButton = { TextButton(onClick = { showIncomeDialog = false }) { Text("Отмена") } }
+            shape = RoundedCornerShape(28.dp),
+            containerColor = ProlesSurface,
+            iconContentColor = ProlesSecondary,
+            titleContentColor = ProlesText,
+            textContentColor = ProlesRestText,
+            tonalElevation = 8.dp
         )
 
         // 📋 Диалог выбора типа дохода
