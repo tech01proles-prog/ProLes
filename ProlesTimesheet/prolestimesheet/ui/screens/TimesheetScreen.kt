@@ -94,6 +94,7 @@ import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.model.TimeEntry
 import com.example.prolestimesheet.model.VacationPeriod
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
+import com.example.prolestimesheet.ui.theme.*
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.todayIn
@@ -189,177 +190,168 @@ fun TimesheetScreen(
 
     Scaffold(
         modifier = modifier,
+        containerColor = ProlesCanvas,
         topBar = {
             TopAppBar(
-                title = { Text("Табель | ${user?.firstName ?: "Гость"}") },
+                title = {
+                    Column {
+                        Text("Табель", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            user?.firstName?.ifBlank { "Гость" } ?: "Гость",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ProlesMuted
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = onRequestVacation) {
                         Icon(
                             Icons.Default.BeachAccess,
                             contentDescription = "Оформить отпуск",
-                            tint = if (isOnVacation) Color(0xFF0277BD) else MaterialTheme.colorScheme.onSurface
+                            tint = if (isOnVacation) ProlesSecondary else ProlesMuted
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = ProlesCanvas,
+                    scrolledContainerColor = ProlesCanvas
+                )
             )
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
-                .padding(16.dp, 2.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
-            // 📅 Навигация по месяцам
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                IconButton(onClick = { currentMonth = currentMonth.minusMonths(1) }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
+            ProlesCard(shape = RoundedCornerShape(20.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { currentMonth = currentMonth.minusMonths(1) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "%s %d".format(
+                                currentMonth.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale("ru")),
+                                currentMonth.year
+                            ),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            "Нажмите на день, чтобы открыть запись",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ProlesMuted
+                        )
+                    }
+                    IconButton(onClick = { currentMonth = currentMonth.plusMonths(1) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, "Вперёд")
+                    }
                 }
-                Text(
-                    "${currentMonth.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale("ru"))} ${currentMonth.year}",
-                    style = MaterialTheme.typography.titleLarge
+                Spacer(Modifier.height(8.dp))
+                CalendarGrid(
+                    month = currentMonth,
+                    selectedDate = selectedDate,
+                    entries = entries,
+                    vacations = vacations,
+                    dayOffs = dayOffs,
+                    userId = user?.id ?: "",
+                    onDateSelected = { viewModel.selectDate(it) }
                 )
-                IconButton(onClick = { currentMonth = currentMonth.plusMonths(1) }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, "Вперед")
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-
-            // 🗓 Календарь
-            CalendarGrid(
-                month = currentMonth,
-                selectedDate = selectedDate,
-                entries = entries,
-                vacations = vacations,
-                dayOffs = dayOffs,
-                userId = user?.id ?: "",
-                onDateSelected = { viewModel.selectDate(it) }
-            )
-            Spacer(Modifier.height(4.dp))
-
-            // ═══════════════════════════════════════════════════════
-            // 📦 СТРОКА 1: Выбор проекта (на всю ширину)
-            // ═══════════════════════════════════════════════════════
-            Box(Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = { showProjectDropdown = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isOnVacation
-                ) {
-                    Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(selectedProject?.name ?: "Добавить часы", fontSize = 16.sp, maxLines = 1)
-                }
-            }
-            if (selectedProject?.subprojects?.any { it.isActive } == true) {
-                OutlinedButton(
-                    onClick = { showSubprojectDropdown = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isOnVacation
-                ) {
-                    Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        selectedSubprojectName.ifBlank { "Без подпроекта" },
-                        fontSize = 14.sp,
-                        maxLines = 1
-                    )
-                }
             }
 
-            Spacer(Modifier.height(1.dp))
+            Spacer(Modifier.height(2.dp))
 
-            // ═══════════════════════════════════════════════════════
-// 💵💰 СТРОКА 2: Доход + Расход (склеенные кнопки)
-// ═══════════════════════════════════════════════════════
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(0.dp)
+            ProlesCard(
+                onClick = if (!isOnVacation) ({ showProjectDropdown = true }) else null,
+                containerColor = ProlesSurface
             ) {
-                // 🔹 Левая кнопка: ДОХОД
-                Button(
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ProlesIconBadge(Icons.Default.Folder, ProlesSecondary)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Текущий объект / проект", style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
+                        Text(
+                            selectedProject?.name ?: "Добавить часы",
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (selectedProject != null) {
+                            Text(
+                                selectedSubprojectName.ifBlank { "Без подпроекта" },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ProlesMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Icon(Icons.Default.ExpandMore, null, tint = ProlesMuted)
+                }
+            }
+
+            if (selectedProject?.subprojects?.any { it.isActive } == true) {
+                FilterChip(
+                    selected = selectedSubprojectId != null,
+                    onClick = { showSubprojectDropdown = true },
+                    label = {
+                        Text(selectedSubprojectName.ifBlank { "Без подпроекта" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Folder, null, modifier = Modifier.size(16.dp))
+                    }
+                )
+            }
+
+            Text("Действия", style = MaterialTheme.typography.titleSmall, color = ProlesMuted)
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(
+                    selected = selectedProject != null,
+                    onClick = { if (!isOnVacation) showProjectDropdown = true },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("Часы", maxLines = 1) },
+                    leadingIcon = { Icon(Icons.Default.AccessTime, null, modifier = Modifier.size(16.dp)) }
+                )
+                FilterChip(
+                    selected = false,
                     onClick = { showIncomeDialog = true },
                     modifier = Modifier.weight(1f),
-                    shape = RectangleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2E7D32),  // ✅ Насыщенный зелёный
-                        contentColor = Color.White           // ✅ Белый текст и иконка
-                    )
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.TrendingUp, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Доход", fontSize = 14.sp, maxLines = 1)
-                }
-
-                // 🔹 Правая кнопка: РАСХОД
-                Button(
+                    label = { Text("Доход", maxLines = 1) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.TrendingUp, null, modifier = Modifier.size(16.dp)) }
+                )
+                FilterChip(
+                    selected = false,
                     onClick = { showExpenseDialog = true },
                     modifier = Modifier.weight(1f),
-                    shape = RectangleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFC62828),  // ✅ Насыщенный красный
-                        contentColor = Color.White           // ✅ Белый текст и иконка
-                    )
-                ) {
-                    Icon(Icons.Default.Receipt, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Расход", fontSize = 14.sp, maxLines = 1)
-                }
+                    label = { Text("Расход", maxLines = 1) },
+                    leadingIcon = { Icon(Icons.Default.Receipt, null, modifier = Modifier.size(16.dp)) }
+                )
+                FilterChip(
+                    selected = isCurrentlyDayOff,
+                    onClick = { if (!isOnVacation) viewModel.toggleDayOff(selectedDate) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text(if (isCurrentlyDayOff) "Отгул" else "Выходной", maxLines = 1) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.EventNote, null, modifier = Modifier.size(16.dp)) }
+                )
             }
 
-            Spacer(Modifier.height(1.dp))
+            FilterChip(
+                selected = false,
+                onClick = { if (!isOnVacation) showTripDialog = true },
+                enabled = !isOnVacation,
+                label = { Text("Командировка") },
+                leadingIcon = { Icon(Icons.Default.Train, null, modifier = Modifier.size(16.dp)) }
+            )
 
-// ═══════════════════════════════════════════════════════
-// 🚆🌴 СТРОКА: Командировка + Выходной (склеенные кнопки)
-// ═══════════════════════════════════════════════════════
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
-                // 🔹 Левая кнопка: КОМАНДИРОВКА
-                Button(
-                    onClick = { showTripDialog = true },
-                    modifier = Modifier.weight(1f),
-                    enabled = !isOnVacation,
-                    shape = RectangleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF5C6BC0),  // ✅ Насыщенный фиолетовый
-                        contentColor = Color.White           // ✅ Белый текст и иконка
-                    )
-                ) {
-                    Icon(Icons.Default.Train, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Командировка", maxLines = 1)
-                }
+            Spacer(Modifier.height(2.dp))
 
-                // 🔹 Правая кнопка: ВЫХОДНОЙ / РАБОЧИЙ
-                val dayOffColor = if (isCurrentlyDayOff) Color(0xFFD32F2F) else Color(0xFFFF8A65)
-                Button(
-                    onClick = { viewModel.toggleDayOff(selectedDate) },
-                    modifier = Modifier.weight(1f),
-                    enabled = !isOnVacation,
-                    shape = RectangleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = dayOffColor,        // ✅ Насыщенный оранжевый/красный
-                        contentColor = Color.White           // ✅ Белый текст и иконка
-                    )
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.EventNote, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        when {
-                            isWeekend && !isUserDayOff -> "Рабочий"
-                            isWeekend && isUserDayOff -> "Выходной"
-                            !isWeekend && !isUserDayOff -> "Выходной"
-                            else -> "Рабочий"
-                        },
-                        maxLines = 1
-                    )
-                }
-            }
-
-            // ═══════════════════════════════════════════════════════
             // 🎯 Плавное появление блока часов при выбранном проекте
             // ═══════════════════════════════════════════════════════
             AnimatedVisibility(
