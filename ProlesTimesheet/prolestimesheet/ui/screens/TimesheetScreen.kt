@@ -1018,6 +1018,16 @@ fun TimesheetScreen(
                         Spacer(Modifier.width(8.dp))
                         Text(dialogProjectName.ifBlank { "Выберите проект" })
                     }
+                    if (dialogProjectId != null) {
+                        OutlinedButton(
+                            onClick = { showExpenseSubprojectPicker = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(dialogSubprojectName.ifBlank { "Без подпроекта" })
+                        }
+                    }
                     
                     // 🔹 Выбор надкатегории расхода
                     OutlinedButton(
@@ -1275,6 +1285,17 @@ fun TimesheetScreen(
                 title = { Text("Выберите проект") },
                 text = {
                     LazyColumn {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    dialogProjectId = null
+                                    dialogProjectName = "Без проекта"
+                                    dialogSubprojectId = null
+                                    dialogSubprojectName = ""
+                                    showProjectPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("Без проекта", style = MaterialTheme.typography.bodyMedium) }
+                        }
                         items(projects.filter { it.isActive }) { proj ->
                             Row(
                                 modifier = Modifier
@@ -1282,6 +1303,8 @@ fun TimesheetScreen(
                                     .clickable {
                                         dialogProjectId = proj.id
                                         dialogProjectName = proj.name
+                                        dialogSubprojectId = null
+                                        dialogSubprojectName = ""
                                         showProjectPicker = false
                                     }
                                     .padding(vertical = 12.dp)
@@ -1296,6 +1319,43 @@ fun TimesheetScreen(
         }
     }
 
+        if (showExpenseSubprojectPicker) {
+            AlertDialog(
+                onDismissRequest = { showExpenseSubprojectPicker = false },
+                title = { Text("Выберите подпроект") },
+                text = {
+                    LazyColumn {
+                        item {
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    dialogSubprojectId = null
+                                    dialogSubprojectName = ""
+                                    showExpenseSubprojectPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("Без подпроекта") }
+                        }
+                        items(
+                            projects.firstOrNull { it.id == dialogProjectId }?.subprojects?.filter { it.isActive }.orEmpty()
+                        ) { sub ->
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    dialogSubprojectId = sub.id
+                                    dialogSubprojectName = sub.name
+                                    showExpenseSubprojectPicker = false
+                                }.padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(sub.name)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
     // 💵 Диалог добавления дохода
     if (showIncomeDialog) {
         var incomeName by remember { mutableStateOf("") }
@@ -1303,7 +1363,10 @@ fun TimesheetScreen(
         var incomeCurrency by remember { mutableStateOf("RUB") }
         var incomeProjectId by remember { mutableStateOf<String?>(null) }
         var incomeProjectName by remember { mutableStateOf("Без проекта") }
+        var incomeSubprojectId by remember { mutableStateOf<String?>(null) }
+        var incomeSubprojectName by remember { mutableStateOf("") }
         var showIncomeProjectPicker by remember { mutableStateOf(false) }
+        var showIncomeSubprojectPicker by remember { mutableStateOf(false) }
         
         // 🆕 Поля для типа, категории и подкатегории дохода
         var incomeType by remember { mutableStateOf("WORK") }
@@ -1324,6 +1387,16 @@ fun TimesheetScreen(
                         Icon(Icons.Default.Folder, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(incomeProjectName)
+                    }
+                    if (incomeProjectId != null) {
+                        OutlinedButton(
+                            onClick = { showIncomeSubprojectPicker = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.AccountTree, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(incomeSubprojectName.ifBlank { "Без подпроекта" })
+                        }
                     }
                     
                     // 🔹 Выбор типа дохода
@@ -1512,6 +1585,8 @@ fun TimesheetScreen(
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     incomeProjectId = null
                                     incomeProjectName = "Без проекта"
+                                    incomeSubprojectId = null
+                                    incomeSubprojectName = ""
                                     showIncomeProjectPicker = false
                                 }.padding(vertical = 12.dp)
                             ) { Text("Без проекта", style = MaterialTheme.typography.bodyMedium) }
@@ -1521,6 +1596,8 @@ fun TimesheetScreen(
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     incomeProjectId = proj.id
                                     incomeProjectName = proj.name
+                                    incomeSubprojectId = null
+                                    incomeSubprojectName = ""
                                     showIncomeProjectPicker = false
                                 }.padding(vertical = 12.dp)
                             ) { Text(proj.name, style = MaterialTheme.typography.bodyMedium) }
@@ -1887,7 +1964,44 @@ fun VacationPickerDialog(
             TextButton(onClick = onDismiss) { Text("Отмена") }
         },
         modifier = Modifier.widthIn(max = 400.dp)
-    )
+    )        if (showIncomeSubprojectPicker) {
+            AlertDialog(
+                onDismissRequest = { showIncomeSubprojectPicker = false },
+                title = { Text("Выберите подпроект") },
+                text = {
+                    LazyColumn {
+                        item {
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    incomeSubprojectId = null
+                                    incomeSubprojectName = ""
+                                    showIncomeSubprojectPicker = false
+                                }.padding(vertical = 12.dp)
+                            ) { Text("Без подпроекта") }
+                        }
+                        items(
+                            projects.firstOrNull { it.id == incomeProjectId }?.subprojects?.filter { it.isActive }.orEmpty()
+                        ) { sub ->
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
+                                    incomeSubprojectId = sub.id
+                                    incomeSubprojectName = sub.name
+                                    showIncomeSubprojectPicker = false
+                                }.padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.AccountTree, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(sub.name)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
+
 }
 
 @Composable
