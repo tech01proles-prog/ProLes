@@ -47,6 +47,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.BeachAccess
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
@@ -997,7 +998,7 @@ fun TimesheetScreen(
             onDismissRequest = { showExpenseDialog = false },
             title = {
                 Text(
-                    if (expenseType == "ROAD") "🚗 Расход на дорогу" else "📦 Прочий расход",
+                    if (expenseType == "ROAD") "Расход на дорогу" else "Прочий расход",
                     style = MaterialTheme.typography.titleLarge
                 )
             },
@@ -1012,13 +1013,13 @@ fun TimesheetScreen(
                         FilterChip(
                             selected = expenseType == "ROAD",
                             onClick = { expenseType = "ROAD" },
-                            label = { Text("🚗 Дорога") },
+                            label = { Text("Дорога") },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = expenseType == "OTHER",
                             onClick = { expenseType = "OTHER" },
-                            label = { Text("📦 Другое") },
+                            label = { Text("Другое") },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1051,7 +1052,7 @@ fun TimesheetScreen(
                         Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            if (expenseCategory == "WITHOUT_RECEIPT") "🚫 Без чека" else "🧾 С чеком"
+                            if (expenseCategory == "WITHOUT_RECEIPT") "Без чека" else "С чеком"
                         )
                     }
                     
@@ -1145,7 +1146,7 @@ fun TimesheetScreen(
                                     ) {
                                         Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("📷 Фото")
+                                        Text("Фото")
                                     }
                                     OutlinedButton(
                                         onClick = {
@@ -1158,7 +1159,7 @@ fun TimesheetScreen(
                                     ) {
                                         Icon(Icons.Default.PhotoLibrary, null, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
-                                        Text("🖼️ Галерея")
+                                        Text("Галерея")
                                     }
                                 }
                             }
@@ -1170,9 +1171,9 @@ fun TimesheetScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = !uploadingPhoto
                             ) {
-                                Icon(Icons.Default.AttachMoney, null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text("📎 Прикрепить документы (PDF, DOC и др.)")
+                                Text("Прикрепить документы (PDF, DOC и др.)")
                             }
                             if (currentPendingFiles.isNotEmpty()) {
                                 Text("Прикреплено файлов: ${currentPendingFiles.size}", style = MaterialTheme.typography.bodySmall)
@@ -1194,7 +1195,7 @@ fun TimesheetScreen(
                 }
             },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         if (amount.isNotEmpty()) {
                             val isOtherValid = expenseType == "ROAD" || name.isNotBlank()
@@ -1219,9 +1220,14 @@ fun TimesheetScreen(
                             }
                         }
                     },
-                    enabled = amount.isNotEmpty()
-                            && (expenseType == "ROAD" || name.isNotBlank())
-                ) { Text("Добавить") }
+                    enabled = amount.isNotEmpty() && (expenseType == "ROAD" || name.isNotBlank()),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ProlesPrimary,
+                        contentColor = Color.White
+                    )
+                ) { Text("Сохранить расход") }
             },
             dismissButton = {
                 TextButton(onClick = { showExpenseDialog = false }) { Text("Отмена") }
