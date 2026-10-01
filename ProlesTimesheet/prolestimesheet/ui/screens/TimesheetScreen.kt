@@ -317,44 +317,66 @@ fun TimesheetScreen(
 
             Text("Действия", style = MaterialTheme.typography.titleSmall, color = ProlesMuted)
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(
-                    selected = selectedProject != null,
-                    onClick = { if (!isOnVacation) showProjectDropdown = true },
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                TimesheetActionTile(
                     modifier = Modifier.weight(1f),
-                    label = { Text("Часы", maxLines = 1) },
-                    leadingIcon = { Icon(Icons.Default.AccessTime, null, modifier = Modifier.size(16.dp)) }
+                    icon = Icons.Default.AccessTime,
+                    title = "Часы",
+                    subtitle = if (selectedProject != null) "Добавить запись" else "Выберите проект",
+                    tint = ProlesPrimary,
+                    enabled = !isOnVacation,
+                    onClick = { showProjectDropdown = true }
                 )
-                FilterChip(
-                    selected = false,
-                    onClick = { showIncomeDialog = true },
+                TimesheetActionTile(
                     modifier = Modifier.weight(1f),
-                    label = { Text("Доход", maxLines = 1) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.TrendingUp, null, modifier = Modifier.size(16.dp)) }
-                )
-                FilterChip(
-                    selected = false,
-                    onClick = { showExpenseDialog = true },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Расход", maxLines = 1) },
-                    leadingIcon = { Icon(Icons.Default.Receipt, null, modifier = Modifier.size(16.dp)) }
-                )
-                FilterChip(
-                    selected = isCurrentlyDayOff,
-                    onClick = { if (!isOnVacation) viewModel.toggleDayOff(selectedDate) },
-                    modifier = Modifier.weight(1f),
-                    label = { Text(if (isCurrentlyDayOff) "Отгул" else "Выходной", maxLines = 1) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.EventNote, null, modifier = Modifier.size(16.dp)) }
+                    icon = Icons.AutoMirrored.Filled.TrendingUp,
+                    title = "Доход",
+                    subtitle = "Поступление",
+                    tint = Color(0xFF0EA5A4),
+                    onClick = { showIncomeDialog = true }
                 )
             }
 
-            FilterChip(
-                selected = false,
-                onClick = { if (!isOnVacation) showTripDialog = true },
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                TimesheetActionTile(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Receipt,
+                    title = "Расход",
+                    subtitle = "Добавить расход",
+                    tint = ProlesExpense,
+                    onClick = { showExpenseDialog = true }
+                )
+                TimesheetActionTile(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.AutoMirrored.Filled.EventNote,
+                    title = if (isCurrentlyDayOff) "Рабочий" else "Выходной",
+                    subtitle = if (isCurrentlyDayOff) "Вернуть день" else "Отметить отгул",
+                    tint = Color(0xFFF59E0B),
+                    enabled = !isOnVacation,
+                    onClick = { viewModel.toggleDayOff(selectedDate) }
+                )
+            }
+
+            FilledTonalButton(
+                onClick = { showTripDialog = true },
                 enabled = !isOnVacation,
-                label = { Text("Командировка") },
-                leadingIcon = { Icon(Icons.Default.Train, null, modifier = Modifier.size(16.dp)) }
-            )
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(15.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = ProlesSecondarySoft,
+                    contentColor = ProlesSecondary
+                )
+            ) {
+                Icon(Icons.Default.Train, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Добавить командировку")
+            }
 
             Spacer(Modifier.height(2.dp))
 
@@ -1667,6 +1689,34 @@ if (showIncomeSubprojectPicker) {
         }
     }
 
+}
+
+@Composable
+private fun TimesheetActionTile(
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    tint: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    ProlesCard(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        containerColor = tint.copy(alpha = 0.08f),
+        onClick = if (enabled) onClick else null
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ProlesIconBadge(icon, tint, size = 38.dp)
+            Spacer(Modifier.width(9.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = ProlesText, maxLines = 1)
+                Spacer(Modifier.height(1.dp))
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = ProlesMuted, maxLines = 2)
+            }
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════
