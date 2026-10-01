@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -15,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import com.example.prolestimesheet.model.User
 import com.example.prolestimesheet.ui.theme.*
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
@@ -133,19 +135,20 @@ fun ProfileScreen(
 
         ProlesSectionTitle(title = "Статистика")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ProlesPill("Месяц", selected = statsPeriod == StatsPeriod.MONTH, modifier = Modifier.weight(1f))
-            ProlesPill("Всё время", selected = statsPeriod == StatsPeriod.ALL, tint = ProlesSecondary, modifier = Modifier.weight(1f))
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(top = 0.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(Modifier.weight(1f)) {
-                TextButton(onClick = { statsPeriod = StatsPeriod.MONTH }, modifier = Modifier.fillMaxWidth().offset(y = (-48).dp).height(48.dp)) {}
-            }
-            Box(Modifier.weight(1f)) {
-                TextButton(onClick = { statsPeriod = StatsPeriod.ALL }, modifier = Modifier.fillMaxWidth().offset(y = (-48).dp).height(48.dp)) {}
-            }
+            FilterChip(
+                selected = statsPeriod == StatsPeriod.MONTH,
+                onClick = { statsPeriod = StatsPeriod.MONTH },
+                modifier = Modifier.weight(1f),
+                label = { Text("Месяц") },
+                leadingIcon = { Icon(Icons.Default.DateRange, null, modifier = Modifier.size(16.dp)) }
+            )
+            FilterChip(
+                selected = statsPeriod == StatsPeriod.ALL,
+                onClick = { statsPeriod = StatsPeriod.ALL },
+                modifier = Modifier.weight(1f),
+                label = { Text("Всё время") },
+                leadingIcon = { Icon(Icons.Default.AllInclusive, null, modifier = Modifier.size(16.dp)) }
+            )
         }
 
         ProlesCard(containerColor = ProlesPrimary) {
