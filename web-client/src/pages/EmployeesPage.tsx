@@ -109,7 +109,9 @@ export function EmployeesPage() {
           ...editingUser,
           ...form,
           name: [form.lastName, form.firstName, form.middleName].filter(Boolean).join(' '),
-          newPassword: form.newPassword || undefined,
+          birthDate: form.birthDate.trim() || null,
+          positionId: form.positionId.trim() || null,
+          newPassword: form.newPassword.trim() || undefined,
         };
         await api.put('/users', updated);
       } else {
@@ -118,7 +120,9 @@ export function EmployeesPage() {
           id: generateUUID(),
           ...form,
           name: [form.lastName, form.firstName, form.middleName].filter(Boolean).join(' '),
-          newPassword: form.newPassword || 'password123',
+          birthDate: form.birthDate.trim() || null,
+          positionId: form.positionId.trim() || null,
+          newPassword: form.newPassword.trim() || 'password123',
           defaultRateType: 'HOURLY',
           defaultRate: 0,
           defaultCurrency: 'RUB',
@@ -126,8 +130,15 @@ export function EmployeesPage() {
       }
       setShowForm(false);
       await loadUsers();
-    } catch (err) {
-      alert('Ошибка сохранения');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const message = err?.response?.data;
+      console.error('Ошибка сохранения сотрудника:', status, message, err);
+      alert(
+        typeof message === 'string' && message.trim()
+          ? `Ошибка сохранения: ${message}`
+          : `Ошибка сохранения${status ? ` (HTTP ${status})` : ''}`
+      );
     } finally {
       setSaving(false);
     }
