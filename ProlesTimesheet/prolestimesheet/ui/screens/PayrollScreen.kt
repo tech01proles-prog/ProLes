@@ -2,18 +2,23 @@ package com.example.prolestimesheet.ui.screens
 
 import android.util.Log
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
+import com.example.prolestimesheet.ui.theme.*
 import java.time.YearMonth
 import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.flow.firstOrNull
@@ -128,7 +133,33 @@ fun PayrollScreen(
         modifier = modifier.padding(16.dp).fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item { Text("💰 Расчёт зарплаты", style = MaterialTheme.typography.headlineLarge) }
+        item {
+            ProlesCard(
+                shape = RoundedCornerShape(22.dp),
+                containerColor = Color.Transparent
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF059669), Color(0xFF0EA5E9), Color(0xFF4F46E5)),
+                                RoundedCornerShape(22.dp)
+                            )
+                        )
+                        .padding(18.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ProlesIconBadge(Icons.Default.Payments, Color.White, size = 42.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Расчёт зарплаты", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+                            Text("Начисления и экспорт", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.82f))
+                        }
+                    }
+                }
+            }
+        }
         // 📊 Кнопки экспорта (теперь внутри item{})
         if (viewModel.canView("payroll")) {
             item {
