@@ -112,7 +112,7 @@ fun ExpensesIncomesListScreen(
                     date = inc.date,
                     amount = inc.amount,
                     currency = inc.currency,
-                    name = inc.name.ifBlank { "Доход" },
+                    name = inc.name.ifBlank { incomeTypeLabel(inc.type) },
                     projectName = inc.projectName,
                     subprojectName = inc.subprojectName
                 )
@@ -174,7 +174,7 @@ fun ExpensesIncomesListScreen(
                 title = "Сальдо",
                 subtitle = "Доходы, расходы и баланс за выбранный период",
                 icon = Icons.Default.AccountBalanceWallet,
-                gradient = listOf(Color(0xFF059669), Color(0xFF0EA5A4), Color(0xFF2563EB))
+                gradient = listOf(Color(0xFF7C3AED), Color(0xFF0284C7), Color(0xFFF43F5E))
             )
             BalanceSummaryCard(
                 income = totalIncome,
@@ -290,9 +290,9 @@ private fun BalanceRow(
     val expense = item.expense
     val isExpense = item.isExpense
     val background = when {
-        !isExpense -> Color(0xFFF4FBF5)
-        expense?.category == "WITHOUT_RECEIPT" -> Color(0xFFE8F5E9)
-        expense?.hasReceiptPhoto == true || (expense?.receiptCount ?: 0) > 0 -> Color(0xFFE8F5E9)
+        !isExpense -> Color(0xFFF3E8FF)
+        expense?.category == "WITHOUT_RECEIPT" -> Color(0xFFFFF7ED)
+        expense?.hasReceiptPhoto == true || (expense?.receiptCount ?: 0) > 0 -> Color(0xFFE0F2FE)
         else -> Color(0xFFFFF7F7)
     }
     val accent = if (isExpense) Color(0xFFC62828) else Color(0xFF2E7D32)
