@@ -29,6 +29,7 @@ import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.model.User
 import com.example.prolestimesheet.model.Waypoint
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
+import com.example.prolestimesheet.ui.theme.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -47,8 +48,9 @@ fun BusinessTripsScreen(
     viewModel: TimesheetViewModel,
     userId: String,
     isAdminView: Boolean = false,
-    canViewAll: Boolean = false,  // 🆕
+    canViewAll: Boolean = false,
     onBack: () -> Unit,
+    onNavigateToTickets: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -67,15 +69,37 @@ fun BusinessTripsScreen(
         if (effectiveIsAdminView) trips else trips.filter { it.userId == userId }
     }.sortedByDescending { it.date }
 
+    val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+    val activeCount = filteredTrips.count { it.status != "COMPLETED" && today >= it.startDate && (it.endDate == null || today <= it.endDate) }
+    val upcomingCount = filteredTrips.count { it.startDate > today }
+    val archiveCount = filteredTrips.count { it.status == "COMPLETED" || (it.endDate != null && it.endDate < today) }
+
     Scaffold(
+        containerColor = ProlesCanvas,
         topBar = {
             TopAppBar(
-                title = { Text(if (effectiveIsAdminView) "Командировки сотрудника" else "Мои командировки") },
+                title = {
+                    Column {
+                        Text(if (effectiveIsAdminView) "Командировки сотрудника" else "Командировки и билеты", style = MaterialTheme.typography.titleLarge)
+                        Text("Деловые поездки", style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
                     }
-                }
+                },
+                actions = {
+                    FilledTonalButton(onClick = onNavigateToTickets) {
+                        Icon(Icons.Default.ConfirmationNumber, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Билет")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = ProlesCanvas,
+                    scrolledContainerColor = ProlesCanvas
+                )
             )
         },
         floatingActionButton = {
@@ -104,9 +128,18 @@ fun BusinessTripsScreen(
         } else {
             LazyColumn(
                 modifier = modifier.padding(padding).fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
             ) {
+                item {
+                    ProlesCard(containerColor = ProlesSurface) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ProlesPill("Активные $activeCount", selected = activeCount > 0, tint = ProlesPrimary, modifier = Modifier.weight(1f))
+                            ProlesPill("Предстоящие $upcomingCount", tint = ProlesSecondary, modifier = Modifier.weight(1f))
+                            ProlesPill("Архив $archiveCount", tint = ProlesMuted, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
                 items(filteredTrips, key = { it.id }) { trip ->
                     val empName = employees.find { it.id == trip.userId }?.name ?: "Неизвестный"
                     TripCard(
@@ -185,115 +218,116 @@ private fun TripCard(
     onDelete: () -> Unit,
     onComplete: () -> Unit
 ) {
-    val (typeLabel, typeColor, typeIcon) = when (trip.type) {
-        "DEPARTURE" -> Triple("🚆 Отъезд", Color(0xFF0277BD), Icons.Default.Train)
-        "TRANSFER" -> Triple("🔄 Переезд", Color(0xFFFF6F00), Icons.Default.SwapHoriz)
-        "COMPLETION" -> Triple("✅ Завершение", Color(0xFF2E7D32), Icons.Default.CheckCircle)
-        else -> Triple(trip.type, Color.Gray, Icons.AutoMirrored.Filled.Help)
+    val typeLabel = when (trip.type) {
+        "DEPARTURE" -> "Отъезд"
+        "TRANSFER" -> "Переезд"
+        "COMPLETION" -> "Завершение"
+        else -> trip.type
+    }
+    val typeColor = when (trip.type) {
+        "COMPLETION" -> ProlesPrimary
+        "TRANSFER" -> ProlesSecondary
+        else -> ProlesSecondary
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = typeColor.copy(alpha = 0.08f))
-    ) {
-        Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
-            // Заголовок
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+    ProlesCard(containerColor = typeColor.copy(alpha = 0.04f)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            ProlesIconBadge(
+                when (trip.type) {
+                    "TRANSFER" -> Icons.Default.SwapHoriz
+                    "COMPLETION" -> Icons.Default.CheckCircle
+                    else -> Icons.Default.Train
+                },
+                typeColor,
+                size = 36.dp
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(typeIcon, null, tint = typeColor, modifier = Modifier.size(20.dp))
+                    ProlesPill(typeLabel, tint = typeColor)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        typeLabel,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = typeColor
+                        "%02d.%02d.%04d".format(trip.date.dayOfMonth, trip.date.monthNumber, trip.date.year),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ProlesMuted
                     )
                 }
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    "${trip.date.dayOfMonth}.${trip.date.monthNumber}.${trip.date.year}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    trip.projectName.ifBlank { "Без проекта" },
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Детали
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text("Проект", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(trip.projectName, style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
                 if (trip.city.isNotBlank()) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Город", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(trip.city, style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium)
-                    }
+                    Text(trip.city, style = MaterialTheme.typography.bodySmall, color = ProlesMuted)
                 }
             }
+        }
 
-            if (isAdminView) {
-                Spacer(Modifier.height(4.dp))
-                Text("👤 $employeeName", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        Spacer(Modifier.height(10.dp))
 
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (trip.transport.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text("🚗 ${trip.transport}", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                InfoCell(Icons.Default.DirectionsCar, "Транспорт", trip.transport, Modifier.weight(1f))
             }
+            InfoCell(Icons.Default.People, "Участники", trip.participants.size.toString(), Modifier.weight(1f))
+        }
 
-            if (trip.participants.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                Text("👥 Участников: ${trip.participants.size}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        if (isAdminView && employeeName.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text("Сотрудник: " + employeeName, style = MaterialTheme.typography.bodySmall, color = ProlesMuted)
+        }
 
-            if (trip.notes.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text("💬 ${trip.notes}", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
-                    overflow = TextOverflow.Ellipsis)
-            }
+        if (trip.notes.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(trip.notes, style = MaterialTheme.typography.bodySmall, color = ProlesMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
 
-            if (!isAdminView) {
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    if (trip.status != "COMPLETED") {
-                        TextButton(
-                            onClick = onComplete,
-                            colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF2E7D32))
-                        ) {
-                            Icon(Icons.Default.TaskAlt, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Завершить")
-                        }
-                    }
-                    TextButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Изменить")
-                    }
-                    TextButton(
-                        onClick = onDelete,
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+        if (!isAdminView) {
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (trip.status != "COMPLETED") {
+                    OutlinedButton(
+                        onClick = onComplete,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ProlesPrimary),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ProlesPrimary.copy(alpha = 0.2f))
                     ) {
-                        Icon(Icons.Default.Delete, null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.TaskAlt, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Удалить")
+                        Text("Завершить")
                     }
                 }
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, "Изменить", tint = ProlesSecondary)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, "Удалить", tint = ProlesExpense)
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun InfoCell(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .background(ProlesRestSoft, RoundedCornerShape(12.dp))
+            .padding(9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = ProlesMuted, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Column {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
+            Text(value, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
