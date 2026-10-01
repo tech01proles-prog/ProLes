@@ -47,13 +47,12 @@ fun AnalyticsScreen(
     val entries by viewModel.entries.collectAsState()
     val expenses by viewModel.expenses.collectAsState()
     val trips by viewModel.trips.collectAsState()
-    val incomes by viewModel.incomes.collectAsState()  // 🆕
+    val incomes by viewModel.incomes.collectAsState()
 
     val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
     val currentMonth = YearMonth.of(today.year, today.monthNumber)
     val previousMonth = currentMonth.minusMonths(1)
 
-    // 🔥 ПРИНУДИТЕЛЬНАЯ ПЕРЕЗАГРУЗКА всех данных для админа
     LaunchedEffect(Unit) {
         if (user?.role in listOf("admin", "director", "superadmin")) {
             viewModel.repository.loadAllEntries()
@@ -61,7 +60,6 @@ fun AnalyticsScreen(
         }
     }
 
-    // 📊 ВСЕ записи за текущий/прошлый месяц (без фильтра по userId!)
     val currentMonthEntries = entries.filter {
         it.date.year == currentMonth.year && it.date.monthNumber == currentMonth.monthValue
     }
@@ -75,7 +73,6 @@ fun AnalyticsScreen(
         it.date.year == previousMonth.year && it.date.monthNumber == previousMonth.monthValue
     }
 
-    // 📈 Метрики
     val totalHoursCurrent = currentMonthEntries.sumOf { it.hours.toDouble() }
     val totalHoursPrevious = previousMonthEntries.sumOf { it.hours.toDouble() }
     val hoursDelta = totalHoursCurrent - totalHoursPrevious
@@ -84,7 +81,6 @@ fun AnalyticsScreen(
     val totalExpensesPrevious = previousMonthExpenses.sumOf { it.amount }
     val expensesDelta = totalExpensesCurrent - totalExpensesPrevious
 
-    // 🆕 Доходы за текущий/прошлый месяц (только ручные доходы, без зарплаты)
     val currentMonthIncomes = incomes.filter {
         it.date.year == currentMonth.year && it.date.monthNumber == currentMonth.monthValue
     }
@@ -96,7 +92,6 @@ fun AnalyticsScreen(
     val incomesDelta = totalIncomesCurrent - totalIncomesPrevious
     val incomesDaysDelta = currentMonthIncomes.size - previousMonthIncomes.size
 
-    // 🆕 Топ проектов по доходам
     val topProjectsByIncome = currentMonthIncomes
         .groupBy { it.projectId to it.projectName }
         .map { (_, projIncomes) ->
@@ -109,7 +104,6 @@ fun AnalyticsScreen(
         .sortedByDescending { it.second }
         .take(5)
 
-    // 🆕 Доходы по валютам
     val incomesByCurrency = currentMonthIncomes
         .groupBy { it.currency }
         .mapValues { (_, list) -> list.sumOf { it.amount } }
@@ -117,7 +111,6 @@ fun AnalyticsScreen(
 
     val activeProjects = projects.count { it.isActive }
 
-    // 🔥 Топ-5 сотрудников по часам (ВСЕ сотрудники)
     val topEmployees = currentMonthEntries
         .groupBy { it.userId }
         .map { (userId, userEntries) ->
@@ -127,7 +120,6 @@ fun AnalyticsScreen(
         .sortedByDescending { it.second }
         .take(5)
 
-    // 🔥 Топ-5 проектов по часам (ВСЕ проекты)
     val topProjects = currentMonthEntries
         .groupBy { it.projectId }
         .map { (projectId, projEntries) ->
@@ -137,25 +129,21 @@ fun AnalyticsScreen(
         .sortedByDescending { it.second }
         .take(5)
 
-    // Расходы по типам (ВСЕ)
     val expensesByType = currentMonthExpenses
         .groupBy { if (it.type == "ROAD") "🚗 Дорога" else "📦 ${it.name.ifBlank { "Другое" }}" }
         .mapValues { (_, list) -> list.sumOf { it.amount } }
         .toList()
         .sortedByDescending { it.second }
 
-    // Расходы по валютам (ВСЕ)
     val expensesByCurrency = currentMonthExpenses
         .groupBy { it.currency }
         .mapValues { (_, list) -> list.sumOf { it.amount } }
         .filterValues { it > 0 }
 
-    // Командировки за месяц (ВСЕ)
     val monthTrips = trips.filter {
         it.date.year == currentMonth.year && it.date.monthNumber == currentMonth.month.number
     }
 
-    // Топ городов (ВСЕ)
     val topCities = monthTrips
         .filter { it.city.isNotBlank() }
         .groupBy { it.city }
@@ -191,6 +179,9 @@ fun AnalyticsScreen(
                 .padding(padding)
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
             item {
                 ProlesHero(
                     title = "Аналитика",
@@ -200,10 +191,6 @@ fun AnalyticsScreen(
                 )
             }
 
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 8.dp)
-        ) {
-            // 📊 KPI карточки (сетка 2×2)
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     KpiCard(
@@ -252,6 +239,7 @@ fun AnalyticsScreen(
                     )
                 }
             }
+
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     KpiCard(
@@ -277,7 +265,6 @@ fun AnalyticsScreen(
                 }
             }
 
-            // 📊 Сравнение с прошлым месяцем
             item {
                 Text("📈 Сравнение с прошлым месяцем",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -304,7 +291,6 @@ fun AnalyticsScreen(
                 }
             }
 
-            // 👥 Топ-5 сотрудников
             item {
                 Text("👥 Топ сотрудников по часам",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -331,7 +317,6 @@ fun AnalyticsScreen(
                 }
             }
 
-            // 📁 Топ-5 проектов
             item {
                 Text("📁 Топ проектов по часам",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -358,7 +343,6 @@ fun AnalyticsScreen(
                 }
             }
 
-            // 💰 Расходы по категориям
             item {
                 Text("💰 Расходы по категориям",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -385,7 +369,6 @@ fun AnalyticsScreen(
                 }
             }
 
-            // 💱 Расходы по валютам
             if (expensesByCurrency.isNotEmpty()) {
                 item {
                     Text("💱 Расходы по валютам",
@@ -413,7 +396,6 @@ fun AnalyticsScreen(
                 }
             }
 
-            // 🆕 💵 Топ проектов по доходам
             item {
                 Text(
                     "💵 Топ проектов по доходам",
@@ -444,7 +426,6 @@ fun AnalyticsScreen(
                 }
             }
 
-// 🆕 💱 Доходы по валютам
             if (incomesByCurrency.isNotEmpty()) {
                 item {
                     Text(
@@ -475,7 +456,6 @@ fun AnalyticsScreen(
                 }
             }
 
-            // 🚆 Командировки
             item {
                 Text("🚆 Командировки",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -498,7 +478,6 @@ fun AnalyticsScreen(
                 }
             }
 
-            // 🏙 Топ городов
             if (topCities.isNotEmpty()) {
                 item {
                     Text("🏙 Топ городов",
@@ -530,7 +509,6 @@ fun AnalyticsScreen(
                 }
             }
 
-            // 📊 Статусы проектов
             item {
                 Text("📊 Проекты по статусам",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -571,7 +549,6 @@ fun AnalyticsScreen(
                 }
             }
 
-            // 📈 Общая статистика
             item {
                 Text("📈 Общая статистика",
                     style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -599,10 +576,6 @@ fun AnalyticsScreen(
         }
     }
 }
-
-// ═══════════════════════════════════════════════════════════
-// 🔹 Вспомогательные компоненты
-// ═══════════════════════════════════════════════════════════
 
 @Composable
 private fun KpiCard(
