@@ -574,7 +574,9 @@ private fun AdminTicketCard(
                         )
                     }
                 }
-            )            if (ticket.hasReceipt && !ticket.receiptDownloadUrl.isNullOrBlank()) {
+            )
+
+            if (ticket.hasReceipt && !ticket.receiptDownloadUrl.isNullOrBlank()) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = {
