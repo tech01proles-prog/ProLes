@@ -189,7 +189,7 @@ fun AdminTicketsScreen(
             employees = employees,
             initialAccountantEmail = savedAccountantEmail,
             onDismiss = { showUploadDialog = false },
-            onUpload = { projectId, description, amount, currency, sendToAccountant, accountantEmail, recipientIds, fileUri, receiptUri ->
+            onUpload = { projectId, subprojectId, description, amount, currency, sendToAccountant, accountantEmail, recipientIds, fileUri, receiptUri ->
                 isUploading = true
                 showUploadDialog = false
                 scope.launch {
@@ -201,6 +201,7 @@ fun AdminTicketsScreen(
                     val success = ApiClient.uploadTicket(
                         context = context,
                         projectId = projectId,
+                        subprojectId = subprojectId,
                         description = description,
                         amount = amount,
                         currency = currency,
@@ -572,6 +573,7 @@ private fun UploadTicketDialog(
     onDismiss: () -> Unit,
     onUpload: (
         projectId: String,
+        subprojectId: String?,
         description: String,
         amount: Double,          // 🆕
         currency: String,        // 🆕
@@ -586,6 +588,8 @@ private fun UploadTicketDialog(
 
     var selectedProjectId by remember { mutableStateOf("") }
     var selectedProjectName by remember { mutableStateOf("") }
+    var selectedSubprojectId by remember { mutableStateOf<String?>(null) }
+    var selectedSubprojectName by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }              // 🆕
     var currency by remember { mutableStateOf("RUB") }         // 🆕
@@ -598,6 +602,7 @@ private fun UploadTicketDialog(
     var selectedReceiptFileName by remember { mutableStateOf("") }      // 🆕
 
     var showProjectPicker by remember { mutableStateOf(false) }
+    var showSubprojectPicker by remember { mutableStateOf(false) }
     var showRecipientPicker by remember { mutableStateOf(false) }
 
     // Launcher для выбора файла билета
@@ -649,6 +654,28 @@ private fun UploadTicketDialog(
                         selectedProjectName.ifBlank { "Выберите проект" },
                         maxLines = 1
                     )
+                }
+                OutlinedButton(
+                    onClick = { showProjectPicker = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Folder, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        selectedProjectName.ifBlank { "Выберите проект" },
+                        maxLines = 1
+                    )
+                }
+
+                if (selectedProjectId.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = { showSubprojectPicker = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.AccountTree, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(selectedSubprojectName.ifBlank { "Без подпроекта" }, maxLines = 1)
+                    }
                 }
 
                 // Файл билета
@@ -845,6 +872,7 @@ private fun UploadTicketDialog(
                     if (selectedProjectId.isNotBlank() && selectedFileUri != null) {
                         onUpload(
                             selectedProjectId,
+                            selectedSubprojectId,
                             description,
                             amount.toDoubleOrNull() ?: 0.0,        // 🆕
                             currency,                              // 🆕
@@ -878,6 +906,8 @@ private fun UploadTicketDialog(
                                 .clickable {
                                     selectedProjectId = proj.id
                                     selectedProjectName = proj.name
+                                    selectedSubprojectId = null
+                                    selectedSubprojectName = ""
                                     showProjectPicker = false
                                 }
                                 .padding(vertical = 12.dp),
@@ -891,6 +921,41 @@ private fun UploadTicketDialog(
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(proj.name, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    if (showSubprojectPicker) {
+        AlertDialog(
+            onDismissRequest = { showSubprojectPicker = false },
+            title = { Text("Выберите подпроект") },
+            text = {
+                LazyColumn {
+                    item {
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                selectedSubprojectId = null
+                                selectedSubprojectName = ""
+                                showSubprojectPicker = false
+                            }.padding(vertical = 10.dp)
+                        ) { Text("Без подпроекта") }
+                    }
+                    items(projects.firstOrNull { it.id == selectedProjectId }?.subprojects?.filter { it.isActive }.orEmpty()) { sub ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                selectedSubprojectId = sub.id
+                                selectedSubprojectName = sub.name
+                                showSubprojectPicker = false
+                            }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.AccountTree, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(sub.name)
                         }
                     }
                 }
