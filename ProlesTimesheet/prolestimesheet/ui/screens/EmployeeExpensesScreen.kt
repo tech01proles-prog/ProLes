@@ -382,6 +382,8 @@ fun EmployeeExpensesScreen(
         )
     }
 
+}
+
 // 🔹 Заголовок таблицы для админа
 @Composable
 private fun AdminExpensesHeader() {
