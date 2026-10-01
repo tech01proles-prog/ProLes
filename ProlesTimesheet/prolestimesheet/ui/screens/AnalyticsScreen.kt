@@ -23,7 +23,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
+import com.example.prolestimesheet.ui.theme.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
@@ -191,6 +191,15 @@ fun AnalyticsScreen(
                 .padding(padding)
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
+            item {
+                ProlesHero(
+                    title = "Аналитика",
+                    subtitle = "Картина по часам, финансам, проектам и поездкам",
+                    icon = Icons.Default.AutoGraph,
+                    gradient = listOf(Color(0xFF4F46E5), Color(0xFF0EA5E9), Color(0xFF06B6D4))
+                )
+            }
+
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
