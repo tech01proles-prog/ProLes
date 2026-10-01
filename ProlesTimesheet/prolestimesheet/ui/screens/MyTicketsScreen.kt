@@ -250,6 +250,13 @@ private fun TicketCard(
                             if (uri != null) {
                                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                                     android.widget.Toast.makeText(context, "✅ Чек сохранён", android.widget.Toast.LENGTH_LONG).show()
+                                    runCatching {
+                                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                            setDataAndType(uri, "application/octet-stream")
+                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        })
+                                    }
                                 }
                             }
                         }
