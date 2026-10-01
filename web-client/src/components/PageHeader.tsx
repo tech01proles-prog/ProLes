@@ -1,13 +1,26 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getPageMeta } from '../config/navigation';
 
 export function PageHeader() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const meta = getPageMeta(pathname);
+  const canGoBack = pathname !== '/' && window.history.length > 1;
 
   return (
     <header className="mb-6 md:mb-8">
       <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-400">
+        {canGoBack && (
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="mr-1 inline-flex items-center gap-1 rounded-lg px-2 py-1 font-bold text-slate-500 transition-colors hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-slate-800 dark:hover:text-indigo-400"
+            aria-label="Назад"
+            title="Вернуться на предыдущую страницу"
+          >
+            ← Назад
+          </button>
+        )}
         <Link
           to="/"
           className="transition-colors hover:text-indigo-600 dark:hover:text-indigo-400"
