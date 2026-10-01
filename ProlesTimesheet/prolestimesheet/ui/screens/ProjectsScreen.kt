@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
 import com.example.prolestimesheet.model.Project
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
@@ -73,6 +74,15 @@ fun ProjectsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item {
+                ProlesHero(
+                    title = "Проекты",
+                    subtitle = "Объекты, клиенты, подпроекты и статусы",
+                    icon = Icons.Default.Folder,
+                    gradient = listOf(Color(0xFFF59E0B), Color(0xFFF97316), Color(0xFFE11D48))
+                )
+            }
+
             if (projects.isEmpty()) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
