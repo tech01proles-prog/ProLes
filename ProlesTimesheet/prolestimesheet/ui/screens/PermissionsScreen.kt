@@ -22,7 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.prolestimesheet.model.*
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
+import com.example.prolestimesheet.ui.theme.*
 import androidx.compose.foundation.verticalScroll
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.prolestimesheet.model.UserEffectivePermissionDto
@@ -70,6 +70,13 @@ fun PermissionsScreen(
         }
     ) { padding ->
         Column(modifier = modifier.padding(padding).fillMaxSize()) {
+            ProlesHero(
+                title = "Права доступа",
+                subtitle = if (isSuperAdmin) "Полное управление ролями и разрешениями" else "Просмотр доступных прав команды",
+                icon = Icons.Default.AdminPanelSettings,
+                gradient = listOf(Color(0xFF2563EB), Color(0xFF06B6D4), Color(0xFF4F46E5))
+            )
+            Spacer(Modifier.height(8.dp))
             // Вкладки
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
