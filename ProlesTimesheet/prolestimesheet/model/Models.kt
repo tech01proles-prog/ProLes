@@ -134,7 +134,7 @@ data class Income(
     val name: String = "",
     val amount: Double = 0.0,
     val currency: String = "RUB",
-    val type: String = "WORK", // 🆕 Тип дохода: WORK | PERSONAL | OTHER
+    val type: String = "HOUSEHOLD", // Тип дохода: HOUSEHOLD | CARD | CASH
     val category: String = "SALARY", // 🆕 Надкатегория: SALARY | BONUS | GIFT | OTHER
     val subcategory: String? = null, // 🆕 Подкатегория типа дохода
     val createdAt: Long = 0L
