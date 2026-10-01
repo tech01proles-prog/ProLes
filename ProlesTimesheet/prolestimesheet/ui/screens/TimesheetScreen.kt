@@ -148,6 +148,7 @@ fun TimesheetScreen(
     var totalH by remember { mutableStateOf("") }
     var selectedCountry by remember { mutableStateOf("RF") }
     var showProjectDropdown by remember { mutableStateOf(false) }
+    var showHoursDialog by remember { mutableStateOf(false) }
     var showExpenseDialog by remember { mutableStateOf(false) }
     var showTripDialog by remember { mutableStateOf(false) }
     var showIncomeDialog by remember { mutableStateOf(false) }
@@ -278,7 +279,7 @@ fun TimesheetScreen(
             Spacer(Modifier.height(2.dp))
 
             ProlesCard(
-                onClick = if (!isOnVacation) ({ showProjectDropdown = true }) else null,
+                onClick = if (!isOnVacation) ({ if (selectedProject == null) showProjectDropdown = true else showHoursDialog = true }) else null,
                 containerColor = ProlesSurface
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -327,20 +328,20 @@ fun TimesheetScreen(
             ) {
                 TimesheetActionTile(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Default.AccessTime,
-                    title = "Часы",
-                    subtitle = if (selectedProject != null) "Добавить запись" else "Выберите проект",
-                    tint = ProlesPrimary,
-                    enabled = !isOnVacation,
-                    onClick = { showProjectDropdown = true }
-                )
-                TimesheetActionTile(
-                    modifier = Modifier.weight(1f),
                     icon = Icons.AutoMirrored.Filled.TrendingUp,
                     title = "Доход",
                     subtitle = "Поступление",
-                    tint = Color(0xFF0EA5A4),
+                    tint = ProlesSecondary,
                     onClick = { showIncomeDialog = true }
+                )
+                TimesheetActionTile(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Train,
+                    title = "Командировка",
+                    subtitle = "Добавить поездку",
+                    tint = ProlesExpense,
+                    enabled = !isOnVacation,
+                    onClick = { showTripDialog = true }
                 )
             }
 
@@ -367,110 +368,7 @@ fun TimesheetScreen(
                 )
             }
 
-            FilledTonalButton(
-                onClick = { showTripDialog = true },
-                enabled = !isOnVacation,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(15.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = ProlesSecondarySoft,
-                    contentColor = ProlesSecondary
-                )
-            ) {
-                Icon(Icons.Default.Train, null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Добавить командировку")
-            }
-
-            Spacer(Modifier.height(2.dp))
-
-            // 🎯 Плавное появление блока часов при выбранном проекте
-            // ═══════════════════════════════════════════════════════
-            AnimatedVisibility(
-                visible = selectedProject != null,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Column {
-                    Spacer(Modifier.height(2.dp))
-
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        Arrangement.spacedBy(8.dp),
-                        Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            OutlinedTextField(
-                                value = hours,
-                                onValueChange = {
-                                    if (it.isEmpty() || it.all { c -> c.isDigit() || c == '.' || c == ',' }) {
-                                        hours = it.replace(',', '.')
-                                    }
-                                },
-                                label = { Text("Часы") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Text(
-                                "${totalH.ifEmpty { "0" }} /24",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 16.dp, top = 2.dp)
-                            )
-                        }
-
-                        IconButton(onClick = {
-                            selectedCountry = if (selectedCountry == "RF") "RB" else "RF"
-                        }) {
-                            Text(
-                                if (selectedCountry == "RF") "🇷🇺" else "🇧🇾",
-                                fontSize = 22.sp
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    // Поле комментария
-                    OutlinedTextField(
-                        value = comment,
-                        onValueChange = { comment = it },
-                        label = { Text("Комментарий") },
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 2
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Button(
-                        onClick = {
-                            if (selectedProject != null && hours.isNotEmpty()) {
-                                val result = viewModel.addEntry(
-                                    selectedProject!!.id,
-                                    selectedProject!!.name,
-                                    hours.toFloatOrNull() ?: 0f,
-                                    selectedCountry,
-                                    comment,
-                                    selectedSubprojectId,
-                                    selectedSubprojectName
-                                )
-                                if (result is TimesheetViewModel.AddEntryResult.Error) {
-                                    Toast.makeText(context, "❌ ${result.message}", Toast.LENGTH_LONG).show()
-                                } else {
-                                    Toast.makeText(context, "✅ Часы добавлены", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            clearAll()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = hours.isNotEmpty()
-                                && hours.toFloatOrNull() != null
-                                && hours.toDouble() + (totalH.toDoubleOrNull() ?: 0.0) <= 24
-                    ) { Text("Сохранить запись") }
-                }
-            }
-
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(4.dp))
 
             // 📋 Сводка за день — раздел 1: Проекты
             Text("📋 Проекты", style = MaterialTheme.typography.titleSmall)
@@ -671,6 +569,132 @@ fun TimesheetScreen(
         }
     }
 
+    if (showHoursDialog && selectedProject != null) {
+        val currentTotalHours = totalH.toDoubleOrNull() ?: 0.0
+        val enteredHours = hours.toFloatOrNull() ?: 0f
+        val hoursValid = enteredHours > 0f && enteredHours <= 24f &&
+                currentTotalHours + enteredHours <= 24.0
+
+        AlertDialog(
+            onDismissRequest = { showHoursDialog = false },
+            icon = {
+                Surface(shape = RoundedCornerShape(16.dp), color = ProlesPrimarySoft) {
+                    Icon(Icons.Default.AccessTime, contentDescription = null, tint = ProlesPrimary, modifier = Modifier.padding(10.dp).size(24.dp))
+                }
+            },
+            title = { Text("Добавить часы", style = MaterialTheme.typography.headlineSmall) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(shape = RoundedCornerShape(16.dp), color = ProlesSecondarySoft) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ProlesIconBadge(Icons.Default.Folder, ProlesSecondary, size = 34.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(selectedProject!!.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(selectedSubprojectName.ifBlank { "Без подпроекта" }, style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
+                            }
+                        }
+                    }
+
+                    if (selectedProject!!.subprojects.any { it.isActive }) {
+                        OutlinedButton(
+                            onClick = { showHoursDialog = false; showSubprojectDropdown = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(selectedSubprojectName.ifBlank { "Выбрать подпроект" })
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = hours,
+                        onValueChange = {
+                            if (it.isEmpty() || it.all { ch -> ch.isDigit() || ch == '.' || ch == ',' }) {
+                                hours = it.replace(',', '.')
+                            }
+                        },
+                        label = { Text("Количество часов") },
+                        placeholder = { Text("Например, 8") },
+                        supportingText = {
+                            Text("\${"%.1f".format(currentTotalHours + enteredHours)} / 24 ч", color = if (hoursValid || hours.isBlank()) ProlesMuted else ProlesExpense)
+                        },
+                        isError = hours.isNotBlank() && !hoursValid,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = selectedCountry == "RF",
+                            onClick = { selectedCountry = "RF" },
+                            label = { Text("🇷🇺 Россия") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = selectedCountry == "RB",
+                            onClick = { selectedCountry = "RB" },
+                            label = { Text("🇧🇾 Беларусь") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = comment,
+                        onValueChange = { comment = it },
+                        label = { Text("Комментарий") },
+                        placeholder = { Text("Кратко опишите работу") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3
+                    )
+
+                    Text("\${"Дата: " + "%02d.%02d.%04d".format(selectedDate.dayOfMonth, selectedDate.monthNumber, selectedDate.year)}", style = MaterialTheme.typography.labelMedium, color = ProlesMuted)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (selectedProject != null && hoursValid) {
+                            val result = viewModel.addEntry(
+                                selectedProject!!.id,
+                                selectedProject!!.name,
+                                enteredHours,
+                                selectedCountry,
+                                comment,
+                                selectedSubprojectId,
+                                selectedSubprojectName
+                            )
+                            if (result is TimesheetViewModel.AddEntryResult.Error) {
+                                Toast.makeText(context, "❌ \${result.message}", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "✅ Часы добавлены", Toast.LENGTH_SHORT).show()
+                                showHoursDialog = false
+                                clearAll()
+                            }
+                        }
+                    },
+                    enabled = hoursValid
+                ) { Text("Добавить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHoursDialog = false }) { Text("Отмена") }
+            },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = ProlesSurface,
+            iconContentColor = ProlesPrimary,
+            titleContentColor = ProlesText,
+            textContentColor = ProlesRestText,
+            tonalElevation = 8.dp
+        )
+    }
+
     // 📁 Красивый диалог выбора проекта (вместо DropdownMenu)
     if (showProjectDropdown) {
         AlertDialog(
@@ -715,6 +739,7 @@ fun TimesheetScreen(
                                         selectedSubprojectId = null
                                         selectedSubprojectName = ""
                                         showProjectDropdown = false
+                                        showHoursDialog = true
                                     }
                                     .padding(vertical = 6.dp, horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -1414,7 +1439,7 @@ fun TimesheetScreen(
         var showIncomeSubprojectPicker by remember { mutableStateOf(false) }
         
         // 🆕 Поля для типа, категории и подкатегории дохода
-        var incomeType by remember { mutableStateOf("WORK") }
+        var incomeType by remember { mutableStateOf("HOUSEHOLD") }
         var incomeCategory by remember { mutableStateOf("SALARY") }
         var incomeSubcategory by remember { mutableStateOf<String?>(null) }
         var showIncomeTypePicker by remember { mutableStateOf(false) }
@@ -1452,12 +1477,7 @@ fun TimesheetScreen(
                         Icon(Icons.AutoMirrored.Filled.TrendingUp, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            when (incomeType) {
-                                "WORK" -> "💼 Доход от работы"
-                                "PERSONAL" -> "👤 Личный доход"
-                                "OTHER" -> "📦 Прочий доход"
-                                else -> incomeType
-                            }
+                            incomeTypeLabel(incomeType)
                         )
                     }
                     
@@ -1522,7 +1542,7 @@ fun TimesheetScreen(
                                 currency = incomeCurrency,
                                 type = incomeType,
                                 category = incomeCategory,
-                                subcategory = incomeSubcategory,
+                                subcategory = incomeType,
                                 subprojectId = incomeSubprojectId,
                                 subprojectName = incomeSubprojectName
                             )
