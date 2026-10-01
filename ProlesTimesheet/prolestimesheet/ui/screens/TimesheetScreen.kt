@@ -623,7 +623,7 @@ fun TimesheetScreen(
                         label = { Text("Количество часов") },
                         placeholder = { Text("Например, 8") },
                         supportingText = {
-                            Text("\${"%.1f".format(currentTotalHours + enteredHours)} / 24 ч", color = if (hoursValid || hours.isBlank()) ProlesMuted else ProlesExpense)
+                            Text("${"%.1f".format(currentTotalHours + enteredHours)} / 24 ч", color = if (hoursValid || hours.isBlank()) ProlesMuted else ProlesExpense)
                         },
                         isError = hours.isNotBlank() && !hoursValid,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -655,7 +655,7 @@ fun TimesheetScreen(
                         maxLines = 3
                     )
 
-                    Text("\${"Дата: " + "%02d.%02d.%04d".format(selectedDate.dayOfMonth, selectedDate.monthNumber, selectedDate.year)}", style = MaterialTheme.typography.labelMedium, color = ProlesMuted)
+                    Text("Дата: ${"%02d.%02d.%04d".format(selectedDate.dayOfMonth, selectedDate.monthNumber, selectedDate.year)}", style = MaterialTheme.typography.labelMedium, color = ProlesMuted)
                 }
             },
             confirmButton = {
@@ -672,7 +672,7 @@ fun TimesheetScreen(
                                 selectedSubprojectName
                             )
                             if (result is TimesheetViewModel.AddEntryResult.Error) {
-                                Toast.makeText(context, "❌ \${result.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "❌ ${result.message}", Toast.LENGTH_LONG).show()
                             } else {
                                 Toast.makeText(context, "✅ Часы добавлены", Toast.LENGTH_SHORT).show()
                                 showHoursDialog = false
@@ -1562,7 +1562,7 @@ fun TimesheetScreen(
                     enabled = (incomeAmount.toDoubleOrNull() ?: 0.0) > 0
                 ) { Text("Добавить") }
             },
-            dismissButton = { TextButton(onClick = { showIncomeDialog = false }) { Text("Отмена") } }
+            dismissButton = { TextButton(onClick = { showIncomeDialog = false }) { Text("Отмена") } },
             shape = RoundedCornerShape(28.dp),
             containerColor = ProlesSurface,
             iconContentColor = ProlesSecondary,
