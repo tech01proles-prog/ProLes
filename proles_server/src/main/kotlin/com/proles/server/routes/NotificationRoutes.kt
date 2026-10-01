@@ -87,9 +87,19 @@ internal fun Route.notificationRoutes() {
             }
 
             val targetUserIds = transaction {
-                UsersTable.selectAll()
-                    .map { it[UsersTable.id].value }
-                    .filter { it != session.userId }
+                if (req.type.uppercase() in setOf("VACATION", "TRIP", "DAYOFF_WEEKDAY")) {
+                    UsersTable.selectAll()
+                        .where {
+                            (UsersTable.role eq "admin") or
+                                (UsersTable.role eq "director")
+                        }
+                        .map { it[UsersTable.id].value }
+                        .filter { it != session.userId }
+                } else {
+                    UsersTable.selectAll()
+                        .map { it[UsersTable.id].value }
+                        .filter { it != session.userId }
+                }
             }
 
             NotificationService.notifyUsers(
