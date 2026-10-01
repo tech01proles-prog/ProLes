@@ -1673,20 +1673,18 @@ fun CalendarGrid(
 ) {
     val daysInMonth = month.lengthOfMonth()
     val firstDayOffset = (java.time.LocalDate.of(month.year, month.monthValue, 1).dayOfWeek.value - 1) % 7
-    val totalCells = firstDayOffset + daysInMonth
-    val weeksNeeded = (totalCells + 6) / 7 // Адаптивное количество строк
-    
+    val weeksNeeded = ((firstDayOffset + daysInMonth) + 6) / 7
     val cells = mutableListOf<LocalDate?>()
     for (i in 0 until weeksNeeded * 7) {
-        if (i < firstDayOffset) cells.add(null)
-        else {
+        if (i < firstDayOffset) {
+            cells.add(null)
+        } else {
             val day = i - firstDayOffset + 1
-            if (day <= daysInMonth) cells.add(LocalDate(month.year, month.monthValue, day))
-            else cells.add(null)
+            cells.add(if (day <= daysInMonth) LocalDate(month.year, month.monthValue, day) else null)
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth()) {
             listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс").forEachIndexed { index, day ->
                 Text(
@@ -1694,44 +1692,42 @@ fun CalendarGrid(
                     Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (index >= 5) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurface
+                    color = if (index >= 5) ProlesExpense else ProlesMuted
                 )
             }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
 
+        val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
         for (week in 0 until weeksNeeded) {
-            Row(Modifier.fillMaxWidth().height(45.dp)) {
+            Row(Modifier.fillMaxWidth().height(48.dp)) {
                 for (dayInWeek in 0 until 7) {
                     val date = cells.getOrNull(week * 7 + dayInWeek)
-                    val isSelected = date == selectedDate
-                    val hasHours = entries.any { it.date == date && it.userId == userId && it.hours > 0f }
-                    val isVacation = date != null && vacations.any { v -> date >= v.start && date <= v.end }
-                    val isUserDayOff = dayOffs.any { it.date == date && it.userId == userId }
-
-                    // 🆕 Определяем выходной (суббота или воскресенье)
-                    val isWeekend = date != null && (
-                            date.dayOfWeek == DayOfWeek.SATURDAY ||
-                                    date.dayOfWeek == DayOfWeek.SUNDAY
-                            )
-                    // День считается выходным, если он выходной ИЛИ явно помечен как dayOff
-                    val isDayOff = if (isWeekend) !isUserDayOff else isUserDayOff
-
-                    val today = kotlinx.datetime.Clock.System.todayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
-                    val isFutureDate = date != null && date > today
-
-                    val bg = when {
-                        isSelected -> MaterialTheme.colorScheme.primary
-                        isVacation -> Color(0xFF81D4FA).copy(alpha = 0.45f)
-                        isDayOff -> Color(0xFFFFCDD2).copy(alpha = 0.6f)
-                        hasHours -> Color(0xFFA5D6A7)
-                        else -> Color.Transparent
+                    if (date == null) {
+                        Spacer(Modifier.weight(1f).fillMaxSize().padding(2.dp))
+                        continue
                     }
 
-                    val txt = when {
-                        isSelected -> MaterialTheme.colorScheme.onPrimary
-                        isVacation || isDayOff -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                        else -> MaterialTheme.colorScheme.onSurface
+                    val isSelected = date == selectedDate
+                    val hasHours = entries.any { it.date == date && it.userId == userId && it.hours > 0f }
+                    val hasExpense = entries.any { it.date == date && it.userId == userId && it.hours <= 0f }
+                    val isVacation = vacations.any { v -> date >= v.start && date <= v.end }
+                    val isUserDayOff = dayOffs.any { it.date == date && it.userId == userId }
+                    val isWeekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
+                    val isDayOff = if (isWeekend) !isUserDayOff else isUserDayOff
+                    val isFuture = date > today
+
+                    val background = when {
+                        isSelected -> ProlesPrimary
+                        isVacation -> ProlesSecondarySoft
+                        isDayOff -> ProlesExpenseSoft
+                        else -> Color.White
+                    }
+                    val textColor = when {
+                        isSelected -> Color.White
+                        isFuture -> ProlesMuted.copy(alpha = 0.55f)
+                        isWeekend -> ProlesExpense
+                        else -> ProlesText
                     }
 
                     Box(
@@ -1739,23 +1735,30 @@ fun CalendarGrid(
                             .weight(1f)
                             .fillMaxSize()
                             .padding(2.dp)
-                            .clickable(
-                                enabled = date != null && !isFutureDate,
-                                onClick = { date?.let { onDateSelected(it) } }
-                            )
-                            .background(
-                                if (isFutureDate) Color.LightGray.copy(alpha = 0.2f) else bg,
-                                MaterialTheme.shapes.small
-                            ),
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(background)
+                            .clickable(enabled = !isFuture) { onDateSelected(date) },
                         contentAlignment = Alignment.Center
                     ) {
-                        date?.let {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                it.dayOfMonth.toString(),
-                                color = if (isFutureDate) Color.Gray else txt,
-                                textAlign = TextAlign.Center,
-                                fontWeight = if (isDayOff && !isSelected) FontWeight.Bold else FontWeight.Normal
+                                date.dayOfMonth.toString(),
+                                color = textColor,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = if (isSelected || isDayOff) FontWeight.SemiBold else FontWeight.Normal
                             )
+                            Spacer(Modifier.height(2.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                if (hasHours) {
+                                    Box(Modifier.size(4.dp).background(if (isSelected) Color.White else ProlesPrimary, CircleShape))
+                                }
+                                if (isVacation) {
+                                    Box(Modifier.size(4.dp).background(if (isSelected) Color.White else ProlesSecondary, CircleShape))
+                                }
+                                if (isDayOff || hasExpense) {
+                                    Box(Modifier.size(4.dp).background(if (isSelected) Color.White else ProlesExpense, CircleShape))
+                                }
+                            }
                         }
                     }
                 }
