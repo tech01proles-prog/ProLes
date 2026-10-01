@@ -11,6 +11,7 @@ import {
 } from 'react-router-dom';
 
 import api from '../api/client';
+import { usePermissions } from '../hooks/usePermissions';
 
 import type {
   CreateSubprojectRequest,
@@ -117,6 +118,8 @@ export function ProjectDetailPage() {
     projectId: string;
   }>();
   const navigate = useNavigate();
+  const { can } = usePermissions();
+  const canEditProject = can('projects', 'edit');
 
   const storedUser = useMemo(() => {
     try {
@@ -145,6 +148,11 @@ export function ProjectDetailPage() {
     useState<SubprojectDto[]>([]);
   const [documents, setDocuments] =
     useState<TnpaDocumentDto[]>([]);
+
+  const [editModalOpen, setEditModalOpen] =
+    useState(false);
+  const [savingProject, setSavingProject] =
+    useState(false);
 
   const [subprojectModalOpen, setSubprojectModalOpen] =
     useState(false);
@@ -397,6 +405,51 @@ export function ProjectDetailPage() {
       [incomes],
     );
 
+  const saveProject = async (value: {
+    name: string;
+    client: string;
+    location: string;
+    productService: string;
+    quantity: string;
+    deliveryDate: string;
+    contract: string;
+    status: string;
+    isActive: boolean;
+  }) => {
+    if (!project) return;
+
+    setSavingProject(true);
+    setError('');
+
+    try {
+      await api.put('/projects', {
+        ...project,
+        name: value.name,
+        client: value.client,
+        location: value.location,
+        productService: value.productService,
+        quantity: Number(value.quantity),
+        deliveryDate: value.deliveryDate || null,
+        contract: value.contract,
+        status: value.status,
+        isActive: value.isActive,
+      });
+
+      setEditModalOpen(false);
+      await loadData();
+    } catch (requestError: any) {
+      console.error(requestError);
+      const message = requestError?.response?.data;
+      setError(
+        typeof message === 'string' && message.trim()
+          ? message
+          : 'Не удалось сохранить проект.',
+      );
+    } finally {
+      setSavingProject(false);
+    }
+  };
+
   const openCreateSubproject = () => {
     setEditingSubproject(null);
     setSubprojectModalOpen(true);
@@ -605,6 +658,7 @@ export function ProjectDetailPage() {
         project={project}
         totalHours={totalHours}
         onBack={() => navigate('/projects')}
+        onEdit={canEditProject ? () => setEditModalOpen(true) : undefined}
       />
 
       {error && (
@@ -914,6 +968,24 @@ export function ProjectDetailPage() {
           />
         </PageSection>
       </div>
+
+      <Modal
+        open={editModalOpen}
+        title="Изменение проекта"
+        description="Измените основные данные проекта и сохраните их."
+        size="lg"
+        closeOnBackdrop={!savingProject}
+        onClose={() => {
+          if (!savingProject) setEditModalOpen(false);
+        }}
+      >
+        <ProjectForm
+          initialValue={project}
+          submitting={savingProject}
+          onCancel={() => setEditModalOpen(false)}
+          onSubmit={saveProject}
+        />
+      </Modal>
 
       <Modal
         open={subprojectModalOpen}
