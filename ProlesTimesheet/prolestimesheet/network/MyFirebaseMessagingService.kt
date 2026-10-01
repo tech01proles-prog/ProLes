@@ -26,7 +26,23 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 putString("fcm_token", token)
             }
 
-        // TODO: Отправить токен на сервер (после логина)
+        // 🔄 Если пользователь уже авторизован — сразу обновляем токен на сервере.
+        // Если FCM вызвался до логина, он останется локально и будет зарегистрирован
+        // при следующем успешном входе.
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                val user = LocalDataStore.getSession(applicationContext)
+                val authToken = LocalDataStore.getAuthToken(applicationContext)
+                if (user != null && !authToken.isNullOrBlank()) {
+                    ApiClient.setToken(authToken)
+                    TimeRepository(applicationContext).registerFcmToken(user.id, token)
+                } else {
+                    Log.d("FCM", "ℹ️ Пользователь ещё не авторизован — токен сохранён локально")
+                }
+            }.onFailure { error ->
+                Log.e("FCM", "❌ Не удалось зарегистрировать новый FCM токен", error)
+            }
+        }
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
