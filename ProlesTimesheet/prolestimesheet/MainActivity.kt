@@ -32,6 +32,7 @@ import com.example.prolestimesheet.network.NetworkMonitor
 import com.example.prolestimesheet.data.sync.SyncQueue
 import androidx.compose.foundation.layout.Box
 import com.example.prolestimesheet.services.ReminderService
+import androidx.core.app.ActivityCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,6 +59,20 @@ class MainActivity : ComponentActivity() {
         // 🆕 Планируем напоминания
         ReminderService.scheduleReminders(applicationContext)
         ReminderService.createNotificationChannel(applicationContext)
+
+        // Android 13+: без runtime-разрешения системные пуши не будут показаны.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                1001
+            )
+        }
 
         // 🔥 Обработчик 401 теперь эмитит глобальное событие
         ApiClient.setSessionExpiredCallback {
