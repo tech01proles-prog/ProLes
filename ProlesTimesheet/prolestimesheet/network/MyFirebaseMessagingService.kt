@@ -18,7 +18,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        Log.d("FCM", "🔑 Новый FCM токен: $token")
+        Log.d("FCM", "🔑 Получен новый FCM токен (длина=" + token.length + ", prefix=" + token.take(12) + "...)")
 
         // Сохраняем токен локально
         getSharedPreferences("fcm_prefs", MODE_PRIVATE)
