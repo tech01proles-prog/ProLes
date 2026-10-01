@@ -832,12 +832,14 @@ fun TimesheetScreen(
         var comment by remember { mutableStateOf("") }
         
         // 🆕 Состояния для смены проекта в диалоге
-        var dialogProjectId by remember { mutableStateOf(selectedProject?.id ?: "") }
-        var dialogProjectName by remember { mutableStateOf(selectedProject?.name ?: "") }
+        var dialogProjectId by remember { mutableStateOf<String?>(selectedProject?.id) }
+        var dialogProjectName by remember { mutableStateOf(selectedProject?.name ?: "Без проекта") }
+        var dialogSubprojectId by remember { mutableStateOf<String?>(null) }
+        var dialogSubprojectName by remember { mutableStateOf("") }
         var showProjectPicker by remember { mutableStateOf(false) }
+        var showExpenseSubprojectPicker by remember { mutableStateOf(false) }
         
-        // 🆕 Поля для категории и подкатегории расхода
-        var expenseCategory by remember { mutableStateOf("WORK") }
+        var expenseCategory by remember { mutableStateOf("WITH_RECEIPT") }
         var expenseSubcategory by remember { mutableStateOf<String?>(null) }
         var showExpenseCategoryPicker by remember { mutableStateOf(false) }
 
@@ -895,7 +897,14 @@ fun TimesheetScreen(
                         tempId = tempExpenseId,
                         uri = uri,
                         isPhoto = true,
-                        fileName = "photo_${System.currentTimeMillis()}.jpg",
+                        fileName = run {
+                            var result: String? = null
+                            context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                                val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                                if (cursor.moveToFirst() && index >= 0) result = cursor.getString(index)
+                            }
+                            result ?: ("photo_" + System.currentTimeMillis())
+                        },
                         mimeType = mimeType
                     )
                 }
@@ -1018,33 +1027,10 @@ fun TimesheetScreen(
                         Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            when (expenseCategory) {
-                                "WORK" -> "💼 Рабочий расход"
-                                "PERSONAL" -> "👤 Личный расход"
-                                "OTHER" -> "📦 Прочий расход"
-                                else -> expenseCategory
-                            }
+                            if (expenseCategory == "WITHOUT_RECEIPT") "🚫 Без чека" else "🧾 С чеком"
                         )
                     }
                     
-                    // 🔹 Выбор подкатегории (опционально)
-                    if (expenseCategory == "WORK") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            FilterChip(
-                                selected = expenseSubcategory == "TRANSPORT",
-                                onClick = { expenseSubcategory = if (expenseSubcategory == "TRANSPORT") null else "TRANSPORT" },
-                                label = { Text("Транспорт") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            FilterChip(
-                                selected = expenseSubcategory == "MEALS",
-                                onClick = { expenseSubcategory = if (expenseSubcategory == "MEALS") null else "MEALS" },
-                                label = { Text("Питание") },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-
                     // 🆕 Плавная анимация поля "Название расхода"
                     AnimatedContent(
                         targetState = expenseType,
@@ -1106,66 +1092,70 @@ fun TimesheetScreen(
                         }
                     }
 
+                    if (expenseCategory == "WITH_RECEIPT") {
                     // 📸 Кнопки добавления фото/файлов чека (поддержка нескольких файлов)
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                    ) {
-                        Text("Прикрепить файлы чека", style = MaterialTheme.typography.labelMedium)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                         ) {
-                            if (uploadingPhoto) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text("Загрузка...", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                            } else {
-                                OutlinedButton(
-                                    onClick = {
-                                        currentPhotoExpenseId = tempExpenseId
-                                        showPhotoSourceDialog = true
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("📷 Фото")
-                                }
-                                OutlinedButton(
-                                    onClick = {
-                                        currentPhotoExpenseId = tempExpenseId
-                                        multiplePhotoPickerLauncher.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                        )
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.PhotoLibrary, null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("🖼️ Галерея")
+                            Text("Прикрепить файлы чека", style = MaterialTheme.typography.labelMedium)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (uploadingPhoto) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text("Загрузка...", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                } else {
+                                    OutlinedButton(
+                                        onClick = {
+                                            currentPhotoExpenseId = tempExpenseId
+                                            showPhotoSourceDialog = true
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("📷 Фото")
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            currentPhotoExpenseId = tempExpenseId
+                                            multiplePhotoPickerLauncher.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            )
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.PhotoLibrary, null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("🖼️ Галерея")
+                                    }
                                 }
                             }
+                            OutlinedButton(
+                                onClick = {
+                                    currentPhotoExpenseId = tempExpenseId
+                                    documentPickerLauncher.launch("*/*")
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !uploadingPhoto
+                            ) {
+                                Icon(Icons.Default.AttachMoney, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("📎 Прикрепить документы (PDF, DOC и др.)")
+                            }
+                            if (currentPendingFiles.isNotEmpty()) {
+                                Text("Прикреплено файлов: ${currentPendingFiles.size}", style = MaterialTheme.typography.bodySmall)
+                            }
                         }
-                        OutlinedButton(
-                            onClick = {
-                                currentPhotoExpenseId = tempExpenseId
-                                documentPickerLauncher.launch("*/*")
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !uploadingPhoto
-                        ) {
-                            Icon(Icons.Default.AttachMoney, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("📎 Прикрепить документы (PDF, DOC и др.)")
-                        }
-                        if (currentPendingFiles.isNotEmpty()) {
-                            Text("Прикреплено файлов: ${currentPendingFiles.size}", style = MaterialTheme.typography.bodySmall)
-                        }
+    
+    
                     }
 
                     // 🔽 Поле комментария
@@ -1182,12 +1172,14 @@ fun TimesheetScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (amount.isNotEmpty() && dialogProjectId.isNotBlank()) {
+                        if (amount.isNotEmpty()) {
                             val isOtherValid = expenseType == "ROAD" || name.isNotBlank()
                             if (isOtherValid) {
                                 viewModel.addExpense(
                                     projectId = dialogProjectId,
                                     projectName = dialogProjectName,
+                                    subprojectId = dialogSubprojectId,
+                                    subprojectName = dialogSubprojectName,
                                     date = selectedDate,
                                     type = expenseType,
                                     name = if (expenseType == "OTHER") name else "",
@@ -1196,7 +1188,7 @@ fun TimesheetScreen(
                                     comment = comment,
                                     category = expenseCategory,
                                     subcategory = expenseSubcategory,
-                                    tempId = tempExpenseId,
+                                    tempId = if (expenseCategory == "WITH_RECEIPT") tempExpenseId else null,
                                     context = context
                                 )
                                 showExpenseDialog = false
@@ -1204,7 +1196,6 @@ fun TimesheetScreen(
                         }
                     },
                     enabled = amount.isNotEmpty()
-                            && dialogProjectId.isNotBlank()
                             && (expenseType == "ROAD" || name.isNotBlank())
                 ) { Text("Добавить") }
             },
@@ -1223,30 +1214,23 @@ fun TimesheetScreen(
                         item {
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable {
-                                    expenseCategory = "WORK"
+                                    expenseCategory = "WITH_RECEIPT"
                                     expenseSubcategory = null
                                     showExpenseCategoryPicker = false
                                 }.padding(vertical = 12.dp)
-                            ) { Text("💼 Рабочий расход", style = MaterialTheme.typography.bodyMedium) }
+                            ) { Text("🧾 С чеком — можно прикрепить чек", style = MaterialTheme.typography.bodyMedium) }
                         }
                         item {
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable {
-                                    expenseCategory = "PERSONAL"
+                                    expenseCategory = "WITHOUT_RECEIPT"
                                     expenseSubcategory = null
+                                    viewModel.clearPendingExpenseFiles(tempExpenseId)
                                     showExpenseCategoryPicker = false
                                 }.padding(vertical = 12.dp)
-                            ) { Text("👤 Личный расход", style = MaterialTheme.typography.bodyMedium) }
+                            ) { Text("🚫 Без чека — прикрепление запрещено", style = MaterialTheme.typography.bodyMedium) }
                         }
-                        item {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    expenseCategory = "OTHER"
-                                    expenseSubcategory = null
-                                    showExpenseCategoryPicker = false
-                                }.padding(vertical = 12.dp)
-                            ) { Text("📦 Прочий расход", style = MaterialTheme.typography.bodyMedium) }
-                        }
+
                     }
                 },
                 confirmButton = {}
