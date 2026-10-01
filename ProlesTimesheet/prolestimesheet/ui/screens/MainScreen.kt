@@ -184,6 +184,7 @@ fun MainScreen(
                     onNavigateToMyExpenses = { navigateTo(Screen.MyExpenses) },
                     onNavigateToMyTrips = { navigateTo(Screen.BusinessTrips) },
                     onNavigateToNotifications = { navigateTo(Screen.Notifications) },
+                    onNavigateToNotificationSettings = { navigateTo(Screen.NotificationSettings) },
                     onNavigateToMyTickets = { navigateTo(Screen.MyTickets) },  // 🆕
                     onNavigateToStats = { navigateTo(Screen.EmployeeStats) },  // 🆕 Статистика сотрудника
                     onNavigateToExpensesIncomes = { navigateTo(Screen.ExpensesIncomesList) }  // 🆕 Расходы/Доходы
