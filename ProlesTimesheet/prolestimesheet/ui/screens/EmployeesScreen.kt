@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import com.example.prolestimesheet.model.Currency
 import com.example.prolestimesheet.model.RateType
 import com.example.prolestimesheet.model.User
@@ -59,6 +60,14 @@ fun EmployeesScreen(
             modifier = modifier.padding(padding).fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            item {
+                ProlesHero(
+                    title = "Сотрудники",
+                    subtitle = "Команда, роли и рабочие профили",
+                    icon = Icons.Default.People,
+                    gradient = listOf(Color(0xFF059669), Color(0xFF14B8A6), Color(0xFF0EA5E9))
+                )
+            }
             items(employees, key = { it.id }) { user ->
                 Card(
                     modifier = Modifier
