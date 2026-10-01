@@ -19,6 +19,8 @@ import io.ktor.client.statement.readRawBytes
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.datetime.LocalDate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -1537,8 +1539,8 @@ object ApiClient {
         recipientIds: List<String>,
         fileUri: android.net.Uri,
         receiptUri: android.net.Uri? = null  // 🆕 Чек (опционально)
-    ): Boolean {
-        return try {
+    ): Boolean = withContext(Dispatchers.IO) {
+        return@withContext try {
             val contentResolver = context.contentResolver
 
             // Читаем файл билета в ByteArray
