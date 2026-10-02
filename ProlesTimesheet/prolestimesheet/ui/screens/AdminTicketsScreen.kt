@@ -574,7 +574,7 @@ private fun AdminTicketCard(
                     onClick = {
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                             val uri = com.example.prolestimesheet.network.DownloadManager.download(
-                                context, ticket.receiptDownloadUrl!!, "receipt_" + ticket.id, ticket.fileType.ifBlank { "application/octet-stream" }
+                                context, ticket.receiptDownloadUrl!!, "receipt_" + ticket.id, "application/octet-stream"
                             )
                             if (uri != null) {
                                 android.os.Handler(android.os.Looper.getMainLooper()).post {
