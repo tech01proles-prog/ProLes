@@ -547,11 +547,7 @@ private fun AdminTicketCard(
                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                         val uri = com.example.prolestimesheet.network.DownloadManager.download(
                             context, ticket.downloadUrl, fileName,
-                            when {
-                                fileType.contains("pdf") -> "application/pdf"
-                                fileType.contains("image") -> "image/jpeg"
-                                else -> "application/octet-stream"
-                            }
+                            fileType.ifBlank { "application/octet-stream" }
                         )
                         if (uri != null) {
                             android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -566,11 +562,7 @@ private fun AdminTicketCard(
                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                         com.example.prolestimesheet.network.DownloadManager.retry(
                             context, ticket.downloadUrl, fileName,
-                            when {
-                                fileType.contains("pdf") -> "application/pdf"
-                                fileType.contains("image") -> "image/jpeg"
-                                else -> "application/octet-stream"
-                            }
+                            fileType.ifBlank { "application/octet-stream" }
                         )
                     }
                 }
@@ -582,7 +574,7 @@ private fun AdminTicketCard(
                     onClick = {
                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                             val uri = com.example.prolestimesheet.network.DownloadManager.download(
-                                context, ticket.receiptDownloadUrl!!, "receipt_" + ticket.id, "application/octet-stream"
+                                context, ticket.receiptDownloadUrl!!, "receipt_" + ticket.id, ticket.fileType.ifBlank { "application/octet-stream" }
                             )
                             if (uri != null) {
                                 android.os.Handler(android.os.Looper.getMainLooper()).post {
