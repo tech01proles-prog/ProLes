@@ -84,7 +84,12 @@ export function TicketsPage() {
 
   const handleDownload = async (ticket: TicketDto) => {
     try {
-      await downloadProtectedFile(ticket.downloadUrl, ticket.fileName);
+      // Старые записи могли содержать прямой /uploads/... URL.
+      // Всегда скачиваем билет через защищённый endpoint.
+      const downloadUrl = ticket.downloadUrl.startsWith('/uploads/tickets/')
+        ? '/tickets/' + ticket.id + '/download'
+        : ticket.downloadUrl;
+      await downloadProtectedFile(downloadUrl, ticket.fileName);
     } catch (err) {
       console.error(err);
       addToast('Не удалось скачать билет', 'error');
