@@ -591,7 +591,7 @@ internal fun Route.ticketRoutes() {
                             description = row[TicketsTable.description],
                             uploadedAt = row[TicketsTable.uploadedAt],
                             viewedAt = row[TicketRecipientsTable.viewedAt],
-                            downloadUrl = row[TicketsTable.filePath],
+                            downloadUrl = "/api/v1/tickets/$ticketId/download",
                             sendToAccountant = row[TicketsTable.sendToAccountant],
                             accountantEmail = row[TicketsTable.accountantEmail],
                             amount = row[TicketsTable.amount],          //
@@ -641,11 +641,60 @@ internal fun Route.ticketRoutes() {
                             hasReceipt = row[TicketsTable.receiptPath] != null,  // 🆕 Флаг наличия чека
                             receiptDownloadUrl = row[TicketsTable.receiptPath]?.let { "/api/v1/tickets/$ticketId/receipt" },
                             recipients = recipients,
-                            downloadUrl = row[TicketsTable.filePath]
+                            downloadUrl = "/api/v1/tickets/$ticketId/download"
                         )
                     }
             }
             call.respond(HttpStatusCode.OK, tickets)
+        }
+
+        // 📥 Скачать исходный файл билета.
+        // Отдаём сохранённые байты напрямую, с исходным MIME и именем файла.
+        get("/{ticketId}/download") {
+            if (!call.checkPermission(Permission.TICKETS, "view")) return@get
+            val session = call.checkTicketSession() ?: return@get
+            val ticketId = runCatching { UUID.fromString(call.parameters["ticketId"]) }
+                .getOrNull()
+                ?: return@get call.respond(HttpStatusCode.BadRequest, "Invalid ticketId")
+
+            val ticket = transaction {
+                TicketsTable.selectAll()
+                    .where { TicketsTable.id eq ticketId }
+                    .limit(1)
+                    .singleOrNull()
+            } ?: return@get call.respond(HttpStatusCode.NotFound, "Ticket not found")
+
+            val allowed = session.role in listOf("admin", "superadmin", "director") ||
+                ticket[TicketsTable.uploadedBy].value == session.userId ||
+                transaction {
+                    TicketRecipientsTable.selectAll()
+                        .where {
+                            (TicketRecipientsTable.ticketId eq ticketId) and
+                                (TicketRecipientsTable.userId eq session.userId)
+                        }
+                        .limit(1)
+                        .any()
+                }
+
+            if (!allowed) return@get call.respond(HttpStatusCode.Forbidden, "Access denied")
+
+            val storedPath = ticket[TicketsTable.filePath]
+            val file = java.io.File("." + storedPath)
+            if (!file.isFile) return@get call.respond(HttpStatusCode.NotFound, "Ticket file not found")
+
+            val fileName = ticket[TicketsTable.originalName].takeIf { it.isNotBlank() } ?: file.name
+            val fileType = ticket[TicketsTable.fileType]
+                .takeIf { it.isNotBlank() }
+                ?: "application/octet-stream"
+
+            call.response.header(HttpHeaders.ContentType, fileType)
+            call.response.header(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment
+                    .withParameter(ContentDisposition.Parameters.FileName, fileName)
+                    .toString()
+            )
+            call.respondFile(file)
         }
 
         get("/{ticketId}/receipt") {
