@@ -245,6 +245,7 @@ fun Route.chatRoutes() {
                     .limit(1).singleOrNull()
                     ?: return@transaction null
                 if (existing[ChatMessagesTable.deletedAt] != null) return@transaction null
+                if (existing[ChatMessagesTable.senderId].value != session.userId) return@transaction null
 
                 val encrypted = ChatCrypto.encrypt(text)
                 val editedAt = System.currentTimeMillis()
@@ -277,6 +278,7 @@ fun Route.chatRoutes() {
                     .where { (ChatMessagesTable.id eq messageId) and (ChatMessagesTable.conversationId eq conversationId) }
                     .limit(1).singleOrNull()
                     ?: return@transaction null
+                if (existing[ChatMessagesTable.senderId].value != session.userId) return@transaction null
 
                 val deletedAt = System.currentTimeMillis()
                 ChatMessagesTable.update({ ChatMessagesTable.id eq messageId }) {
