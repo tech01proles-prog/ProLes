@@ -55,6 +55,13 @@ private fun validateBusinessTripSubproject(
     return validateActiveSubproject(projectId, subprojectId)
 }
 
+@kotlinx.serialization.Serializable
+private data class CompleteBusinessTripResponse(
+    val success: Boolean,
+    val status: String,
+    val endDate: String
+)
+
 private enum class BusinessTripResult {
     NOT_FOUND,
     FORBIDDEN,
@@ -669,10 +676,10 @@ internal fun Route.businessTripRoutes() {
                 BusinessTripResult.UPDATED ->
                     call.respond(
                         HttpStatusCode.OK,
-                        mapOf(
-                            "success" to true,
-                            "status" to "COMPLETED",
-                            "endDate" to endDate.toString()
+                        CompleteBusinessTripResponse(
+                            success = true,
+                            status = "COMPLETED",
+                            endDate = endDate.toString()
                         )
                     )
 
