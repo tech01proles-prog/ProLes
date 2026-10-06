@@ -46,6 +46,7 @@ sealed class Screen(val title: String, val icon: ImageVector) {
     object AdminProjectExpenses : Screen("Расходы по проектам", Icons.Default.AttachMoney)
     object EmployeeStats : Screen("Моя статистика", Icons.Default.Analytics)
     object ExpensesIncomesList : Screen("Расходы/Доходы", Icons.Default.MonetizationOn)
+    object Chat : Screen("Чат", Icons.Default.Chat)
 }
 
 @Composable
