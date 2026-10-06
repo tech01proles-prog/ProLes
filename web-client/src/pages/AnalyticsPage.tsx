@@ -496,6 +496,7 @@ export function AnalyticsPage() {
               <div className="detail-tone detail-blue"><span>Рабочих дней</span><strong>{selectedEmployee.workDays}</strong></div>
               <div className="detail-tone detail-amber"><span>Затраты сотрудников</span><strong>{formatMoneyExact(selectedEmployee.employeeExpenseRub)}</strong></div>
               <div className="detail-tone detail-blue"><span>Суточные</span><strong>{formatMoneyExact(selectedEmployee.perDiemRub)}</strong></div>
+              <div className="detail-tone detail-green"><span>С чеком</span><strong>{formatMoneyExact(selectedEmployee.receiptRub)}</strong></div>
               <div className="detail-tone detail-red"><span>Без чека</span><strong>{formatMoneyExact(selectedEmployee.noReceiptRub)}</strong></div>
             </div>
             <div className="analytics-detail-section"><h3>По проектам</h3><div className="space-y-2">{employeeDetail.byProject.map(p => <button key={p.projectId} onClick={() => { setSelectedEmployeeId(null); setSelectedProjectId(p.projectId); }} className="analytics-detail-row"><span className="detail-main-label"><i className="detail-dot detail-dot-green" />{p.name}</span><span className="detail-value detail-value-blue">{formatDuration(p.hours)} · {formatMoneyExact(p.employeeExpense)} · суточные {formatMoneyExact(p.perDiem)}</span></button>)}</div></div>
@@ -519,6 +520,7 @@ export function AnalyticsPage() {
             <div className="analytics-detail-grid">
               <div className="detail-tone detail-amber"><span>Затраты сотрудников</span><strong>{formatMoneyExact(selectedProject.employeeExpenseRub)}</strong></div>
               <div className="detail-tone detail-blue"><span>Суточные</span><strong>{formatMoneyExact(selectedProject.perDiemRub)}</strong></div>
+              <div className="detail-tone detail-green"><span>С чеком</span><strong>{formatMoneyExact(selectedProject.receiptRub)}</strong></div>
               <div className="detail-tone detail-red"><span>Без чека</span><strong>{formatMoneyExact(selectedProject.noReceiptRub)}</strong></div>
               <div className="detail-tone detail-green"><span>Рабочее время</span><strong>{formatDuration(selectedProject.hours)}</strong></div>
               <div className={`detail-tone ${selectedProject.marginPct < 0 ? 'detail-red' : 'detail-green'}`}><span>Маржа</span><strong>{Math.round(selectedProject.marginPct)}%</strong></div>
