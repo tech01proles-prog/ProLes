@@ -140,6 +140,14 @@ fun ChatScreen(
         loading = true
         loadSidebar()
         loading = false
+        while (true) {
+            delay(2000)
+            ChatApi.conversations().onSuccess { list ->
+                conversations = list.sortedByDescending { it.updatedAt }
+                if (activeConversationId == null) activeConversationId = list.firstOrNull()?.id
+            }
+            ChatApi.users().onSuccess { users = it }
+        }
     }
 
     LaunchedEffect(activeConversationId) {
@@ -148,18 +156,15 @@ fun ChatScreen(
         nextCursor = null
         loadMessages(conversationId)
         while (true) {
-            delay(1000)
+            delay(800)
             ChatApi.messages(conversationId, limit = 50).onSuccess { page ->
                 val incoming = page.items.reversed()
-                val previousSize = messages.size
+                val previousLastId = messages.lastOrNull()?.id
                 messages = mergeMessages(incoming).takeLast(200)
-                if (messages.size > previousSize) {
+                if (messages.lastOrNull()?.id != previousLastId) {
                     listState.animateScrollToItem(messages.lastIndex.coerceAtLeast(0))
                     messages.lastOrNull { it.senderId != userId }?.let { ChatApi.markRead(conversationId, it.id) }
                 }
-            }
-            ChatApi.conversations().onSuccess { list ->
-                conversations = list.sortedByDescending { it.updatedAt }
             }
         }
     }
@@ -306,13 +311,21 @@ fun ChatScreen(
         }
 
         if (selectedFiles.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                selectedFiles.take(3).forEach { uri ->
-                    Surface(shape = RoundedCornerShape(14.dp), color = Color.Transparent) {
-                        Text(queryFileName(context, uri), modifier = Modifier.widthIn(max = 150.dp).padding(horizontal = 10.dp, vertical = 8.dp), maxLines = 1)
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(selectedFiles, key = { it.toString() }) { uri ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ProlesPrimarySoft).padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(queryFileName(context, uri), Modifier.weight(1f), maxLines = 1)
+                        IconButton(onClick = { selectedFiles = selectedFiles.filterNot { it == uri } }) {
+                            Text("×", fontWeight = FontWeight.Black, color = ProlesExpense)
+                        }
                     }
                 }
-                if (selectedFiles.size > 3) Text("+${selectedFiles.size - 3}", modifier = Modifier.padding(8.dp))
             }
         }
 
