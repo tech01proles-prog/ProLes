@@ -55,13 +55,6 @@ private fun validateBusinessTripSubproject(
     return validateActiveSubproject(projectId, subprojectId)
 }
 
-@kotlinx.serialization.Serializable
-private data class CompleteBusinessTripResponse(
-    val success: Boolean,
-    val status: String,
-    val endDate: String
-)
-
 private enum class BusinessTripResult {
     NOT_FOUND,
     FORBIDDEN,
@@ -599,6 +592,8 @@ internal fun Route.businessTripRoutes() {
                 )
             }
 
+            var completedTrip: BusinessTripDto? = null
+
             val result = transaction {
                 val existing = BusinessTripsTable
                     .selectAll()
@@ -648,7 +643,7 @@ internal fun Route.businessTripRoutes() {
             }
 
             if (result == BusinessTripResult.UPDATED) {
-                val completedTrip = transaction {
+                completedTrip = transaction {
                     BusinessTripsTable
                         .selectAll()
                         .where { BusinessTripsTable.id eq tripId }
@@ -656,7 +651,7 @@ internal fun Route.businessTripRoutes() {
                         ?.let(::mapRowToBusinessTripDto)
                 }
                 if (completedTrip != null) {
-                    NotificationService.notifyBusinessTripCompleted(completedTrip)
+                    NotificationService.notifyBusinessTripCompleted(completedTrip!!)
                 }
             }
 
@@ -674,14 +669,11 @@ internal fun Route.businessTripRoutes() {
                     )
 
                 BusinessTripResult.UPDATED ->
-                    call.respond(
-                        HttpStatusCode.OK,
-                        CompleteBusinessTripResponse(
-                            success = true,
-                            status = "COMPLETED",
-                            endDate = endDate.toString()
-                        )
-                    )
+                    if (completedTrip != null) {
+                        call.respond(HttpStatusCode.OK, completedTrip!!)
+                    } else {
+                        call.respond(HttpStatusCode.NotFound, "Business trip not found")
+                    }
 
                 BusinessTripResult.DELETED ->
                     call.respond(HttpStatusCode.NoContent)
