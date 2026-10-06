@@ -96,6 +96,23 @@ data class ProjectCostPayrollDataDto(
 )
 
 @Serializable
+@Serializable
+data class ProjectRealizationCostDto(
+    val id: String,
+    val projectId: String,
+    val amount: Double,
+    val comment: String = "",
+    val date: String,
+    val createdAt: Long
+)
+
+@Serializable
+data class CreateProjectRealizationCostDto(
+    val amount: Double,
+    val comment: String = "",
+    val date: String
+)
+
 data class ProjectCostUpdateDto(
     val sellingPrice: Double = 0.0,
     val transportToClient: Double = 0.0,
