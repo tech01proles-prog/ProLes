@@ -38,7 +38,7 @@ const findIncomeType = (key: string) => INCOME_TYPES.find(t => t.key === key);
 const findExpenseType = (key: string) => EXPENSE_TYPES.find(t => t.key === key);
 
 type ReportPreset = '1' | '2' | '3';
-const PER_DIEM_TYPES = new Set(['PER_DIEM']);
+const PER_DIEM_TYPES = new Set(['PER_DIEM', 'PER_DIEM_EXTRA']);
 const EXTRA_PER_DIEM_TYPES = new Set(['PER_DIEM_EXTRA']);
 const isPerDiem = (entry: CombinedEntry) =>
   entry.type === 'EXPENSE' && PER_DIEM_TYPES.has(entry.subcategory || '');
@@ -47,6 +47,9 @@ const isExtraPerDiem = (entry: CombinedEntry) =>
     EXTRA_PER_DIEM_TYPES.has(entry.subcategory || '') ||
     (entry.name || '').toLowerCase().replace(/ё/g, 'е').includes('суточные сверх')
   );
+const hasActualReceipt = (expense: ExpenseDto) =>
+  Number(expense.receiptCount || 0) > 0 || Boolean(expense.hasReceiptPhoto);
+
 const isHouseholdExpense = (entry: CombinedEntry) => {
   if (entry.type !== 'EXPENSE') return false;
   const type = (entry.subcategory || '').toUpperCase();
@@ -148,7 +151,6 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
   const [hidePerDiem, setHidePerDiem] = useState(false);
   const [hideDirectorExpenses, setHideDirectorExpenses] = useState(false);
   const [filterReceipt, setFilterReceipt] = useState<'all' | 'with' | 'without'>('all');
-  const [filterCategory, setFilterCategory] = useState<'all' | 'WITH_RECEIPT' | 'WITHOUT_RECEIPT'>('all');
   const [filterSubcategory, setFilterSubcategory] = useState('all');  // 🆕 Фильтр по подкатегории (типу расхода)
   const [reportPreset, setReportPreset] = useState<ReportPreset | null>(null);
   
@@ -326,13 +328,10 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
       amount: expense.amount,
       currency: expense.currency,
       comment: expense.comment || '',
-      hasReceipt:
-        expense.category === 'WITHOUT_RECEIPT' ||
-        Boolean(expense.receiptSubmitted || expense.hasReceiptPhoto),
-      entryCategory:
-        expense.category === 'WITHOUT_RECEIPT'
-          ? 'WITHOUT_RECEIPT'
-          : 'WITH_RECEIPT',
+      hasReceipt: hasActualReceipt(expense),
+      entryCategory: hasActualReceipt(expense)
+        ? 'WITH_RECEIPT'
+        : 'WITHOUT_RECEIPT',
       expenseScope: expense.expenseScope,
       creatorRole: expense.creatorRole,
     })),
@@ -344,10 +343,8 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
     .filter(entry => effectiveScope !== 'all' || filterUser === 'all' || entry.userId === filterUser)
     .filter(entry => {
       if (reportPreset === '1') return true;
-      if (reportPreset === '2') return entry.type === 'EXPENSE' && (isHouseholdExpense(entry) || isPerDiem(entry));
-      if (reportPreset === '3') return entry.type === 'INCOME' || (
-        entry.type === 'EXPENSE' && !isPerDiem(entry) && (!entry.hasReceipt || isExtraPerDiem(entry))
-      );
+      if (reportPreset === '2') return entry.type === 'EXPENSE' && (isPerDiem(entry) || Boolean(entry.hasReceipt));
+      if (reportPreset === '3') return entry.type === 'EXPENSE' && isHouseholdExpense(entry);
       return filterEntryType === 'all' || entry.type === filterEntryType;
     })
     .filter(entry => reportPreset ? true : (filterCategory === 'all' || entry.entryCategory === filterCategory))
@@ -514,7 +511,6 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
     if (canViewAll) setScope('all');
     setFilterUser('all');
     setFilterEntryType('all');
-    setFilterCategory('all');
     setFilterSubcategory('all');
     setFilterReceipt('all');
     setHidePerDiem(false);
@@ -965,22 +961,23 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Шаблоны отчетов</div>
           <div className="flex flex-wrap gap-2">
             {([
-              ['1', '📊 Отчет 1', 'Все доходы и расходы'],
-              ['2', '🏠 Отчет 2', 'Хоз.нужды + суточные'],
-              ['3', '🧾 Отчет 3', 'Доходы + расходы без чека + сверхсуточные'],
-            ] as const).map(([preset, label, hint]) => (
+              ['1', '📊 Отчет 1', 'Все доходы и расходы', 'from-indigo-600 to-violet-600'],
+              ['2', '🧾 Отчет 2', 'Суточные + расходы с фактическим чеком', 'from-emerald-600 to-teal-600'],
+              ['3', '🏠 Отчет 3', 'Только расходы на хоз. нужды', 'from-amber-500 to-orange-600'],
+            ] as const).map(([preset, label, hint, gradient]) => (
               <button
                 key={preset}
                 type="button"
                 onClick={() => applyReportPreset(preset)}
                 title={hint}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all border ${
+                className={`group rounded-xl border px-4 py-2.5 text-left transition-all shadow-sm ${
                   reportPreset === preset
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200 dark:shadow-indigo-900/30'
-                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
+                    ? `bg-gradient-to-r ${gradient} text-white border-transparent shadow-lg scale-[1.01]`
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700'
                 }`}
               >
-                {label}
+                <span className="block text-sm font-bold">{label}</span>
+                <span className={`mt-0.5 block text-[11px] ${reportPreset === preset ? 'text-white/85' : 'text-slate-500 dark:text-slate-400'}`}>{hint}</span>
               </button>
             ))}
             {reportPreset && (
@@ -1058,20 +1055,13 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
               <option value="EXPENSE">📉 Расходы</option>
             </select>
             <select
-              value={filterCategory}
-              onChange={event =>
-                setFilterCategory(
-                  event.target.value as
-                    | 'all'
-                    | 'WITH_RECEIPT'
-                    | 'WITHOUT_RECEIPT',
-                )
-              }
+              value={filterReceipt}
+              onChange={event => setFilterReceipt(event.target.value as 'all' | 'with' | 'without')}
               className="input bg-white dark:bg-slate-900"
             >
               <option value="all">Все подтверждения</option>
-              <option value="WITH_RECEIPT">С чеком</option>
-              <option value="WITHOUT_RECEIPT">Без чека</option>
+              <option value="with">С чеком — файл загружен</option>
+              <option value="without">Без чека — файла нет</option>
             </select>
           </div>
         )}
