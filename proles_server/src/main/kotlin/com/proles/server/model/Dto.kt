@@ -96,7 +96,6 @@ data class ProjectCostPayrollDataDto(
 )
 
 @Serializable
-@Serializable
 data class ProjectRealizationCostDto(
     val id: String,
     val projectId: String,
