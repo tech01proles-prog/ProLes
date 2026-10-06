@@ -72,9 +72,9 @@ fun MainScreen(
     val visibleScreens = remember(user?.role, userPermissions) {
         val isDirector = user?.role == "director"
         val base = if (isDirector) {
-            listOf(Screen.Home, Screen.Profile)
+            listOf(Screen.Home, Screen.Profile, Screen.Chat)
         } else {
-            listOf(Screen.Home, Screen.Timesheet, Screen.Profile)
+            listOf(Screen.Home, Screen.Timesheet, Screen.Profile, Screen.Chat)
         }
         val hasManagementRole = user?.role in setOf("admin", "director", "superadmin")
         if (hasManagementRole) base + Screen.Admin else base
@@ -319,6 +319,12 @@ fun MainScreen(
                     onBack = { goBack() }
                 )
                 
+                Screen.Chat -> ChatScreen(
+                    userId = user?.id ?: "",
+                    context = context,
+                    onBack = { goBack() }
+                )
+
                 Screen.ExpensesIncomesList -> ExpensesIncomesListScreen(
                     viewModel = viewModel,
                     onBack = { goBack() }
