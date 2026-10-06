@@ -590,7 +590,8 @@ internal fun Route.payrollRoutes() {
                     withholdingRepayment = repayment,
                     gross = gross,
                     total = total,
-                    balance = balance
+                    balance = balance,
+                    projectGroups = breakdown.projectGroups
                 )
             }
 
