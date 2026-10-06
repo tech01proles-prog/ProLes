@@ -199,6 +199,77 @@ data class BusinessTrip(
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
+data class ChatUser(
+    val id: String,
+    val name: String,
+    val role: String,
+    val position: String = "",
+    val online: Boolean = false
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class ChatAttachment(
+    val id: String,
+    val originalName: String,
+    val mimeType: String,
+    val sizeBytes: Long,
+    val downloadUrl: String
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class ChatMessage(
+    val id: String,
+    val conversationId: String,
+    val senderId: String,
+    val senderName: String,
+    val text: String,
+    val clientMessageId: String,
+    val replyToMessageId: String? = null,
+    val createdAt: Long,
+    val editedAt: Long? = null,
+    val deletedAt: Long? = null,
+    val deliveryStatus: String = "SENT",
+    val attachments: List<ChatAttachment> = emptyList()
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class ChatConversation(
+    val id: String,
+    val type: String,
+    val title: String,
+    val members: List<ChatUser> = emptyList(),
+    val lastMessage: ChatMessage? = null,
+    val unreadCount: Int = 0,
+    val updatedAt: Long = 0L
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class ChatMessagesPage(
+    val items: List<ChatMessage> = emptyList(),
+    val nextCursor: String? = null
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class ChatSendMessageRequest(
+    val text: String,
+    val clientMessageId: String,
+    val replyToMessageId: String? = null
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class ChatUpdateMessageRequest(val text: String)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class ChatReadRequest(val messageId: String? = null)
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
 data class Notification(
     val id: String,
     val targetUserId: String? = null,
