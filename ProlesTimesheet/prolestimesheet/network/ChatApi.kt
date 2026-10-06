@@ -132,5 +132,5 @@ object ChatApi {
 
     private fun createClientMessageId(): String = "android-${System.currentTimeMillis()}-${UUID.randomUUID()}"
 
-    private inline fun <T> request(block: () -> T): Result<T> = runCatching { block() }
+    private suspend inline fun <T> request(crossinline block: suspend () -> T): Result<T> = runCatching { block() }
 }
