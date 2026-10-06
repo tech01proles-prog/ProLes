@@ -292,6 +292,18 @@ export function TripsPage() {
       );
 
       setShowCompleteDialog(false);
+      setTrips(current =>
+        current.map(trip =>
+          trip.id === activeTrip.id
+            ? {
+                ...trip,
+                status: 'COMPLETED',
+                endDate: completionDate,
+                completedDate: completionDate,
+              }
+            : trip,
+        ),
+      );
       await loadData();
     } catch (error) {
       alert(
