@@ -134,8 +134,6 @@ const SECTIONS: ManagementSection[] = [
         title: 'Часы',
         description: 'Часы по сотрудникам и проектам',
         gradient: 'from-cyan-500 to-blue-500',
-        permission: 'timesheet',
-        action: 'view',
       },
       {
         to: '/positions',
@@ -198,7 +196,6 @@ export function ManagementPage() {
     .map(section => ({
       ...section,
       cards: section.cards.filter(card => {
-        if (isDirector && card.to === '/hours-calendar') return false;
         if (card.directorOnly && !isDirector) return false;
         return card.permission ? can(card.permission, card.action || 'view') : true;
       }),
