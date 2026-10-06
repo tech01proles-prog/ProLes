@@ -347,8 +347,7 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
       if (reportPreset === '3') return entry.type === 'EXPENSE' && isHouseholdExpense(entry);
       return filterEntryType === 'all' || entry.type === filterEntryType;
     })
-    .filter(entry => reportPreset ? true : (filterCategory === 'all' || entry.entryCategory === filterCategory))
-    .filter(entry => reportPreset ? true : (filterSubcategory === 'all' || entry.subcategory === filterSubcategory))
+        .filter(entry => reportPreset ? true : (filterSubcategory === 'all' || entry.subcategory === filterSubcategory))
     .filter(entry => reportPreset ? true : (!hidePerDiem || !isPerDiem(entry)))
     .filter(entry => {
       if (reportPreset) return true;
