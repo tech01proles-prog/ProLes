@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import type { TimeEntryDto, UserDto, ProjectDto, DayOffDto } from '../types';
 import { monthName } from '../lib/utils';
-import { usePermissions } from '../hooks/usePermissions';
 
 // 🔥 Контрастная палитра из 13 сильно различающихся цветов
 const USER_COLORS = [
@@ -31,9 +30,6 @@ export function HoursCalendarPage() {
   const [searchParams] = useSearchParams();
   const filterUserId = searchParams.get('userId');
 
-  const { can, loading: permLoading } = usePermissions();
-  const canViewAll = !permLoading && can('projects', 'view');
-
   const [entries, setEntries] = useState<TimeEntryDto[]>([]);
   const [users, setUsers] = useState<UserDto[]>([]);
   const [projects, setProjects] = useState<ProjectDto[]>([]);
@@ -50,7 +46,6 @@ export function HoursCalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string>(now.toISOString().slice(0, 10));
 
   useEffect(() => {
-    if (!canViewAll) return;
     (async () => {
       setLoading(true);
       const [e, u, p, d] = await Promise.allSettled([
@@ -65,7 +60,7 @@ export function HoursCalendarPage() {
       setDayOffs(d.status === 'fulfilled' ? d.value.data : []);
       setLoading(false);
     })();
-  }, [canViewAll]);
+  }, []);
 
   useEffect(() => {
     if (filterUserId) {
@@ -178,18 +173,6 @@ export function HoursCalendarPage() {
     : new Set(filteredDayOffs.filter(d =>
         !filteredEntries.some(e => e.userId === d.user_id && e.date === d.date && e.hours > 0)
       ).map(d => d.date)).size;
-
-  if (permLoading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
-
-  if (!canViewAll) {
-    return (
-      <div className="card p-12 text-center">
-        <div className="text-5xl mb-4 opacity-50">🔒</div>
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Нет доступа</h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">У вас нет прав на просмотр часов всех сотрудников</p>
-      </div>
-    );
-  }
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
 
