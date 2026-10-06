@@ -79,7 +79,7 @@ function App() {
             <Route path="/notification-settings" element={<NotificationSettingsPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route element={<NonDirectorPermissionGate permission="timesheet" />}><Route path="/hours-calendar" element={<HoursCalendarPage />} /></Route>
+            <Route path="/hours-calendar" element={<HoursCalendarPage />} />
             <Route path="/employees" element={<EmployeesPage />} />
             <Route path="/positions" element={<PositionsPage />} />
             <Route path="/management" element={<ManagementPage />} />
