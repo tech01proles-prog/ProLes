@@ -67,6 +67,18 @@ object ProjectsTable : UUIDTable("projects") {
     val completionDate = date("completion_date").nullable()
 }
 
+object ProjectRealizationCostsTable : UUIDTable("project_realization_costs") {
+    val projectId = reference(
+        "project_id",
+        ProjectsTable,
+        onDelete = ReferenceOption.CASCADE
+    ).index()
+    val amount = double("amount").default(0.0)
+    val comment = text("comment").default("")
+    val date = date("date").index()
+    val createdAt = long("created_at").default(0L)
+}
+
 object SubprojectsTable : UUIDTable("subprojects") {
     val projectId = reference(
         "project_id",
