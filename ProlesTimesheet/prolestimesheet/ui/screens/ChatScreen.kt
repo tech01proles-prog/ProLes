@@ -236,7 +236,7 @@ fun ChatScreen(
         }
     }
 
-    fun downloadAttachment(attachmentId: String, fileName: String) {
+    fun downloadAttachment(attachmentId: String) {
         val message = messages.firstOrNull { it.attachments.any { attachment -> attachment.id == attachmentId } } ?: return
         val attachment = message.attachments.firstOrNull { it.id == attachmentId } ?: return
         scope.launch {
@@ -305,7 +305,7 @@ fun ChatScreen(
                     message = message,
                     mine = message.senderId == userId,
                     onLongPress = { if (message.senderId == userId && message.deletedAt == null) actionMessage = message },
-                    onDownload = { attachment -> downloadAttachment(attachment.id, attachment.originalName) },
+                    onDownload = { attachment -> downloadAttachment(attachment.id) },
                 )
             }
         }
