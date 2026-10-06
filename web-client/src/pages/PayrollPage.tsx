@@ -548,6 +548,8 @@ export function PayrollPage() {
                 </div>
               </div>
             )}
+              <SalaryProjectBreakdown groups={breakdown.projectGroups} />
+            )}
           </div>
 
           {/* ═══════════ КОМПОНЕНТЫ ЗАРПЛАТЫ (с RBAC) ═══════════ */}
@@ -832,6 +834,8 @@ export function PayrollPage() {
                         </div>
                       </div>
                     )}
+                      <SalaryProjectBreakdown groups={employeeBreakdown.projectGroups} />
+                    )}
                   </div>
                 )}
               </div>
@@ -949,6 +953,51 @@ export function PayrollPage() {
   );
 }
 
+function SalaryProjectBreakdown({ groups }: { groups: SalaryBreakdownResponse['projectGroups'] }) {
+  const visible = groups || [];
+  if (!visible.length) return null;
+
+  return (
+    <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/50 overflow-hidden">
+      <div className="px-4 py-3 border-b border-indigo-100">
+        <div className="font-bold text-indigo-900">📐 Пояснение расчёта почасовой части</div>
+        <div className="text-xs text-indigo-700 mt-0.5">Для часов проекта действует наиболее конкретная ставка: подпроект → проект → общая.</div>
+      </div>
+      <div className="p-3 space-y-2">
+        {visible.map(group => {
+          const lines = [
+            ...group.entriesWithoutSubproject.map(entry => ({ ...entry, subprojectName: '' })),
+            ...group.subprojects.flatMap(subproject => subproject.entries.map(entry => ({ ...entry, subprojectName: subproject.subprojectName }))),
+          ];
+          const aggregated = new Map<string, { subprojectName: string; hours: number; rate: number; amount: number }>();
+          lines.forEach(entry => {
+            const key = entry.subprojectName + '|' + entry.hourlyCost;
+            const current = aggregated.get(key) || { subprojectName: entry.subprojectName, hours: 0, rate: entry.hourlyCost, amount: 0 };
+            current.hours += entry.hours;
+            current.amount += entry.amount;
+            aggregated.set(key, current);
+          });
+          return (
+            <div key={group.projectId || group.projectName} className="rounded-xl border border-indigo-100 bg-white px-3 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="font-semibold text-slate-900">📁 {group.projectName}</div>
+                <div className="text-sm font-black text-indigo-700">{formatMoney(group.amount)}</div>
+              </div>
+              <div className="mt-2 space-y-1.5">
+                {Array.from(aggregated.values()).map(line => (
+                  <div key={line.subprojectName + line.rate} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-indigo-50/70 px-3 py-2 text-sm">
+                    <span className="text-slate-700">{line.subprojectName ? line.subprojectName + ': ' : ''}{line.hours.toFixed(1)} ч × {formatMoney(line.rate)}/ч</span>
+                    <strong className="text-indigo-800">= {formatMoney(line.amount)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 function formatPayrollHours(hours: number): string {
   const minutes = Math.round(hours * 60);
   const h = Math.floor(minutes / 60);
