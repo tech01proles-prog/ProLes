@@ -32,13 +32,9 @@ import java.util.UUID
 internal fun Route.timeEntryRoutes() {
     route("/api/v1/entries") {
         get("/all") {
-            if (
-                !call.checkPermission(
-                    Permission.PROJECTS,
-                    "view"
-                )
-            ) {
-                return@get
+            val session = call.requireSession() ?: return@get
+            if (session.role !in setOf("superadmin", "admin", "director")) {
+                return@get call.respond(HttpStatusCode.Forbidden, "Access denied")
             }
 
             val dateFromText =
