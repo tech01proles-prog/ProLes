@@ -271,7 +271,7 @@ fun ChatScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Назад") }
+                IconButton(onClick = { activeConversationId = null }) { Icon(Icons.Default.ArrowBack, "Диалоги") }
                 Box(Modifier.size(42.dp).clip(CircleShape).background(ProlesPrimarySoft), contentAlignment = Alignment.Center) {
                     Text(activeConversation.title.take(1).uppercase(), fontWeight = FontWeight.Black, color = ProlesPrimary)
                 }
