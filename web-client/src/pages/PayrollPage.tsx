@@ -547,7 +547,9 @@ export function PayrollPage() {
                   <div className="text-2xl font-black">{formatMoney(breakdown.total)}</div>
                 </div>
               </div>
-              <SalaryProjectBreakdown groups={breakdown.projectGroups} />
+              <>
+                <SalaryProjectBreakdown groups={breakdown.projectGroups} />
+              </>
             )}
           </div>
 
@@ -832,7 +834,9 @@ export function PayrollPage() {
                           </div>
                         </div>
                       </div>
-                      <SalaryProjectBreakdown groups={employeeBreakdown.projectGroups} />
+                      <>
+                        <SalaryProjectBreakdown groups={employeeBreakdown.projectGroups} />
+                      </>
                     )}
                   </div>
                 )}
@@ -1098,4 +1102,3 @@ function EmployeeHoursDetails({
     </div>
   );
 }
-
