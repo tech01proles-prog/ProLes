@@ -60,6 +60,43 @@ object NotificationService {
         TelegramConfig(telegramEnabled && eventEnabled && !chatId.isNullOrBlank(), chatId)
     }
 
+    private fun businessTripVisibleToAll(userId: UUID): Boolean = transaction {
+        NotificationPreferencesTable
+            .selectAll()
+            .where { NotificationPreferencesTable.userId eq userId }
+            .singleOrNull()
+            ?.get(NotificationPreferencesTable.tripVisibleToAll)
+            ?: true
+    }
+
+    private fun privateTripTelegramRecipient(): UUID? = transaction {
+        val users = UsersTable.selectAll().toList()
+        val accountant = users.firstOrNull {
+            (it[UsersTable.position] ?: "").trim().contains("бухгалтер", ignoreCase = true)
+        }?.get(UsersTable.id)?.value
+
+        accountant ?: users.firstOrNull {
+            it[UsersTable.role].trim().equals("superadmin", ignoreCase = true)
+        }?.get(UsersTable.id)?.value
+    }
+
+    private suspend fun sendPrivateBusinessTripTelegram(message: String) {
+        val recipientId = privateTripTelegramRecipient()
+        if (recipientId == null) {
+            println("🚆 [Trip notification] private Telegram recipient not found")
+            return
+        }
+
+        val chatId = telegramConfig(recipientId).chatId
+        println("🔐 [Trip notification] private Telegram: recipient=$recipientId chatIdPresent=${!chatId.isNullOrBlank()}")
+        if (chatId.isNullOrBlank()) return
+
+        runCatching {
+            TelegramService.sendMessageToChat(chatId, message)
+        }.onFailure { error ->
+            println("❌ [Trip notification] private Telegram failed: ${error::class.simpleName}: ${error.message}")
+        }
+    }
     /**
      * Персональное уведомление. Системный Telegram-чат здесь никогда не используется.
      */
@@ -265,8 +302,11 @@ object NotificationService {
         )
         deliveryScope.launch {
             val message = buildBusinessTripCreatedMessage(trip)
-            println("🚆 [Trip notification] NEW: tripId=${trip.id} systemChat=${TelegramService.configuredSystemChatId() != null}")
-            TelegramService.sendSystemMessage(message)
+            val ownerId = runCatching { UUID.fromString(trip.userId) }.getOrNull()
+            val visibleToAll = ownerId?.let(::businessTripVisibleToAll) ?: true
+            println("🚆 [Trip notification] NEW: tripId=${trip.id} visibleToAll=$visibleToAll systemChat=${TelegramService.configuredSystemChatId() != null}")
+            if (visibleToAll) TelegramService.sendSystemMessage(message)
+            else sendPrivateBusinessTripTelegram(message)
         }
     }
 
@@ -287,8 +327,10 @@ object NotificationService {
         }
         deliveryScope.launch {
             val message = buildBusinessTripCompletedMessage(trip)
-            println("✅ [Trip notification] COMPLETED: tripId=${trip.id} systemChat=${TelegramService.configuredSystemChatId() != null}")
-            TelegramService.sendSystemMessage(message)
+            val visibleToAll = ownerId?.let(::businessTripVisibleToAll) ?: true
+            println("✅ [Trip notification] COMPLETED: tripId=${trip.id} visibleToAll=$visibleToAll systemChat=${TelegramService.configuredSystemChatId() != null}")
+            if (visibleToAll) TelegramService.sendSystemMessage(message)
+            else sendPrivateBusinessTripTelegram(message)
         }
     }
 
@@ -321,6 +363,7 @@ object NotificationService {
             appendLine("<b>🚆 КОМАНДИРОВКА ЗАВЕРШЕНА</b>")
             appendLine(participants.joinToString(", "))
             appendLine(dateRange)
+            if (trip.city.isNotBlank()) appendLine("Вернулся из: ${escapeTelegram(trip.city.trim())}")
             if (projectTag.isNotBlank()) appendLine(projectTag)
         }.trim()
     }
