@@ -525,7 +525,8 @@ export function PayrollPage() {
             </div>
 
             {breakdown && (
-              <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-3 animate-fade-in">
+              <>
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-3 animate-fade-in">
                 <div className="bg-white rounded-xl p-3 border border-blue-100">
                   <div className="text-[10px] text-blue-600 font-bold uppercase">Фикс</div>
                   <div className="text-lg font-bold text-blue-900">{formatMoney(breakdown.fixed)}</div>
@@ -546,8 +547,7 @@ export function PayrollPage() {
                   <div className="text-[10px] font-bold uppercase opacity-90">Итого</div>
                   <div className="text-2xl font-black">{formatMoney(breakdown.total)}</div>
                 </div>
-              </div>
-              <>
+                </div>
                 <SalaryProjectBreakdown groups={breakdown.projectGroups} />
               </>
             )}
@@ -820,7 +820,8 @@ export function PayrollPage() {
                     )}
 
                     {employeeBreakdown && (
-                      <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                      <>
+                        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div>
                             <div className="font-bold text-emerald-900">Расчёт за {monthName(exportPeriod.month)} {exportPeriod.year}</div>
@@ -833,8 +834,7 @@ export function PayrollPage() {
                             <div className="text-xs text-amber-700">Баланс: {formatMoney(employeeBreakdown.balance || 0)}</div>
                           </div>
                         </div>
-                      </div>
-                      <>
+                        </div>
                         <SalaryProjectBreakdown groups={employeeBreakdown.projectGroups} />
                       </>
                     )}
