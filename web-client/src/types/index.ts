@@ -244,6 +244,32 @@ export interface SalaryComponentDto {
   isActive: boolean;
 }
 
+export interface PayrollHourEntryDto {
+  id: string;
+  date: string;
+  hours: number;
+  hourlyCost: number;
+  amount: number;
+  comment: string;
+}
+
+export interface PayrollSubprojectGroupDto {
+  subprojectId: string;
+  subprojectName: string;
+  hours: number;
+  amount: number;
+  entries: PayrollHourEntryDto[];
+}
+
+export interface PayrollProjectGroupDto {
+  projectId: string | null;
+  projectName: string;
+  hours: number;
+  amount: number;
+  subprojects: PayrollSubprojectGroupDto[];
+  entriesWithoutSubproject: PayrollHourEntryDto[];
+}
+
 export interface SalaryBreakdownResponse {
   id: string;
   fixed: number;
@@ -258,6 +284,7 @@ export interface SalaryBreakdownResponse {
   balance: number;
   taxInclusiveCost: number;
   remoteEmployee: boolean;
+  projectGroups: PayrollProjectGroupDto[];
 }
 
 export interface SalaryRecordDto {
