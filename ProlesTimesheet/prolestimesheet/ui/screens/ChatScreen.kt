@@ -1,7 +1,6 @@
 package com.example.prolestimesheet.ui.screens
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -38,7 +37,6 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
@@ -256,6 +254,7 @@ fun ChatScreen(
             users = users,
             conversations = conversations,
             userId = userId,
+            onConversationClick = { activeConversationId = it.id },
             onUserClick = ::openConversation,
             onBack = onBack,
         )
@@ -384,21 +383,51 @@ private fun ChatUserPicker(
     users: List<ChatUser>,
     conversations: List<ChatConversation>,
     userId: String,
+    onConversationClick: (ChatConversation) -> Unit,
     onUserClick: (ChatUser) -> Unit,
     onBack: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().background(ProlesCanvas)) {
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Назад") }
-            Text("PRO-Chat", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+            Column(Modifier.weight(1f)) {
+                Text("PRO-Chat", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+                Text("Сообщения и файлы", style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
+            }
         }
         LazyColumn {
-            items(users, key = { it.id }) { item ->
-                val existing = conversations.firstOrNull { conversation -> conversation.members.any { it.id == userId } && conversation.members.any { it.id == item.id } }
-                Row(
-                    Modifier.fillMaxWidth().clickable { onUserClick(item) }.padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            if (conversations.isNotEmpty()) {
+                item {
+                    Text("Диалоги", Modifier.padding(horizontal = 14.dp, vertical = 10.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = ProlesMuted)
+                }
+                items(conversations, key = { "conversation-" + it.id }) { conversation ->
+                    val peer = conversation.members.firstOrNull { it.id != userId }
+                    Row(Modifier.fillMaxWidth().clickable { onConversationClick(conversation) }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(46.dp).clip(CircleShape).background(ProlesPrimarySoft), contentAlignment = Alignment.Center) {
+                            Text(conversation.title.take(1).uppercase(), fontWeight = FontWeight.Black, color = ProlesPrimary)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(conversation.title, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                if (conversation.unreadCount > 0) {
+                                    Text(conversation.unreadCount.toString(), style = MaterialTheme.typography.labelSmall, color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.clip(CircleShape).background(ProlesExpense).padding(horizontal = 7.dp, vertical = 3.dp))
+                                }
+                            }
+                            Text(conversation.lastMessage?.let {
+                                if (it.deletedAt != null) "Сообщение удалено"
+                                else it.text.ifBlank { if (it.attachments.isNotEmpty()) "📎 ${it.attachments.size} файл(а)" else "Нет сообщений" }
+                            } ?: "Нет сообщений", maxLines = 1, style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
+                        }
+                        if (peer?.online == true) Box(Modifier.size(9.dp).clip(CircleShape).background(ProlesPrimary))
+                    }
+                }
+            }
+            item {
+                Text("Новый диалог", Modifier.padding(horizontal = 14.dp, vertical = 10.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = ProlesMuted)
+            }
+            items(users, key = { "user-" + it.id }) { item ->
+                Row(Modifier.fillMaxWidth().clickable { onUserClick(item) }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(44.dp).clip(CircleShape).background(ProlesPrimarySoft), contentAlignment = Alignment.Center) {
                         Text(item.name.take(1).uppercase(), fontWeight = FontWeight.Black, color = ProlesPrimary)
                     }
@@ -407,7 +436,7 @@ private fun ChatUserPicker(
                         Text(item.name, fontWeight = FontWeight.Bold)
                         Text(if (item.online) "онлайн" else "не в сети", style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
                     }
-                    if (existing != null) Text("→", color = ProlesPrimary, fontWeight = FontWeight.Black)
+                    Text("＋", color = ProlesPrimary, fontWeight = FontWeight.Black)
                 }
             }
         }
@@ -457,9 +486,9 @@ private fun ChatMessageBubble(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 if (message.editedAt != null && message.deletedAt == null) Text("изменено", style = MaterialTheme.typography.labelSmall, color = if (mine) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.65f) else ProlesMuted)
-                if (message.senderId == message.senderId) {
+                if (mine) {
                     Spacer(Modifier.width(4.dp))
-                    if (mine) Icon(statusIcon, null, Modifier.size(13.dp), tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.75f))
+                    Icon(statusIcon, null, Modifier.size(13.dp), tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.75f))
                 }
                 Spacer(Modifier.width(4.dp))
                 Text(formatChatTime(message.createdAt), style = MaterialTheme.typography.labelSmall, color = if (mine) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.65f) else ProlesMuted)
