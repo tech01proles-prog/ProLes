@@ -188,6 +188,14 @@ private fun Route.vacationRoutes() {
                 preferenceKey = "vacation",
                 linkUrl = vacationLink
             )
+
+            if (!approved) {
+                transaction {
+                    VacationsTable.deleteWhere { VacationsTable.id eq id }
+                }
+                return@post call.respond(HttpStatusCode.NoContent)
+            }
+
             call.respond(HttpStatusCode.OK, VacationDto(
                 id.toString(), employeeId.toString(), vacation[VacationsTable.start].toString(), vacation[VacationsTable.end].toString(),
                 vacation[VacationsTable.status], vacation[VacationsTable.approvedBy]?.value?.toString(), vacation[VacationsTable.approvedAt], vacation[VacationsTable.rejectionReason]
