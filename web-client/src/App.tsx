@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { PermissionGate } from './components/PermissionGate';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -47,14 +46,6 @@ function TimesheetRoute() {
   const isDirector = user?.role?.trim().toLowerCase() === 'director';
   const allowed = !isDirector && (can('timesheet', 'view') || user?.login === 'a.ermashkevich');
   return allowed ? <TimesheetPage /> : <Navigate to="/" replace />;
-}
-
-function NonDirectorPermissionGate({ permission }: { permission: string }) {
-  const { can, loading } = usePermissions();
-  let user: UserDto | null = null;
-  try { user = JSON.parse(localStorage.getItem('proles_user') || 'null'); } catch { localStorage.removeItem('proles_user'); }
-  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
-  return user?.role?.trim().toLowerCase() !== 'director' && can(permission, 'view') ? <PermissionGate permission={permission} /> : <Navigate to="/" replace />;
 }
 
 function App() {
