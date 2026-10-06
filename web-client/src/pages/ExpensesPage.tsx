@@ -39,14 +39,8 @@ const findExpenseType = (key: string) => EXPENSE_TYPES.find(t => t.key === key);
 
 type ReportPreset = '1' | '2' | '3';
 const PER_DIEM_TYPES = new Set(['PER_DIEM', 'PER_DIEM_EXTRA']);
-const EXTRA_PER_DIEM_TYPES = new Set(['PER_DIEM_EXTRA']);
 const isPerDiem = (entry: CombinedEntry) =>
   entry.type === 'EXPENSE' && PER_DIEM_TYPES.has(entry.subcategory || '');
-const isExtraPerDiem = (entry: CombinedEntry) =>
-  entry.type === 'EXPENSE' && (
-    EXTRA_PER_DIEM_TYPES.has(entry.subcategory || '') ||
-    (entry.name || '').toLowerCase().replace(/ё/g, 'е').includes('суточные сверх')
-  );
 const hasActualReceipt = (expense: ExpenseDto) =>
   Number(expense.receiptCount || 0) > 0 || Boolean(expense.hasReceiptPhoto);
 
