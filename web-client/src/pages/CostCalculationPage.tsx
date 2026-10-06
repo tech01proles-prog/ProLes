@@ -324,11 +324,7 @@ export function CostCalculationPage() {
           </tfoot>
         </table>
       </div>
-    </div>
-  );
-}
-
-    {showRealizationDialog && (
+      {showRealizationDialog && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => !realizationSaving && setShowRealizationDialog(false)}>
         <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-900" onClick={(event) => event.stopPropagation()}>
           <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">Добавить затраты на реализацию</h2>
@@ -354,6 +350,9 @@ export function CostCalculationPage() {
         </div>
       </div>
     )}
+    </div>
+  );
+}
 
 function Summary({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return <div className={`card p-4 ${accent ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/20' : ''}`}><div className="text-xs text-slate-500">{label}</div><div className={`mt-2 text-xl font-black ${accent ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-100'}`}>{value}</div></div>;
