@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -54,6 +55,7 @@ fun MainScreen(
     user: User?,
     onLogout: () -> Unit
 ) {
+    val context = LocalContext.current
     var selectedEmployeeId by remember { mutableStateOf<String?>(null) }
 
     var selectedScreen by remember { mutableStateOf<Screen>(Screen.Home) }
