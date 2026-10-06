@@ -59,6 +59,9 @@ interface EmployeeMetric {
   expectedWorkDays: number;
   projects: number;
   expenseRub: number;
+  employeeExpenseRub: number;
+  perDiemRub: number;
+  receiptRub: number;
   noReceiptRub: number;
   expenseCount: number;
   avgHoursPerDay: number;
@@ -77,6 +80,9 @@ interface ProjectMetric {
   hours: number;
   employeeCount: number;
   expenseCount: number;
+  employeeExpenseRub: number;
+  perDiemRub: number;
+  receiptRub: number;
   noReceiptRub: number;
   expenseShare: number;
 }
@@ -89,6 +95,16 @@ function normalizeType(type?: string) {
   const raw = String(type || '').trim();
   const upper = raw.toUpperCase();
   return TYPE_ALIASES[raw] || TYPE_ALIASES[upper] || upper;
+}
+
+function isPerDiemExpense(expense: Pick<ExpenseDto, 'type' | 'subcategory' | 'name'>) {
+  const type = normalizeType(expense.subcategory || expense.type);
+  if (type === 'PER_DIEM' || type === 'PER_DIEM_EXTRA') return true;
+  return String(expense.name || '').toLowerCase().replace(/ё/g, 'е').includes('суточн');
+}
+
+function hasActualReceipt(expense: Pick<ExpenseDto, 'receiptCount' | 'hasReceiptPhoto'>) {
+  return Number(expense.receiptCount || 0) > 0 || Boolean(expense.hasReceiptPhoto);
 }
 
 function expenseLabel(expense: Pick<ExpenseDto, 'type' | 'subcategory' | 'name'>) {
@@ -196,11 +212,14 @@ export function AnalyticsPage() {
 
   const totals = useMemo(() => {
     const expenseRub = filteredExpenses.reduce((s, x) => s + rub(Number(x.amount || 0), x.currency), 0);
+    const employeeExpenseRub = filteredExpenses.filter(x => !isPerDiemExpense(x)).reduce((s, x) => s + rub(Number(x.amount || 0), x.currency), 0);
+    const perDiemRub = filteredExpenses.filter(isPerDiemExpense).reduce((s, x) => s + rub(Number(x.amount || 0), x.currency), 0);
     const incomeRub = filteredIncomes.reduce((s, x) => s + rub(Number(x.amount || 0), x.currency), 0);
     const hours = filteredEntries.reduce((s, x) => s + Number(x.hours || 0), 0);
-    const noReceiptRub = filteredExpenses.filter(x => !x.receiptSubmitted && !x.hasReceiptPhoto).reduce((s, x) => s + rub(Number(x.amount || 0), x.currency), 0);
+    const noReceiptRub = filteredExpenses.filter(x => !hasActualReceipt(x)).reduce((s, x) => s + rub(Number(x.amount || 0), x.currency), 0);
+    const receiptRub = expenseRub - noReceiptRub;
     const workingDays = new Set(filteredEntries.map(x => x.date)).size;
-    return { expenseRub, incomeRub, hours, noReceiptRub, workingDays, balanceRub: incomeRub - expenseRub };
+    return { expenseRub, employeeExpenseRub, perDiemRub, receiptRub, incomeRub, hours, noReceiptRub, workingDays, balanceRub: incomeRub - expenseRub };
   }, [filteredExpenses, filteredIncomes, filteredEntries]);
 
   const monthlyTrend = useMemo(() => {
@@ -212,7 +231,8 @@ export function AnalyticsPage() {
     }
     return months.map(key => ({
       month: fmtMonth(key),
-      expense: Math.round(filteredExpenses.filter(x => monthKey(x.date) === key).reduce((s, x) => s + rub(Number(x.amount || 0), x.currency), 0)),
+      employeeExpense: Math.round(filteredExpenses.filter(x => monthKey(x.date) === key && !isPerDiemExpense(x)).reduce((s, x) => s + rub(Number(x.amount || 0), x.currency), 0)),
+      perDiem: Math.round(filteredExpenses.filter(x => monthKey(x.date) === key && isPerDiemExpense(x)).reduce((s, x) => s + rub(Number(x.amount || 0), x.currency), 0)),
       income: Math.round(filteredIncomes.filter(x => monthKey(x.date) === key).reduce((s, x) => s + rub(Number(x.amount || 0), x.currency), 0)),
       hours: Math.round(filteredEntries.filter(x => monthKey(x.date) === key).reduce((s, x) => s + Number(x.hours || 0), 0) * 10) / 10,
     }));
@@ -228,7 +248,7 @@ export function AnalyticsPage() {
         userId: id,
         name: user?.name || `${user?.lastName || ''} ${user?.firstName || ''}`.trim() || 'Неизвестный',
         position: user?.position || '—', hours: 0, workDays: 0, expectedWorkDays: expectedDays, projects: 0,
-        expenseRub: 0, noReceiptRub: 0, expenseCount: 0, avgHoursPerDay: 0, attendanceRate: 0, efficiencyScore: 0, stabilityScore: 0,
+        expenseRub: 0, employeeExpenseRub: 0, perDiemRub: 0, receiptRub: 0, noReceiptRub: 0, expenseCount: 0, avgHoursPerDay: 0, attendanceRate: 0, efficiencyScore: 0, stabilityScore: 0,
       });
       return map.get(id)!;
     };
@@ -244,8 +264,11 @@ export function AnalyticsPage() {
       const m = ensure(x.userId);
       const amount = rub(Number(x.amount || 0), x.currency);
       m.expenseRub += amount;
+      if (isPerDiemExpense(x)) m.perDiemRub += amount;
+      else m.employeeExpenseRub += amount;
+      if (hasActualReceipt(x)) m.receiptRub += amount;
+      else m.noReceiptRub += amount;
       m.expenseCount += 1;
-      if (!x.receiptSubmitted && !x.hasReceiptPhoto) m.noReceiptRub += amount;
     });
     map.forEach(m => {
       m.workDays = daySets.get(m.userId)?.size || 0;
@@ -280,7 +303,7 @@ export function AnalyticsPage() {
     let withReceipt = 0; let withoutReceipt = 0;
     filteredExpenses.forEach(x => {
       const amount = rub(Number(x.amount || 0), x.currency);
-      if (x.receiptSubmitted || x.hasReceiptPhoto) withReceipt += amount; else withoutReceipt += amount;
+      if (hasActualReceipt(x)) withReceipt += amount; else withoutReceipt += amount;
     });
     return [{ name: 'С чеком', value: Math.round(withReceipt) }, { name: 'Без чека', value: Math.round(withoutReceipt) }];
   }, [filteredExpenses]);
@@ -306,6 +329,9 @@ export function AnalyticsPage() {
           hours: 0,
           employeeCount: 0,
           expenseCount: 0,
+          employeeExpenseRub: 0,
+          perDiemRub: 0,
+          receiptRub: 0,
           noReceiptRub: 0,
           expenseShare: 0,
         });
@@ -314,7 +340,10 @@ export function AnalyticsPage() {
       const m = map.get(projectId)!;
       const amount = rub(Number(x.amount || 0), x.currency);
       m.expenseRub += amount; m.expenseCount += 1;
-      if (!x.receiptSubmitted && !x.hasReceiptPhoto) m.noReceiptRub += amount;
+      if (isPerDiemExpense(x)) m.perDiemRub += amount;
+      else m.employeeExpenseRub += amount;
+      if (hasActualReceipt(x)) m.receiptRub += amount;
+      else m.noReceiptRub += amount;
     });
     filteredEntries.forEach(x => { const m = map.get(x.projectId); if (m) m.hours += Number(x.hours || 0); });
     const people = new Map<string, Set<string>>();
