@@ -219,6 +219,13 @@ data class ChatAttachment(
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
+data class ChatAttachmentUploadResponse(
+    val attachment: ChatAttachment,
+    val message: ChatMessage
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
 data class ChatMessage(
     val id: String,
     val conversationId: String,
