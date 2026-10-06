@@ -94,6 +94,20 @@ fun Application.module() {
         exec("CREATE INDEX IF NOT EXISTS chat_message_delivery_user_idx ON chat_message_deliveries(user_id)")
         exec("CREATE INDEX IF NOT EXISTS chat_message_delivery_message_idx ON chat_message_deliveries(message_id)")
 
+        // 💼 Затраты на реализацию проекта: отдельные записи, чтобы несколько добавлений суммировались.
+        exec("""
+            CREATE TABLE IF NOT EXISTS project_realization_costs (
+                id UUID PRIMARY KEY,
+                project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+                comment TEXT NOT NULL DEFAULT '',
+                date DATE NOT NULL,
+                created_at BIGINT NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+        exec("CREATE INDEX IF NOT EXISTS project_realization_costs_project_idx ON project_realization_costs(project_id)")
+        exec("CREATE INDEX IF NOT EXISTS project_realization_costs_date_idx ON project_realization_costs(date)")
+
         // 🔐 Идемпотентно приводим таблицу настроек уведомлений к актуальной схеме.
         // Это защищает существующие БД, созданные до появления новых настроек.
         exec("""
