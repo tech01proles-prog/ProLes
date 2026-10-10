@@ -11,13 +11,29 @@ import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../components/Toast/ToastContext';
 
 const COMPONENT_TYPES = {
-  FIXED: { label: '💼 Фикс', color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  HOURLY: { label: '⏱ Почасовая', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
-  PIECE: { label: '🔨 Сдельная', color: 'bg-orange-100 text-orange-700 border-orange-200' },
-  BONUS: { label: '🎁 Бонус', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  PENALTY: { label: '⚠️ Штраф', color: 'bg-red-100 text-red-700 border-red-200' },
-  MARGIN_PERCENT: { label: '% от маржи', color: 'bg-purple-100 text-purple-700 border-purple-200' },
-};
+  FIXED: { label: 'Фиксированная', description: 'Базовая сумма', color: 'bg-blue-100 text-blue-700 border-blue-200', accent: '#2563eb', soft: '#eff6ff' },
+  HOURLY: { label: 'Почасовая', description: 'За каждый отработанный час', color: 'bg-indigo-100 text-indigo-700 border-indigo-200', accent: '#4f46e5', soft: '#eef2ff' },
+  PIECE: { label: 'Сдельная', description: 'За выполненные единицы', color: 'bg-orange-100 text-orange-700 border-orange-200', accent: '#ea580c', soft: '#fff7ed' },
+  BONUS: { label: 'Бонус', description: 'Дополнительное начисление', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', accent: '#059669', soft: '#ecfdf5' },
+  PENALTY: { label: 'Штраф', description: 'Удержание из начислений', color: 'bg-red-100 text-red-700 border-red-200', accent: '#dc2626', soft: '#fef2f2' },
+  MARGIN_PERCENT: { label: 'Процент от маржи', description: 'Доля маржи проекта', color: 'bg-purple-100 text-purple-700 border-purple-200', accent: '#9333ea', soft: '#faf5ff' },
+} as const;
+
+type SalaryComponentType = keyof typeof COMPONENT_TYPES;
+
+function SalaryTypeIcon({ type, className = 'h-6 w-6' }: { type: SalaryComponentType; className?: string }) {
+  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true" {...common}>
+      {type === 'FIXED' && <><rect x="3" y="6" width="18" height="14" rx="2" /><path d="M3 10h18M16 14h2" /><path d="M7 4h10" /></>}
+      {type === 'HOURLY' && <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></>}
+      {type === 'PIECE' && <><path d="M3 9.5 12 5l9 4.5-9 4.5-9-4.5Z" /><path d="M3 9.5V18l9 4 9-4V9.5M12 14v8" /><path d="m7.5 7.2 9 4.6" /></>}
+      {type === 'BONUS' && <><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-2-5.8L4 11l6-2.2L12 3Z" /><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z" /></>}
+      {type === 'PENALTY' && <><path d="M12 3 20 6v5c0 5-3.3 8.1-8 10-4.7-1.9-8-5-8-10V6l8-3Z" /><path d="M12 7v6M12 16.5h.01" /></>}
+      {type === 'MARGIN_PERCENT' && <><path d="M4 19V5M4 19h17" /><path d="m7 15 4-4 3 2 5-6" /><circle cx="7" cy="7" r="1.5" /><circle cx="18" cy="7" r="1.5" /></>}
+    </svg>
+  );
+}
 
 type EmployeeBalanceTransaction = { id: string; transactionType: string; amount: number; comment: string; createdByName: string; createdAt: number };
 type EmployeeBalance = { userId: string; balance: number; transactions: EmployeeBalanceTransaction[] };
@@ -380,35 +396,41 @@ export function PayrollPage() {
                   <div className="proles-modal-body">
                     <div className="proles-modal-section">
                       <div className="proles-modal-section-title">Тип компонента</div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                        Выберите, как будет рассчитываться начисление.
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                         {Object.entries(COMPONENT_TYPES).map(([key, cfg]) => {
-                          // 🔐 MARGIN_PERCENT доступен только менеджерам и админам
-                          const isMarginPercent = key === 'MARGIN_PERCENT';
+                          const type = key as SalaryComponentType;
+                          const isMarginPercent = type === 'MARGIN_PERCENT';
                           const canSelectMargin = isAdmin || isManager;
-                          
+                          const selected = form.type === type;
+
                           if (isMarginPercent && !canSelectMargin) return null;
-                          
+
                           return (
                             <button
-                              key={key}
-                              onClick={() => setForm({ ...form, type: key as any })}
-                              style={{
-                                padding: '0.75rem',
-                                borderRadius: '0.75rem',
-                                border: form.type === key ? '2px solid #10b981' : '2px solid #e2e8f0',
-                                background: form.type === key ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)' : 'transparent',
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
-                                cursor: canSelectMargin || !isMarginPercent ? 'pointer' : 'not-allowed',
-                                transition: 'all 0.15s',
-                                textAlign: 'left',
-                                color: form.type === key ? '#047857' : '#64748b',
-                                opacity: isMarginPercent && !canSelectMargin ? 0.5 : 1
-                              }}
-                              disabled={isMarginPercent && !canSelectMargin}
-                              title={isMarginPercent && !canSelectMargin ? 'Доступно только менеджерам' : ''}
+                              key={type}
+                              type="button"
+                              onClick={() => setForm(current => ({ ...current, type }))}
+                              className={`group relative flex min-h-[128px] flex-col items-start rounded-2xl border-2 p-3.5 text-left transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${selected ? 'shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900'}`}
+                              style={selected ? { borderColor: cfg.accent, background: cfg.soft, color: cfg.accent } : undefined}
+                              title={isMarginPercent && !canSelectMargin ? 'Доступно только менеджерам' : cfg.description}
+                              aria-pressed={selected}
                             >
-                              {cfg.label}
+                              <span
+                                className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl"
+                                style={{ backgroundColor: selected ? '#ffffffcc' : cfg.soft, color: cfg.accent }}
+                              >
+                                <SalaryTypeIcon type={type} className="h-6 w-6" />
+                              </span>
+                              <span className={`text-sm font-bold leading-tight ${selected ? '' : 'text-slate-800 dark:text-slate-100'}`}>{cfg.label}</span>
+                              <span className={`mt-1 text-[11px] leading-snug ${selected ? 'opacity-80' : 'text-slate-500 dark:text-slate-400'}`}>{cfg.description}</span>
+                              {selected && (
+                                <span className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full text-white" style={{ backgroundColor: cfg.accent }} aria-label="Выбрано">
+                                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m4 10 4 4 8-8" /></svg>
+                                </span>
+                              )}
                             </button>
                           );
                         })}
