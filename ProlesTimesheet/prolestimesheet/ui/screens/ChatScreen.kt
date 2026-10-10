@@ -146,6 +146,10 @@ fun ChatScreen(
                 nextCursor = page.nextCursor
                 page.items.firstOrNull { it.senderId != userId }?.let { ChatApi.markRead(conversationId, it.id) }
             }
+            .onFailure { error ->
+                Log.e("ChatScreen", "Failed to load chat messages", error)
+                Toast.makeText(context, "Не удалось загрузить сообщения: ${error.message ?: "ошибка сервера"}", Toast.LENGTH_SHORT).show()
+            }
     }
 
     LaunchedEffect(Unit) {
@@ -154,11 +158,7 @@ fun ChatScreen(
         loading = false
         while (true) {
             delay(2000)
-            ChatApi.conversations().onSuccess { list ->
-                conversations = list.sortedByDescending { it.updatedAt }
-            }.onFailure { Log.e("ChatScreen", "Failed to refresh conversations", it) }
-            ChatApi.users().onSuccess { users = it }
-                .onFailure { Log.e("ChatScreen", "Failed to refresh users", it) }
+            loadSidebar()
         }
     }
 
