@@ -24,6 +24,8 @@ import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
 @Composable
 fun AdminManagementScreen(
     viewModel: TimesheetViewModel,
+    onNavigateToProfile: () -> Unit,
+    onNavigateToTimesheet: () -> Unit,
     onNavigateToPayroll: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
     onNavigateToProjects: () -> Unit,
@@ -85,6 +87,30 @@ fun AdminManagementScreen(
                     }
                 }
             }
+        }
+
+        Text(
+            "Личные разделы",
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ManagementTile(
+                "Мой профиль",
+                "Личные данные и настройки",
+                Icons.Default.Person,
+                listOf(Color(0xFF0EA5E9), Color(0xFF2563EB)),
+                onNavigateToProfile,
+                Modifier.weight(1f)
+            )
+            ManagementTile(
+                "Табель",
+                "Рабочее время и часы",
+                Icons.Default.CalendarMonth,
+                listOf(Color(0xFF059669), Color(0xFF0D9488)),
+                onNavigateToTimesheet,
+                Modifier.weight(1f)
+            )
         }
 
         Text(
