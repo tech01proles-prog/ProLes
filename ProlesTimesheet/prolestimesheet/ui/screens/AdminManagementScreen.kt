@@ -210,7 +210,7 @@ fun AdminManagementScreen(
             }
         }
 
-        if (canView("project_expenses")) {
+        if (canView("project_expenses") || canView("expenses_all") || canView("projects") || canView("cost_calculation")) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ManagementTile(
                     "Расходы по проектам",
