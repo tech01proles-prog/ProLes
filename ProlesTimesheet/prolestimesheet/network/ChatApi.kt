@@ -13,6 +13,8 @@ import com.example.prolestimesheet.model.ChatUpdateMessageRequest
 import com.example.prolestimesheet.model.ChatUser
 import io.ktor.client.call.body
 import io.ktor.client.request.delete
+import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.header
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -37,15 +39,16 @@ object ChatApi {
     private const val MAX_FILE_BYTES = 100L * 1024L * 1024L
 
     suspend fun users(): Result<List<ChatUser>> = request {
-        ApiClient.client.get("${ApiClient.BASE_URL}/chat/users").body()
+        ApiClient.client.get("${ApiClient.BASE_URL}/chat/users") { withChatSession() }.body()
     }
 
     suspend fun conversations(): Result<List<ChatConversation>> = request {
-        ApiClient.client.get("${ApiClient.BASE_URL}/chat/conversations").body()
+        ApiClient.client.get("${ApiClient.BASE_URL}/chat/conversations") { withChatSession() }.body()
     }
 
     suspend fun messages(conversationId: String, limit: Int = 50, cursor: String? = null): Result<ChatMessagesPage> = request {
         ApiClient.client.get("${ApiClient.BASE_URL}/chat/conversations/$conversationId/messages") {
+            withChatSession()
             parameter("limit", limit)
             cursor?.let { parameter("cursor", it) }
         }.body()
@@ -53,12 +56,14 @@ object ChatApi {
 
     suspend fun createDirectConversation(userId: String): Result<ChatConversation> = request {
         ApiClient.client.post("${ApiClient.BASE_URL}/chat/conversations/direct") {
+            withChatSession()
             setBody(mapOf("userId" to userId))
         }.body()
     }
 
     suspend fun sendMessage(conversationId: String, text: String): Result<ChatMessage> = request {
         ApiClient.client.post("${ApiClient.BASE_URL}/chat/conversations/$conversationId/messages") {
+            withChatSession()
             setBody(ChatSendMessageRequest(text.trim(), createClientMessageId()))
         }.body()
     }
@@ -85,7 +90,7 @@ object ChatApi {
                             }
                         )
                     }
-                )
+                ) { withChatSession() }
                 if (response.status != HttpStatusCode.Created) error("Ошибка загрузки файла: ${response.status}")
                 response.body<com.example.prolestimesheet.model.ChatAttachmentUploadResponse>().message
             }.onFailure { error -> Log.e("ChatApi", "attachment upload failed", error) }
@@ -93,16 +98,18 @@ object ChatApi {
 
     suspend fun updateMessage(conversationId: String, messageId: String, text: String): Result<ChatMessage> = request {
         ApiClient.client.put("${ApiClient.BASE_URL}/chat/conversations/$conversationId/messages/$messageId") {
+            withChatSession()
             setBody(ChatUpdateMessageRequest(text.trim()))
         }.body()
     }
 
     suspend fun deleteMessage(conversationId: String, messageId: String): Result<ChatMessage> = request {
-        ApiClient.client.delete("${ApiClient.BASE_URL}/chat/conversations/$conversationId/messages/$messageId").body()
+        ApiClient.client.delete("${ApiClient.BASE_URL}/chat/conversations/$conversationId/messages/$messageId") { withChatSession() }.body()
     }
 
     suspend fun markRead(conversationId: String, messageId: String? = null): Result<Unit> = request {
         val response = ApiClient.client.post("${ApiClient.BASE_URL}/chat/conversations/$conversationId/read") {
+            withChatSession()
             setBody(ChatReadRequest(messageId))
         }
         if (response.status != HttpStatusCode.OK) error("Ошибка отметки прочитанным: ${response.status}")
@@ -114,7 +121,7 @@ object ChatApi {
             val url = if (attachment.downloadUrl.startsWith("/api/v1")) {
                 "${ApiClient.BASE_URL}" + attachment.downloadUrl.removePrefix("/api/v1")
             } else attachment.downloadUrl
-            val response = ApiClient.client.get(url)
+            val response = ApiClient.client.get(url) { withChatSession() }
             if (response.status != HttpStatusCode.OK) error("Ошибка скачивания: ${response.status}")
             ChatDownloadedFile(response.body<ByteArray>(), attachment.originalName, attachment.mimeType)
         }
@@ -132,5 +139,10 @@ object ChatApi {
 
     private fun createClientMessageId(): String = "android-${System.currentTimeMillis()}-${UUID.randomUUID()}"
 
-    private suspend inline fun <T> request(crossinline block: suspend () -> T): Result<T> = runCatching { block() }
+    private fun HttpRequestBuilder.withChatSession() {
+        ApiClient.authToken?.takeIf { it.isNotBlank() }?.let { header("X-Session-Token", it) }
+    }
+
+    private suspend inline fun <T> request(crossinline block: suspend () -> T): Result<T> =
+        runCatching { block() }.onFailure { Log.e("ChatApi", "Chat request failed", it) }
 }
