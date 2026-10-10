@@ -187,6 +187,43 @@ fun AdminManagementScreen(
             }
         }
 
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (canView("payroll")) {
+                ManagementTile(
+                    "Расчёт зарплаты",
+                    "Начисления и экспорт",
+                    Icons.Default.Payments,
+                    listOf(Color(0xFF059669), Color(0xFF10B981)),
+                    onNavigateToPayroll,
+                    Modifier.weight(1f)
+                )
+            }
+            if (canView("cost_calculation")) {
+                ManagementTile(
+                    "Себестоимость",
+                    "Затраты и расчёт проектов",
+                    Icons.Default.Calculate,
+                    listOf(Color(0xFF2563EB), Color(0xFF0EA5E9)),
+                    onNavigateToCostCalculation,
+                    Modifier.weight(1f)
+                )
+            }
+        }
+
+        if (canView("project_expenses")) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ManagementTile(
+                    "Расходы по проектам",
+                    "Документы и затраты",
+                    Icons.Default.AttachMoney,
+                    listOf(Color(0xFFEA580C), Color(0xFFF59E0B)),
+                    onNavigateToProjectExpenses,
+                    Modifier.weight(1f)
+                )
+                Spacer(Modifier.weight(1f))
+            }
+        }
+
     }
 }
 
