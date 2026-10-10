@@ -1,6 +1,7 @@
 package com.example.prolestimesheet.ui.screens
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -8,6 +9,7 @@ import android.provider.OpenableColumns
 import android.widget.Toast
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -103,6 +105,11 @@ fun ChatScreen(
     var deleting by remember { mutableStateOf(false) }
     var showNewDialogUsers by remember { mutableStateOf(false) }
     var sidebarError by remember { mutableStateOf<String?>(null) }
+
+    // Back at message level returns to the dialog list; back at the list returns to the previous screen.
+    BackHandler {
+        if (activeConversationId != null) activeConversationId = null else onBack()
+    }
 
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
@@ -256,7 +263,12 @@ fun ChatScreen(
         val attachment = message.attachments.firstOrNull { it.id == attachmentId } ?: return
         scope.launch {
             ChatApi.downloadAttachment(attachment).onSuccess { file ->
-                saveChatFile(context, file.bytes, file.fileName, file.mimeType)
+                val savedUri = saveChatFile(context, file.bytes, file.fileName, file.mimeType)
+                if (savedUri != null) {
+                    openChatFile(context, savedUri, file.mimeType)
+                } else {
+                    Toast.makeText(context, "Файл сохранён в папке «Загрузки/Proles»", Toast.LENGTH_LONG).show()
+                }
             }.onFailure { Toast.makeText(context, "Не удалось скачать файл", Toast.LENGTH_LONG).show() }
         }
     }
@@ -588,26 +600,58 @@ private fun queryFileName(context: Context, uri: Uri): String {
     return "Файл"
 }
 
-private fun saveChatFile(context: Context, bytes: ByteArray, fileName: String, mimeType: String) {
-    runCatching {
+private fun saveChatFile(context: Context, bytes: ByteArray, fileName: String, mimeType: String): Uri? {
+    return runCatching {
+        val resolver = context.contentResolver
+        val savedUri: Uri?
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = android.content.ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                put(MediaStore.Downloads.MIME_TYPE, mimeType)
+                put(MediaStore.Downloads.MIME_TYPE, mimeType.ifBlank { "application/octet-stream" })
                 put(MediaStore.Downloads.RELATIVE_PATH, "Download/Proles")
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }
-            val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: error("Не удалось создать файл")
-            context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
-            values.clear()
-            values.put(MediaStore.Downloads.IS_PENDING, 0)
-            context.contentResolver.update(uri, values, null, null)
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("Не удалось создать файл")
+            try {
+                resolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    ?: error("Не удалось записать файл")
+                val completed = android.content.ContentValues().apply {
+                    put(MediaStore.Downloads.IS_PENDING, 0)
+                }
+                resolver.update(uri, completed, null, null)
+                savedUri = uri
+            } catch (error: Throwable) {
+                resolver.delete(uri, null, null)
+                throw error
+            }
         } else {
-            val dir = java.io.File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "Proles").apply { mkdirs() }
+            val dir = java.io.File(
+                context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS),
+                "Proles"
+            ).apply { mkdirs() }
             java.io.File(dir, fileName).writeBytes(bytes)
+            savedUri = null
         }
         Toast.makeText(context, "Файл сохранён: $fileName", Toast.LENGTH_LONG).show()
+        savedUri
     }.onFailure { error ->
         Toast.makeText(context, "Не удалось сохранить файл: ${error.message}", Toast.LENGTH_LONG).show()
+    }.getOrNull()
+}
+
+private fun openChatFile(context: Context, uri: Uri, mimeType: String) {
+    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, mimeType.takeIf { it.isNotBlank() } ?: "*/*")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    try {
+        context.startActivity(
+            Intent.createChooser(viewIntent, "Открыть скачанный файл")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    } catch (error: Exception) {
+        Log.w("ChatScreen", "No app available to open file", error)
+        Toast.makeText(context, "Файл сохранён, но приложение для его открытия не найдено", Toast.LENGTH_LONG).show()
     }
 }
