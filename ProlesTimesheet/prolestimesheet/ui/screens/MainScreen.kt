@@ -70,18 +70,9 @@ fun MainScreen(
     // 🆕 Состояние для предустановленного фильтра в AdminExpensesScreen
     var adminExpensesInitialEmployeeId by remember { mutableStateOf<String?>(null) }
 
-    // 🆕 Динамическое меню: видимость экранов определяется правами
-    val userPermissions by viewModel.userPermissions.collectAsState()
-    val visibleScreens = remember(user?.role, userPermissions) {
-        val isDirector = user?.role == "director"
-        val base = if (isDirector) {
-            listOf(Screen.Home, Screen.Profile, Screen.Chat)
-        } else {
-            listOf(Screen.Home, Screen.Timesheet, Screen.Profile, Screen.Chat)
-        }
-        val hasManagementRole = user?.role in setOf("admin", "director", "superadmin")
-        if (hasManagementRole) base + Screen.Admin else base
-    }
+    // Нижняя панель всегда содержит три основных раздела.
+    // Чат расположен по центру, личные экраны и остальные инструменты находятся в «Управлении».
+    val bottomScreens = listOf(Screen.Home, Screen.Chat, Screen.Admin)
 
     // 🆕 АВТОПЕРЕХОД: слушаем StateFlow и user одновременно
     val pending by PendingNavigationHolder.pending.collectAsState()
@@ -103,11 +94,6 @@ fun MainScreen(
         }
     }
 
-    // Сброс на "Главную", если текущий экран стал недоступен
-    LaunchedEffect(visibleScreens) {
-        if (selectedScreen !in visibleScreens) selectedScreen = Screen.Home
-    }
-
     // 🆕 Функция навигации с добавлением в историю
     fun navigateTo(screen: Screen) {
         if (screen != selectedScreen) {
@@ -120,6 +106,9 @@ fun MainScreen(
     fun goBack() {
         if (navigationStack.isNotEmpty()) {
             selectedScreen = navigationStack.removeAt(navigationStack.lastIndex)
+        } else if (selectedScreen != Screen.Home) {
+            // Корневые вкладки тоже должны иметь рабочую кнопку «Назад».
+            selectedScreen = Screen.Home
         }
     }
 
@@ -134,7 +123,7 @@ fun MainScreen(
                 containerColor = Color.White.copy(alpha = 0.96f),
                 tonalElevation = 0.dp,
             ) {
-                visibleScreens.take(4).forEach { screen ->
+                bottomScreens.forEach { screen ->
                     NavigationBarItem(
                         icon = {
                             Icon(
@@ -210,7 +199,9 @@ fun MainScreen(
                 )
 
                 Screen.Admin -> AdminManagementScreen(
-                    viewModel = viewModel,  // 🆕
+                    viewModel = viewModel,
+                    onNavigateToProfile = { navigateTo(Screen.Profile) },
+                    onNavigateToTimesheet = { navigateTo(Screen.Timesheet) },
                     onNavigateToPayroll = { navigateTo(Screen.Payroll) },
                     onNavigateToAnalytics = { navigateTo(Screen.Analytics) },
                     onNavigateToProjects = { navigateTo(Screen.Projects) },
