@@ -262,14 +262,25 @@ fun ChatScreen(
         val message = messages.firstOrNull { it.attachments.any { attachment -> attachment.id == attachmentId } } ?: return
         val attachment = message.attachments.firstOrNull { it.id == attachmentId } ?: return
         scope.launch {
-            ChatApi.downloadAttachment(attachment).onSuccess { file ->
-                val savedUri = saveChatFile(context, file.bytes, file.fileName, file.mimeType)
-                if (savedUri != null) {
-                    openChatFile(context, savedUri, file.mimeType)
-                } else {
-                    Toast.makeText(context, "Файл сохранён в папке «Загрузки/Proles»", Toast.LENGTH_LONG).show()
+            ChatApi.downloadAttachment(attachment)
+                .onSuccess { file ->
+                    runCatching { saveChatFile(context, file.bytes, file.fileName, file.mimeType) }
+                        .onSuccess { savedUri ->
+                            if (savedUri != null) {
+                                openChatFile(context, savedUri, file.mimeType)
+                            } else {
+                                Toast.makeText(context, "Файл сохранён в папке «Загрузки/Proles»", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                        .onFailure { error ->
+                            Log.e("ChatScreen", "Failed to save downloaded file", error)
+                            Toast.makeText(context, "Не удалось сохранить файл: ${error.message}", Toast.LENGTH_LONG).show()
+                        }
                 }
-            }.onFailure { Toast.makeText(context, "Не удалось скачать файл", Toast.LENGTH_LONG).show() }
+                .onFailure { error ->
+                    Log.e("ChatScreen", "Failed to download attachment", error)
+                    Toast.makeText(context, "Не удалось скачать файл", Toast.LENGTH_LONG).show()
+                }
         }
     }
 
@@ -601,43 +612,39 @@ private fun queryFileName(context: Context, uri: Uri): String {
 }
 
 private fun saveChatFile(context: Context, bytes: ByteArray, fileName: String, mimeType: String): Uri? {
-    return runCatching {
-        val resolver = context.contentResolver
-        val savedUri: Uri?
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val values = android.content.ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                put(MediaStore.Downloads.MIME_TYPE, mimeType.ifBlank { "application/octet-stream" })
-                put(MediaStore.Downloads.RELATIVE_PATH, "Download/Proles")
-                put(MediaStore.Downloads.IS_PENDING, 1)
-            }
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                ?: error("Не удалось создать файл")
-            try {
-                resolver.openOutputStream(uri)?.use { it.write(bytes) }
-                    ?: error("Не удалось записать файл")
-                val completed = android.content.ContentValues().apply {
-                    put(MediaStore.Downloads.IS_PENDING, 0)
-                }
-                resolver.update(uri, completed, null, null)
-                savedUri = uri
-            } catch (error: Throwable) {
-                resolver.delete(uri, null, null)
-                throw error
-            }
-        } else {
-            val dir = java.io.File(
-                context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS),
-                "Proles"
-            ).apply { mkdirs() }
-            java.io.File(dir, fileName).writeBytes(bytes)
-            savedUri = null
+    val resolver = context.contentResolver
+    val savedUri: Uri?
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val values = android.content.ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+            put(MediaStore.Downloads.MIME_TYPE, mimeType.ifBlank { "application/octet-stream" })
+            put(MediaStore.Downloads.RELATIVE_PATH, "Download/Proles")
+            put(MediaStore.Downloads.IS_PENDING, 1)
         }
-        Toast.makeText(context, "Файл сохранён: $fileName", Toast.LENGTH_LONG).show()
-        savedUri
-    }.onFailure { error ->
-        Toast.makeText(context, "Не удалось сохранить файл: ${error.message}", Toast.LENGTH_LONG).show()
-    }.getOrNull()
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: error("Не удалось создать файл")
+        try {
+            resolver.openOutputStream(uri)?.use { it.write(bytes) }
+                ?: error("Не удалось записать файл")
+            val completed = android.content.ContentValues().apply {
+                put(MediaStore.Downloads.IS_PENDING, 0)
+            }
+            resolver.update(uri, completed, null, null)
+            savedUri = uri
+        } catch (error: Throwable) {
+            resolver.delete(uri, null, null)
+            throw error
+        }
+    } else {
+        val dir = java.io.File(
+            context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS),
+            "Proles"
+        ).apply { mkdirs() }
+        java.io.File(dir, fileName).writeBytes(bytes)
+        savedUri = null
+    }
+    Toast.makeText(context, "Файл сохранён: $fileName", Toast.LENGTH_LONG).show()
+    return savedUri
 }
 
 private fun openChatFile(context: Context, uri: Uri, mimeType: String) {
