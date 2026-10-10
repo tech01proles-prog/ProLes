@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.widget.Toast
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -100,6 +101,8 @@ fun ChatScreen(
     var editText by remember { mutableStateOf("") }
     var savingEdit by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    var showNewDialogUsers by remember { mutableStateOf(false) }
+    var sidebarError by remember { mutableStateOf<String?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
@@ -115,11 +118,20 @@ fun ChatScreen(
     }
 
     suspend fun loadSidebar() {
-        ChatApi.users().onSuccess { users = it }
-        ChatApi.conversations().onSuccess { list ->
-            conversations = list.sortedByDescending { it.updatedAt }
-            if (activeConversationId == null) activeConversationId = list.firstOrNull()?.id
-        }
+        var failed = false
+        ChatApi.users()
+            .onSuccess { users = it }
+            .onFailure { error ->
+                failed = true
+                Log.e("ChatScreen", "Failed to load chat users", error)
+            }
+        ChatApi.conversations()
+            .onSuccess { list -> conversations = list.sortedByDescending { it.updatedAt } }
+            .onFailure { error ->
+                failed = true
+                Log.e("ChatScreen", "Failed to load conversations", error)
+            }
+        sidebarError = if (failed) "Не удалось загрузить данные чата. Проверьте подключение и авторизацию." else null
     }
 
     suspend fun loadMessages(conversationId: String, older: Boolean = false) {
@@ -144,9 +156,9 @@ fun ChatScreen(
             delay(2000)
             ChatApi.conversations().onSuccess { list ->
                 conversations = list.sortedByDescending { it.updatedAt }
-                if (activeConversationId == null) activeConversationId = list.firstOrNull()?.id
-            }
+            }.onFailure { Log.e("ChatScreen", "Failed to refresh conversations", it) }
             ChatApi.users().onSuccess { users = it }
+                .onFailure { Log.e("ChatScreen", "Failed to refresh users", it) }
         }
     }
 
@@ -178,7 +190,10 @@ fun ChatScreen(
                 conversations = (conversations.filterNot { it.id == conversation.id } + conversation)
                     .sortedByDescending { it.updatedAt }
                 activeConversationId = conversation.id
-            }.onFailure { Toast.makeText(context, "Не удалось открыть диалог", Toast.LENGTH_SHORT).show() }
+            }.onFailure { error ->
+                Log.e("ChatScreen", "Failed to create/open direct conversation", error)
+                Toast.makeText(context, "Не удалось открыть диалог: ${error.message ?: "ошибка сервера"}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -256,6 +271,16 @@ fun ChatScreen(
             users = users,
             conversations = conversations,
             userId = userId,
+            showNewDialogUsers = showNewDialogUsers,
+            sidebarError = sidebarError,
+            onToggleNewDialog = { showNewDialogUsers = !showNewDialogUsers },
+            onRetry = {
+                scope.launch {
+                    loading = true
+                    loadSidebar()
+                    loading = false
+                }
+            },
             onConversationClick = { activeConversationId = it.id },
             onUserClick = ::openConversation,
             onBack = onBack,
@@ -393,6 +418,10 @@ private fun ChatUserPicker(
     users: List<ChatUser>,
     conversations: List<ChatConversation>,
     userId: String,
+    showNewDialogUsers: Boolean,
+    sidebarError: String?,
+    onToggleNewDialog: () -> Unit,
+    onRetry: () -> Unit,
     onConversationClick: (ChatConversation) -> Unit,
     onUserClick: (ChatUser) -> Unit,
     onBack: () -> Unit,
@@ -404,8 +433,33 @@ private fun ChatUserPicker(
                 Text("PRO-Chat", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
                 Text("Сообщения и файлы", style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
             }
+            TextButton(onClick = onToggleNewDialog) {
+                Text(if (showNewDialogUsers) "Скрыть" else "＋ Новый диалог", fontWeight = FontWeight.Bold)
+            }
         }
         LazyColumn {
+            if (sidebarError != null) {
+                item {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(sidebarError, Modifier.weight(1f), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = onRetry) { Text("Повторить") }
+                    }
+                }
+            }
+            if (conversations.isEmpty()) {
+                item {
+                    Text(
+                        if (sidebarError == null) "Пока нет диалогов. Нажмите «Новый диалог», чтобы начать общение."
+                        else "Диалоги пока не удалось загрузить.",
+                        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 18.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ProlesMuted
+                    )
+                }
+            }
             if (conversations.isNotEmpty()) {
                 item {
                     Text("Диалоги", Modifier.padding(horizontal = 14.dp, vertical = 10.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = ProlesMuted)
@@ -433,20 +487,33 @@ private fun ChatUserPicker(
                     }
                 }
             }
-            item {
-                Text("Новый диалог", Modifier.padding(horizontal = 14.dp, vertical = 10.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = ProlesMuted)
-            }
-            items(users, key = { "user-" + it.id }) { item ->
-                Row(Modifier.fillMaxWidth().clickable { onUserClick(item) }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).clip(CircleShape).background(ProlesPrimarySoft), contentAlignment = Alignment.Center) {
-                        Text(item.name.take(1).uppercase(), fontWeight = FontWeight.Black, color = ProlesPrimary)
+            if (showNewDialogUsers) {
+                item {
+                    Text("Выберите сотрудника", Modifier.padding(horizontal = 14.dp, vertical = 10.dp), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = ProlesMuted)
+                }
+                if (users.isEmpty()) {
+                    item {
+                        Text(
+                            if (sidebarError == null) "Нет доступных сотрудников для нового диалога."
+                            else "Не удалось получить список сотрудников.",
+                            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ProlesMuted
+                        )
                     }
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(item.name, fontWeight = FontWeight.Bold)
-                        Text(if (item.online) "онлайн" else "не в сети", style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
+                }
+                items(users, key = { "user-" + it.id }) { item ->
+                    Row(Modifier.fillMaxWidth().clickable { onUserClick(item) }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(44.dp).clip(CircleShape).background(ProlesPrimarySoft), contentAlignment = Alignment.Center) {
+                            Text(item.name.take(1).uppercase(), fontWeight = FontWeight.Black, color = ProlesPrimary)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(item.name, fontWeight = FontWeight.Bold)
+                            Text(if (item.online) "онлайн" else "не в сети", style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
+                        }
+                        Text("＋", color = ProlesPrimary, fontWeight = FontWeight.Black)
                     }
-                    Text("＋", color = ProlesPrimary, fontWeight = FontWeight.Black)
                 }
             }
         }
