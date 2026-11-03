@@ -1,5 +1,5 @@
 import type { ProjectDto } from '../../types';
-import { formatMoney } from '../../lib/utils';
+import { formatDate, formatMoney } from '../../lib/utils';
 import { StatusBadge, type StatusBadgeTone } from '../ui';
 
 interface ProjectCardProps {
@@ -107,9 +107,7 @@ export function ProjectCard({
               <span className="font-semibold text-slate-700 dark:text-slate-300">
                 Срок:
               </span>{' '}
-              {new Date(
-                `${project.deliveryDate}T00:00:00`,
-              ).toLocaleDateString('ru-RU')}
+              {formatDate(project.deliveryDate)}
             </p>
           )}
         </div>
