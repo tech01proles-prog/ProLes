@@ -336,39 +336,42 @@ object NotificationService {
     }
 
     private fun buildBusinessTripCreatedMessage(trip: BusinessTripDto): String =
-        buildBusinessTripTelegramMessage(trip, "начата")
+        buildBusinessTripMessage(trip, completed = false)
 
     private fun buildBusinessTripCompletedMessage(trip: BusinessTripDto): String =
-        buildBusinessTripTelegramMessage(trip, "завершена")
+        buildBusinessTripMessage(trip, completed = true)
 
-    private fun buildBusinessTripTelegramMessage(
+    private fun buildBusinessTripMessage(
         trip: BusinessTripDto,
-        statusLabel: String
+        completed: Boolean
     ): String {
         val participants = resolveTripParticipants(trip.userId, trip.participants)
+            .ifEmpty { listOf("Участники не указаны") }
             .joinToString(", ")
-        val project = listOf(trip.projectNumber.trim(), trip.projectName.trim())
+        val cityAndCountry = listOf(trip.city.trim(), trip.country.trim())
             .filter { it.isNotBlank() }
-            .joinToString(" — ")
+            .joinToString(", ")
+            .ifBlank { "—" }
+
+        fun dateLabel(raw: String?): String {
+            if (raw.isNullOrBlank()) return "—"
+            return runCatching {
+                JavaLocalDate.parse(raw)
+                    .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yy"))
+            }.getOrDefault(raw)
+        }
 
         return buildString {
-            appendLine("#Командировка $statusLabel")
+            appendLine("#Командировка ${if (completed) "завершена" else "начата"}")
             appendLine("Сотрудники: ${escapeTelegram(participants)}")
-            appendLine("Город: ${escapeTelegram(trip.city.trim())}, ${escapeTelegram(trip.country.trim())}")
-            appendLine("Дата начала: ${formatBusinessTripDate(trip.startDate.ifBlank { trip.date })}")
-            appendLine("Дата окончания: ${formatBusinessTripDate(trip.endDate ?: trip.completedDate)}")
-            appendLine("Транспорт: ${escapeTelegram(trip.transport.trim())}")
-            appendLine("Проект: ${escapeTelegram(project)}")
-            appendLine("Клиент: ${escapeTelegram(trip.companyName.trim())}")
-            appendLine("Цель: ${escapeTelegram(trip.notes.trim())}")
+            appendLine("Город: ${escapeTelegram(cityAndCountry)}")
+            appendLine("Дата начала: ${dateLabel(trip.startDate.ifBlank { trip.date })}")
+            appendLine("Дата окончания: ${dateLabel(trip.endDate ?: trip.completedDate)}")
+            appendLine("Транспорт: ${escapeTelegram(trip.transport.trim().ifBlank { "—" })}")
+            appendLine("Проект: ${escapeTelegram(trip.projectName.trim().ifBlank { "—" })}")
+            appendLine("Клиент: ${escapeTelegram(trip.companyName.trim().ifBlank { "—" })}")
+            appendLine("Цель: ${escapeTelegram(trip.purpose.trim().ifBlank { "—" })}")
         }.trim()
-    }
-
-    private fun formatBusinessTripDate(rawDate: String?): String {
-        if (rawDate.isNullOrBlank()) return ""
-        return runCatching {
-            JavaLocalDate.parse(rawDate).format(DateTimeFormatter.ofPattern("dd.MM.yy"))
-        }.getOrDefault(rawDate)
     }
 
     private fun resolveTripParticipants(ownerIdRaw: String, participantIds: Collection<String>): List<String> {
