@@ -168,8 +168,22 @@ fun BusinessTripsScreen(
             allTrips = trips,
             onDismiss = { showAddDialog = false },
             onConfirm = { newTrip ->
-                viewModel.addBusinessTrip(newTrip)
-                showAddDialog = false
+                if (newTrip.type == "TRANSFER") {
+                    viewModel.transferBusinessTrip(newTrip) { ok ->
+                        if (ok) {
+                            showAddDialog = false
+                        } else {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Не удалось выполнить переезд. Проверьте активную командировку и повторите попытку.",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                } else {
+                    viewModel.addBusinessTrip(newTrip)
+                    showAddDialog = false
+                }
             }
         )
     }
@@ -220,36 +234,30 @@ private fun TripCard(
     onDelete: () -> Unit,
     onComplete: () -> Unit
 ) {
-    val typeLabel = when (trip.type) {
-        "DEPARTURE" -> "Отъезд"
-        "TRANSFER" -> "Переезд"
-        "COMPLETION" -> "Завершение"
-        else -> trip.type
-    }
-    val typeColor = when (trip.type) {
-        "COMPLETION" -> ProlesPrimary
-        "TRANSFER" -> ProlesSecondary
-        else -> ProlesSecondary
-    }
+    val isCompleted = trip.status == "COMPLETED" || trip.endDate != null
+    val statusLabel = if (isCompleted) "Завершена" else "Начата"
+    val typeColor = if (isCompleted) ProlesPrimary else ProlesSecondary
 
     ProlesCard(containerColor = typeColor.copy(alpha = 0.04f)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             ProlesIconBadge(
-                when (trip.type) {
-                    "TRANSFER" -> Icons.Default.SwapHoriz
-                    "COMPLETION" -> Icons.Default.CheckCircle
-                    else -> Icons.Default.Train
-                },
+                if (isCompleted) Icons.Default.CheckCircle else Icons.Default.Train,
                 typeColor,
                 size = 36.dp
             )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ProlesPill(typeLabel, tint = typeColor)
+                    ProlesPill(statusLabel, tint = typeColor)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        "%02d.%02d.%04d".format(trip.date.dayOfMonth, trip.date.monthNumber, trip.date.year),
+                        buildString {
+                            append("%02d.%02d.%04d".format(trip.startDate.dayOfMonth, trip.startDate.monthNumber, trip.startDate.year))
+                            trip.endDate?.let { end ->
+                                append(" — ")
+                                append("%02d.%02d.%04d".format(end.dayOfMonth, end.monthNumber, end.year))
+                            }
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = ProlesMuted
                     )
@@ -349,58 +357,64 @@ fun TripDialog(
     val isNew = trip == null
     val today = kotlinx.datetime.Clock.System.todayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
 
-    // 🔥 Активная командировка ТЕКУЩЕГО пользователя (без COMPLETION)
+    // Активная командировка определяется по статусу и отсутствию даты окончания.
     val activeTrip = remember(userId, allTrips) {
-        allTrips.filter { it.userId == userId && it.type != "COMPLETION" }
-            .maxByOrNull { it.date }
+        allTrips
+            .filter { it.userId == userId && it.status == "ACTIVE" && it.endDate == null }
+            .maxByOrNull { it.startDate }
     }
 
-    // 🔥 Все занятые пользователи (у кого есть активная командировка)
     val busyUserIds = remember(allTrips) {
         allTrips
+            .filter { it.status == "ACTIVE" && it.endDate == null }
             .groupBy { it.userId }
-            .mapNotNull { (_, trips) -> trips.maxByOrNull { it.date } }
-            .filter { it.type != "COMPLETION" }
-            .map { it.userId }
+            .mapNotNull { (_, trips) -> trips.maxByOrNull { it.startDate }?.userId }
             .toSet()
     }
 
-    // 🔥 Доступные типы: зависит от наличия активной командировки
-    val availableTypes = remember(activeTrip) {
-        if (activeTrip != null) listOf("TRANSFER", "COMPLETION")
+    // «Переезд» — действие пользователя; новая запись всегда создаётся как обычная командировка.
+    val availableTypes = remember(activeTrip, isNew) {
+        if (!isNew) listOf("DEPARTURE")
+        else if (activeTrip != null) listOf("TRANSFER")
         else listOf("DEPARTURE")
     }
 
-    var type by remember { mutableStateOf(trip?.type ?: availableTypes.firstOrNull() ?: "DEPARTURE") }
+    var type by remember {
+        mutableStateOf(if (isNew) availableTypes.firstOrNull() ?: "DEPARTURE" else "DEPARTURE")
+    }
 
-    // При смене доступных типов — сбрасываем type на первый доступный
-    LaunchedEffect(availableTypes) {
-        if (type !in availableTypes) {
+    LaunchedEffect(availableTypes, isNew) {
+        if (isNew && type !in availableTypes) {
             type = availableTypes.firstOrNull() ?: "DEPARTURE"
         }
     }
 
-    // 🔥 Проект: для TRANSFER и COMPLETION подтягивается из активной командировки
-    var projectId by remember { mutableStateOf(trip?.projectId ?: activeTrip?.projectId ?: "") }
-    var projectName by remember { mutableStateOf(trip?.projectName ?: activeTrip?.projectName ?: "") }
+    val initialProjectId = trip?.projectId ?: activeTrip?.projectId
+    val initialProject = projects.firstOrNull { it.id == initialProjectId }
+    var projectId by remember { mutableStateOf(initialProjectId ?: "") }
+    var projectName by remember {
+        mutableStateOf(trip?.projectName ?: initialProject?.name ?: activeTrip?.projectName.orEmpty())
+    }
+    var projectNumber by remember {
+        mutableStateOf(trip?.projectNumber ?: initialProject?.projectNumber ?: activeTrip?.projectNumber.orEmpty())
+    }
+    var companyName by remember {
+        mutableStateOf(
+            trip?.companyName
+                ?: initialProject?.client?.takeIf { it.isNotBlank() }
+                ?: initialProject?.customer
+                ?: activeTrip?.companyName.orEmpty()
+        )
+    }
+    var country by remember { mutableStateOf(trip?.country ?: activeTrip?.country.orEmpty()) }
     var subprojectId by remember { mutableStateOf(trip?.subprojectId) }
     var subprojectName by remember { mutableStateOf(trip?.subprojectName ?: "") }
     var date by remember { mutableStateOf(trip?.startDate ?: trip?.date ?: today) }
     var endDate by remember { mutableStateOf(trip?.endDate) }
-    var city by remember { mutableStateOf(trip?.city ?: "") }
-    // 🆕 Пункты следования (waypoints)
-    var waypoints by remember { mutableStateOf(trip?.waypoints ?: emptyList()) }
-
-    // 🔥 Для COMPLETION проект и город read-only из активной командировки
-    LaunchedEffect(type, activeTrip) {
-        if (type == "COMPLETION" && activeTrip != null) {
-            projectId = activeTrip.projectId.orEmpty()
-            projectName = activeTrip.projectName
-            subprojectId = activeTrip.subprojectId
-            subprojectName = activeTrip.subprojectName
-            city = activeTrip.city
-        }
+    var city by remember {
+        mutableStateOf(trip?.city?.takeIf { it.isNotBlank() } ?: initialProject?.location ?: activeTrip?.city.orEmpty())
     }
+    var waypoints by remember { mutableStateOf(trip?.waypoints ?: emptyList()) }
 
     // 🔥 Участники: для TRANSFER подтягиваем из активной командировки
     var selectedParticipants by remember {
@@ -423,7 +437,13 @@ fun TripDialog(
 
     var showParticipantPicker by remember { mutableStateOf(false) }
     var transport by remember { mutableStateOf(trip?.transport ?: "") }
-    var notes by remember { mutableStateOf(trip?.notes ?: "") }
+    var notes by remember {
+        mutableStateOf(
+            trip?.notes?.takeIf { it.isNotBlank() }
+                ?: initialProject?.productService
+                ?: activeTrip?.notes.orEmpty()
+        )
+    }
     var showProjectPicker by remember { mutableStateOf(false) }
     var showSubprojectPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -476,9 +496,8 @@ fun TripDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     listOf(
-                        "DEPARTURE" to "🚆 Отъезд",
-                        "TRANSFER" to "🔄 Переезд",
-                        "COMPLETION" to "✅ Завершение"
+                        "DEPARTURE" to "🚆 Новая командировка",
+                        "TRANSFER" to "🔄 Переезд"
                     )
                         .filter { (t, _) -> t in availableTypes }  // 🔥 Фильтруем только доступные
                         .forEach { (t, label) ->
@@ -521,14 +540,10 @@ fun TripDialog(
                 }
 
                 // 🔥 КУДА (выбор проекта) — для TRANSFER можно сменить
-                Text(
-                    if (type == "COMPLETION") "Проект (завершение):" else "Проект:",
-                    style = MaterialTheme.typography.labelLarge
-                )
+                Text("Проект:", style = MaterialTheme.typography.labelLarge)
                 OutlinedButton(
-                    onClick = { if (type != "COMPLETION") showProjectPicker = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = type != "COMPLETION"
+                    onClick = { showProjectPicker = true },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -539,9 +554,8 @@ fun TripDialog(
                     )
                 if (projectId.isNotBlank()) {
                     OutlinedButton(
-                        onClick = { if (type != "COMPLETION") showSubprojectPicker = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = type != "COMPLETION"
+                        onClick = { showSubprojectPicker = true },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -584,29 +598,31 @@ fun TripDialog(
                     }
                 }
 
-                // 🔥 ГОРОД (кроме COMPLETION — там read-only)
-                if (type != "COMPLETION") {
-                    Text(
-                        if (type == "TRANSFER") "Город назначения:" else "Город:",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    OutlinedTextField(
-                        value = city,
-                        onValueChange = { city = it },
-                        placeholder = { Text("Например, Москва") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                } else if (city.isNotBlank()) {
-                    // Для COMPLETION показываем read-only город из активной
-                    Text("Город завершения:", style = MaterialTheme.typography.labelLarge)
-                    OutlinedTextField(
-                        value = city,
-                        onValueChange = {},
-                        readOnly = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                // Город, клиент и страна автозаполняются из проекта, но остаются редактируемыми.
+                Text("Город:", style = MaterialTheme.typography.labelLarge)
+                OutlinedTextField(
+                    value = city,
+                    onValueChange = { city = it },
+                    placeholder = { Text("Например, Москва") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = companyName,
+                    onValueChange = { companyName = it },
+                    label = { Text("Клиент") },
+                    placeholder = { Text("Название клиента") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = country,
+                    onValueChange = { country = it },
+                    label = { Text("Страна") },
+                    placeholder = { Text("Страна командировки") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
 
                 // 🔥 ТРАНСПОРТ
                 Text(
@@ -771,6 +787,9 @@ fun TripDialog(
                         subprojectId = subprojectId,
                         subprojectName = subprojectName,
                         projectName = projectName,
+                        projectNumber = projectNumber,
+                        companyName = companyName.trim(),
+                        country = country.trim(),
                         type = type,
                         date = date,
                         startDate = date,
@@ -805,6 +824,10 @@ fun TripDialog(
                             Modifier.fillMaxWidth().clickable {
                                 projectId = ""
                                 projectName = "Без проекта"
+                                projectNumber = ""
+                                companyName = ""
+                                city = ""
+                                notes = ""
                                 subprojectId = null
                                 subprojectName = ""
                                 showProjectPicker = false
@@ -816,6 +839,10 @@ fun TripDialog(
                             modifier = Modifier.fillMaxWidth().clickable {
                                 projectId = proj.id
                                 projectName = proj.name
+                                projectNumber = proj.projectNumber
+                                companyName = proj.client.ifBlank { proj.customer }
+                                city = proj.location
+                                notes = proj.productService
                                 subprojectId = null
                                 subprojectName = ""
                                 showProjectPicker = false
