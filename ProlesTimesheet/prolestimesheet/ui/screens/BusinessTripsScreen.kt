@@ -234,7 +234,9 @@ private fun TripCard(
     onDelete: () -> Unit,
     onComplete: () -> Unit
 ) {
-    val isCompleted = trip.status == "COMPLETED" || trip.endDate != null
+    val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+    val isCompleted = trip.status == "COMPLETED" ||
+        (trip.endDate?.let { it <= today } == true)
     val statusLabel = if (isCompleted) "Завершена" else "Начата"
     val typeColor = if (isCompleted) ProlesPrimary else ProlesSecondary
 
@@ -302,7 +304,7 @@ private fun TripCard(
         if (!isAdminView) {
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (trip.status != "COMPLETED") {
+                if (!isCompleted) {
                     OutlinedButton(
                         onClick = onComplete,
                         modifier = Modifier.weight(1f),
@@ -362,16 +364,23 @@ fun TripDialog(
     val isNew = trip == null
     val today = kotlinx.datetime.Clock.System.todayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
 
-    // Активная командировка определяется по статусу и отсутствию даты окончания.
-    val activeTrip = remember(userId, allTrips) {
+    // Будущая дата окончания не завершает командировку до наступления этого дня.
+    val activeTrip = remember(userId, allTrips, today) {
         allTrips
-            .filter { it.userId == userId && it.status == "ACTIVE" && it.endDate == null }
+            .filter {
+                it.userId == userId &&
+                    it.status == "ACTIVE" &&
+                    (it.endDate == null || it.endDate >= today)
+            }
             .maxByOrNull { it.startDate }
     }
 
-    val busyUserIds = remember(allTrips) {
+    val busyUserIds = remember(allTrips, today) {
         allTrips
-            .filter { it.status == "ACTIVE" && it.endDate == null }
+            .filter {
+                it.status == "ACTIVE" &&
+                    (it.endDate == null || it.endDate >= today)
+            }
             .groupBy { it.userId }
             .mapNotNull { (_, trips) -> trips.maxByOrNull { it.startDate }?.userId }
             .toSet()
@@ -405,9 +414,9 @@ fun TripDialog(
     }
     var companyName by remember {
         mutableStateOf(
-            trip?.companyName
+            trip?.companyName?.takeIf { it.isNotBlank() }
                 ?: initialProject?.client?.takeIf { it.isNotBlank() }
-                ?: initialProject?.customer
+                ?: initialProject?.customer?.takeIf { it.isNotBlank() }
                 ?: activeTrip?.companyName.orEmpty()
         )
     }
@@ -448,8 +457,10 @@ fun TripDialog(
     var purpose by remember {
         mutableStateOf(
             trip?.purpose?.takeIf { it.isNotBlank() }
-                ?: initialProject?.productService
-                ?: activeTrip?.purpose.orEmpty()
+                ?: trip?.notes?.takeIf { it.isNotBlank() }
+                ?: initialProject?.productService?.takeIf { it.isNotBlank() }
+                ?: activeTrip?.purpose?.takeIf { it.isNotBlank() }
+                ?: activeTrip?.notes.orEmpty()
         )
     }
     var showProjectPicker by remember { mutableStateOf(false) }
@@ -556,7 +567,10 @@ fun TripDialog(
                     Icon(Icons.Default.Folder, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        projectName.ifBlank { "Выберите проект" },
+                        buildString {
+                            if (projectNumber.isNotBlank()) append(projectNumber).append(" — ")
+                            append(projectName.ifBlank { "Выберите проект" })
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
