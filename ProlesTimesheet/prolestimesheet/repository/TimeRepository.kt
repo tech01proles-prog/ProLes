@@ -650,8 +650,7 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
         val previousTrip = _trips.value
             .filter {
                 it.userId == trip.userId &&
-                    it.status == "ACTIVE" &&
-                    it.endDate == null
+                    it.status == "ACTIVE"
             }
             .maxByOrNull { it.startDate }
 
