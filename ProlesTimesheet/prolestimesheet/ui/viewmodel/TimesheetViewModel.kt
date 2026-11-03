@@ -771,6 +771,13 @@ class TimesheetViewModel(val repository: TimeRepository) : ViewModel() {
     val trips: StateFlow<List<BusinessTrip>> = repository.tripsFlow
 
     fun addBusinessTrip(trip: BusinessTrip) { viewModelScope.launch { repository.addBusinessTrip(trip) } }
+    fun transferBusinessTrip(trip: BusinessTrip, onFinished: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            repository.transferBusinessTrip(trip)
+                .onSuccess { onFinished(true) }
+                .onFailure { onFinished(false) }
+        }
+    }
     fun completeBusinessTrip(tripId: String, endDate: LocalDate, onFinished: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             repository.completeBusinessTrip(tripId, endDate)
