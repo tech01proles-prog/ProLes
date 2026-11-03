@@ -264,6 +264,7 @@ data class BusinessTripDto(
     val waypoints: List<WaypointDto> = emptyList(),  // 🆕 маршрут
     val transport: String = "",
     val notes: String = "",
+    val purpose: String = "",
     val participants: List<String> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
     val perDiemRate: Double = 750.0,
