@@ -98,7 +98,8 @@ object PerDiemService {
 
                 BusinessTripsTable.selectAll().forEach { trip ->
                     val status = trip[BusinessTripsTable.status].uppercase()
-                    if (status == "CANCELLED") return@forEach
+                    val tripType = trip[BusinessTripsTable.type].uppercase()
+                    if (status == "CANCELLED" || tripType == "COMPLETION") return@forEach
 
                     val startDate = trip[BusinessTripsTable.startDate]
                         ?: trip[BusinessTripsTable.date]
