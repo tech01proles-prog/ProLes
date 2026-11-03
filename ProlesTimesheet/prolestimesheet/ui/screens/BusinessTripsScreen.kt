@@ -235,8 +235,8 @@ private fun TripCard(
     onComplete: () -> Unit
 ) {
     val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
-    val isCompleted = trip.status == "COMPLETED" ||
-        (trip.endDate?.let { it <= today } == true)
+    val isCompleted = trip.endDate?.let { it <= today }
+        ?: (trip.status == "COMPLETED")
     val isCancelled = trip.status == "CANCELLED"
     val statusLabel = when {
         isCancelled -> "Отменена"
