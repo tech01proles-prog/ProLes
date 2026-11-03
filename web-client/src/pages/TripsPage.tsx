@@ -6,10 +6,10 @@ import type { BusinessTripDto, ProjectDto, UserDto, WaypointDto } from '../types
 import { generateUUID, formatDate } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 
-const TRIP_TYPES = {
-  DEPARTURE: { label: '🚆 Отъезд', color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900' },
-  TRANSFER: { label: '🔄 Переезд', color: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-900' },
-  COMPLETION: { label: '✅ Завершение', color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900' },
+const TRIP_STATUS = {
+  ACTIVE: { label: 'Начата', color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900' },
+  COMPLETED: { label: 'Завершена', color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900' },
+  CANCELLED: { label: 'Отменена', color: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' },
 };
 
 type SubprojectOption = {
@@ -25,7 +25,7 @@ type TripFormState = {
   projectNumber: string;
   companyName: string;
   country: string;
-  type: keyof typeof TRIP_TYPES;
+  type: BusinessTripDto['type'];
   date: string;
   startDate: string;
   endDate: string;
@@ -207,7 +207,7 @@ export function TripsPage() {
     .sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
       if (sortField === 'date') return a.date.localeCompare(b.date) * dir;
-      return a.type.localeCompare(b.type) * dir;
+      return a.status.localeCompare(b.status) * dir;
     });
 
   const activeTrip =
@@ -229,6 +229,7 @@ export function TripsPage() {
     setTripAction(mode);
     if (mode === 'transfer' && activeTrip) {
       const today = new Date().toISOString().slice(0, 10);
+      const project = projects.find(item => item.id === activeTrip.projectId);
       const isStandardCountry = [
         'РБ',
         'РФ',
@@ -239,8 +240,8 @@ export function TripsPage() {
       setForm({
         projectId: activeTrip.projectId || '',
         subprojectId: activeTrip.subprojectId || '',
-        projectNumber: activeTrip.projectNumber || '',
-        companyName: activeTrip.companyName || '',
+        projectNumber: project?.projectNumber || activeTrip.projectNumber || '',
+        companyName: project?.client || project?.customer || activeTrip.companyName || '',
         country: isStandardCountry
           ? activeTrip.country
           : 'Другое',
@@ -249,11 +250,11 @@ export function TripsPage() {
         startDate: today,
         endDate: '',
         status: 'ACTIVE',
-        city: '',
+        city: project?.location || '',
         waypoints: [],
         participants: activeTrip.participants || [],
         transport: activeTrip.transport || '',
-        notes: activeTrip.notes || '',
+        notes: project?.productService || '',
       });
       setCustomCountry(['РБ','РФ','Казахстан','Китай'].includes(activeTrip.country) ? '' : activeTrip.country || '');
     } else {
@@ -331,12 +332,13 @@ export function TripsPage() {
 
     setSaving(true);
     try {
+      const selectedProject = projects.find(project => project.id === form.projectId);
       const payload: BusinessTripDto = {
         id: editingTripId || generateUUID(),
         userId: editingTripId ? (selectedTrip?.userId || user.id) : user.id,
         projectId: form.projectId || null,
-        projectName: projects.find(p => p.id === form.projectId)?.name || '',
-        projectNumber: form.projectNumber,
+        projectName: selectedProject?.name || '',
+        projectNumber: selectedProject?.projectNumber || form.projectNumber,
         companyName: form.companyName,
         country: form.country === 'Другое' ? customCountry.trim() : form.country,
                 subprojectId: form.subprojectId || null,
@@ -771,11 +773,24 @@ export function TripsPage() {
                 <div className="proles-modal-grid">
                   <div className="proles-input-group" style={{ gridColumn: 'span 2' }}>
                     <label>Проект</label>
-                    <select value={form.projectId} onChange={event =>
-                      setForm(current => ({ ...current, projectId: event.target.value, subprojectId: ''}))
-                      } className="input bg-white dark:bg-slate-900">
+                    <select value={form.projectId} onChange={event => {
+                      const project = projects.find(item => item.id === event.target.value);
+                      setForm(current => ({
+                        ...current,
+                        projectId: event.target.value,
+                        subprojectId: '',
+                        projectNumber: project?.projectNumber || '',
+                        companyName: project?.client || project?.customer || '',
+                        city: project?.location || '',
+                        notes: project?.productService || '',
+                      }));
+                    }} className="input bg-white dark:bg-slate-900">
                       <option value="">Без привязки к проекту</option>
-                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.projectNumber ? `${p.projectNumber} — ` : ''}{p.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div
@@ -811,10 +826,7 @@ export function TripsPage() {
                     </select>
                   </div>
                   <div className="proles-input-group">
-                    <label>Номер проекта</label><input value={form.projectNumber} onChange={e => setForm({ ...form, projectNumber: e.target.value })} className="input" placeholder="Например, 25-041" />
-                  </div>
-                  <div className="proles-input-group">
-                    <label>Название фирмы</label><input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} className="input" placeholder="Контрагент / клиент" />
+                    <label>Клиент</label><input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} className="input" placeholder="Контрагент / клиент" />
                   </div>
                   <div className="proles-input-group">
                     <label>Страна *</label>
@@ -976,8 +988,8 @@ export function TripsPage() {
               <div className="proles-modal-section">
                 <div className="proles-modal-section-title">Дополнительно</div>
                 <div className="proles-input-group">
-                  <label>Заметки (опционально)</label>
-                  <textarea placeholder="Дополнительная информация о поездке..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input min-h-[80px]" />
+                  <label>Цель командировки</label>
+                  <textarea placeholder="Цель поездки или ожидаемый результат..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input min-h-[80px]" />
                 </div>
               </div>
             </div>
@@ -1029,7 +1041,7 @@ export function TripsPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map(trip => {
-            const cfg = TRIP_TYPES[trip.type as keyof typeof TRIP_TYPES] || TRIP_TYPES.DEPARTURE;
+            const statusCfg = TRIP_STATUS[trip.status] || TRIP_STATUS.ACTIVE;
             const userName = isAdmin ? allUsers.find(u => u.id === trip.userId)?.name : null;
             const participants = trip.participants.map(pid => allUsers.find(u => u.id === pid)?.name).filter(Boolean);
 
@@ -1041,7 +1053,7 @@ export function TripsPage() {
                 <div className="flex items-start justify-between gap-4 mb-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.color}`}>{cfg.label}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusCfg.color}`}>{statusCfg.label}</span>
                       <span className="text-xs text-slate-400">
                         {tripEndDate
                           ? `${formatDate(tripStartDate)} — ${formatDate(tripEndDate)}`
@@ -1113,7 +1125,7 @@ export function TripsPage() {
                 <div>
                   <div>Командировка</div>
                   <div style={{ fontSize: '0.75rem', fontWeight: 500, opacity: 0.85, marginTop: 2 }}>
-                    {TRIP_TYPES[selectedTrip.type as keyof typeof TRIP_TYPES]?.label || 'Просмотр'}
+                    {TRIP_STATUS[selectedTrip.status]?.label || 'Командировка'}
                   </div>
                 </div>
               </div>
