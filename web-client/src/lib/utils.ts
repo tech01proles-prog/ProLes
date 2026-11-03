@@ -22,7 +22,7 @@ export function formatDate(date: string): string {
 
   // API dates are ISO YYYY-MM-DD. Read the calendar parts directly to avoid
   // timezone offsets shifting a displayed date to the previous/next day.
-  const yearFirstMatch = value.match(/^(\\d{4})[./-](\\d{2})[./-](\\d{2})/);
+  const yearFirstMatch = value.match(/^(\d{4})[./-](\d{2})[./-](\d{2})/);
   if (yearFirstMatch) {
     return `${yearFirstMatch[3]}.${yearFirstMatch[2]}.${yearFirstMatch[1]}`;
   }
