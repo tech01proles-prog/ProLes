@@ -308,7 +308,7 @@ object PerDiemService {
                                 it[ExpensesTable.amount] = amount
                                 it[ExpensesTable.currency] = "RUB"
                                 it[ExpensesTable.comment] = comment
-                                it[ExpensesTable.receiptSubmitted] = false
+                                it[ExpensesTable.receiptSubmitted] = true
                                 it[ExpensesTable.hasReceiptPhoto] = false
                                 it[ExpensesTable.category] = "WITHOUT_RECEIPT"
                                 it[ExpensesTable.createdAt] = System.currentTimeMillis()
@@ -323,6 +323,9 @@ object PerDiemService {
                                 it[ExpensesTable.amount] = amount
                                 it[ExpensesTable.currency] = "RUB"
                                 it[ExpensesTable.comment] = comment
+                                it[ExpensesTable.category] = "WITHOUT_RECEIPT"
+                                it[ExpensesTable.receiptSubmitted] = true
+                                it[ExpensesTable.hasReceiptPhoto] = false
                             }
                             updated++
                             matchingRows.drop(1).forEach {
