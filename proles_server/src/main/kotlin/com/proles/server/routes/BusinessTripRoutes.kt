@@ -310,14 +310,19 @@ internal fun Route.businessTripRoutes() {
                         .selectAll()
                         .where {
                             (BusinessTripsTable.userId eq userId) and
-                                (BusinessTripsTable.status eq "ACTIVE") and
-                                BusinessTripsTable.endDate.isNull()
+                                (BusinessTripsTable.status eq "ACTIVE")
                         }
-                        .orderBy(
-                            BusinessTripsTable.startDate to SortOrder.DESC,
-                            BusinessTripsTable.createdAt to SortOrder.DESC
+                        .filter { row ->
+                            val plannedEndDate = row[BusinessTripsTable.endDate]
+                                ?: row[BusinessTripsTable.completedDate]
+                            plannedEndDate == null || plannedEndDate >= startDate
+                        }
+                        .maxWithOrNull(
+                            compareBy<ResultRow>(
+                                { it[BusinessTripsTable.startDate] ?: it[BusinessTripsTable.date] },
+                                { it[BusinessTripsTable.createdAt] }
+                            )
                         )
-                        .firstOrNull()
                         ?: throw IllegalStateException(
                             "Нет активной командировки для переезда"
                         )
