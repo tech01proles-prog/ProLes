@@ -90,8 +90,9 @@ private fun mapRowToBusinessTripDto(row: ResultRow): BusinessTripDto {
         .toLocalDateTime(TimeZone.currentSystemDefault()).date
     val effectiveStatus = when {
         storedStatus == "CANCELLED" -> "CANCELLED"
-        storedStatus == "COMPLETED" -> "COMPLETED"
         storedEndDate != null && storedEndDate <= today -> "COMPLETED"
+        storedEndDate != null && storedEndDate > today -> "ACTIVE"
+        storedStatus == "COMPLETED" -> "COMPLETED"
         else -> "ACTIVE"
     }
 
@@ -345,7 +346,8 @@ internal fun Route.businessTripRoutes() {
                     ) {
                         it[BusinessTripsTable.endDate] = startDate
                         it[BusinessTripsTable.completedDate] = startDate
-                        it[BusinessTripsTable.status] = "COMPLETED"
+                        it[BusinessTripsTable.status] =
+                            if (startDate <= today) "COMPLETED" else "ACTIVE"
                     }
 
                     BusinessTripsTable.insert {
@@ -397,7 +399,9 @@ internal fun Route.businessTripRoutes() {
                 return@post call.respond(HttpStatusCode.Conflict, e.message ?: "Transfer failed")
             }
 
-            NotificationService.notifyBusinessTripCompleted(transferResult.first)
+            if (transferResult.first.status == "COMPLETED") {
+                NotificationService.notifyBusinessTripCompleted(transferResult.first)
+            }
             if (transferResult.second.status == "COMPLETED") {
                 NotificationService.notifyBusinessTripCompleted(transferResult.second)
             } else {
