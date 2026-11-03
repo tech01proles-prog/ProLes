@@ -239,7 +239,7 @@ export function TripsPage() {
       setForm({
         projectId: activeTrip.projectId || '',
         subprojectId: activeTrip.subprojectId || '',
-        companyName: project?.client || project?.customer || activeTrip.companyName || '',
+        companyName: project?.client || project?.customer || '',
         country: isStandardCountry
           ? activeTrip.country
           : 'Другое',
@@ -250,9 +250,9 @@ export function TripsPage() {
         city: project?.location || '',
         waypoints: [],
         participants: activeTrip.participants || [],
-        transport: activeTrip.transport || '',
+        transport: '',
         notes: '',
-        purpose: project?.productService || activeTrip.purpose || '',
+        purpose: project?.productService || '',
       });
       setCustomCountry(['РБ','РФ','Казахстан','Китай'].includes(activeTrip.country) ? '' : activeTrip.country || '');
     } else {
