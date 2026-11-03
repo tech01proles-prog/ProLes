@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import {
   Area,
@@ -168,11 +169,14 @@ export function AnalyticsPage() {
   const [users, setUsers] = useState<UserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<AnalyticsTab>('overview');
+  const navigate = useNavigate();
   const [periodMonths, setPeriodMonths] = useState<6 | 12>(6);
+  const [expensePeriodPreset, setExpensePeriodPreset] = useState<'month' | 'halfYear' | 'year'>('halfYear');
   const [selectedProjectFilter, setSelectedProjectFilter] = useState('all');
   const [sortEmployees, setSortEmployees] = useState<EmployeeSort>('efficiency');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
 
   useEffect(() => { void loadData(); }, []);
 
@@ -201,9 +205,20 @@ export function AnalyticsPage() {
   const period = useMemo(() => {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
+
+    if (tab === 'expenses') {
+      const startMonth = expensePeriodPreset === 'month'
+        ? end.getMonth()
+        : expensePeriodPreset === 'halfYear'
+          ? Math.floor(end.getMonth() / 6) * 6
+          : 0;
+      const start = new Date(end.getFullYear(), startMonth, 1);
+      return { from: toISODateLocal(start), to: toISODateLocal(end) };
+    }
+
     const start = new Date(end.getFullYear(), end.getMonth() - periodMonths + 1, 1);
     return { from: toISODateLocal(start), to: toISODateLocal(end) };
-  }, [periodMonths]);
+  }, [periodMonths, tab, expensePeriodPreset]);
 
   const filteredExpenses = useMemo(() => expenses.filter(x => x.date >= period.from && x.date <= period.to && (selectedProjectFilter === 'all' || x.projectId === selectedProjectFilter)), [expenses, period, selectedProjectFilter]);
   const filteredIncomes = useMemo(() => incomes.filter(x => x.date >= period.from && x.date <= period.to && (selectedProjectFilter === 'all' || x.projectId === selectedProjectFilter)), [incomes, period, selectedProjectFilter]);
@@ -406,6 +421,8 @@ export function AnalyticsPage() {
     return { projectEntries, projectExpenses, byEmployee: Array.from(byEmployee.entries()).map(([userId, v]) => ({ userId, ...v })).sort((a, b) => b.hours - a.hours) };
   }, [selectedProjectId, filteredEntries, filteredExpenses, users]);
 
+  const selectedExpense = projectDetail?.projectExpenses.find(expense => expense.id === selectedExpenseId) || null;
+
   const signals = useMemo(() => {
     const out: { tone: 'good' | 'warn' | 'bad'; title: string; text: string }[] = [];
     const receiptPct = totals.expenseRub ? (totals.noReceiptRub / totals.expenseRub) * 100 : 0;
@@ -437,7 +454,19 @@ export function AnalyticsPage() {
             <button onClick={() => void loadData()} className="analytics-glass-button px-4 py-2.5 rounded-xl text-sm font-semibold">↻ Обновить</button>
           </div>
           <div className="mt-7 flex flex-wrap items-center gap-3">
-            <div className="analytics-period-group"><button onClick={() => setPeriodMonths(6)} className={periodMonths === 6 ? 'active' : ''}>6 мес.</button><button onClick={() => setPeriodMonths(12)} className={periodMonths === 12 ? 'active' : ''}>12 мес.</button></div>
+            {tab !== 'expenses' && (
+              <div className="analytics-period-group">
+                <button onClick={() => setPeriodMonths(6)} className={periodMonths === 6 ? 'active' : ''}>6 мес.</button>
+                <button onClick={() => setPeriodMonths(12)} className={periodMonths === 12 ? 'active' : ''}>12 мес.</button>
+              </div>
+            )}
+            {tab === 'expenses' && (
+              <div className="analytics-period-group" aria-label="Период расходов">
+                <button onClick={() => setExpensePeriodPreset('month')} className={expensePeriodPreset === 'month' ? 'active' : ''}>Месяц</button>
+                <button onClick={() => setExpensePeriodPreset('halfYear')} className={expensePeriodPreset === 'halfYear' ? 'active' : ''}>Полугодие</button>
+                <button onClick={() => setExpensePeriodPreset('year')} className={expensePeriodPreset === 'year' ? 'active' : ''}>Год</button>
+              </div>
+            )}
             <select value={selectedProjectFilter} onChange={e => setSelectedProjectFilter(e.target.value)} className="analytics-select"><option value="all">Все проекты</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
           </div>
         </div>
@@ -476,9 +505,21 @@ export function AnalyticsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><div className="analytics-card bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm"><h3 className="font-bold text-gray-900 dark:text-white">Рабочий ритм</h3><p className="text-xs text-gray-500 mb-4">часы в фактически отработанный день — главный критерий эффективности</p><div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={sortedEmployees.slice(0, 10)} layout="vertical" margin={{ left: 20, right: 20 }}><CartesianGrid strokeDasharray="3 3" horizontal={false}/><XAxis type="number" domain={[0, 12]}/><YAxis type="category" dataKey="name" width={100} tickFormatter={value => shortPersonName(String(value))}/><Tooltip content={({ active, payload }) => active && payload?.length ? <div className="analytics-tooltip"><div className="analytics-tooltip-row"><span>Часов в день</span><strong>{Number(payload[0].value || 0).toFixed(1)} ч</strong></div></div> : null}/><Bar dataKey="avgHoursPerDay" name="Часов в день" fill="#10b981" radius={[0,8,8,0]}/></BarChart></ResponsiveContainer></div></div><div className="analytics-card bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm"><h3 className="font-bold text-gray-900 dark:text-white">Стабильность команды</h3><p className="text-xs text-gray-500 mb-4">выходы в рабочие дни + соблюдение рабочего ритма</p><div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={sortedEmployees.slice(0, 10)} layout="vertical" margin={{ left: 20, right: 20 }}><CartesianGrid strokeDasharray="3 3" horizontal={false}/><XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`}/><YAxis type="category" dataKey="name" width={100} tickFormatter={value => shortPersonName(String(value))}/><Tooltip content={({ active, payload }) => active && payload?.length ? <div className="analytics-tooltip"><div className="analytics-tooltip-row"><span>Стабильность</span><strong>{Math.round(Number(payload[0].value || 0))}%</strong></div></div> : null}/><Bar dataKey="stabilityScore" name="Стабильность" fill="#6366f1" radius={[0,8,8,0]}/></BarChart></ResponsiveContainer></div></div></div>
       </div>}
 
-      {tab === 'expenses' && <div className="space-y-6"><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className="analytics-card bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm lg:col-span-2"><div className="flex justify-between mb-5"><div><h2 className="text-lg font-bold text-gray-900 dark:text-white">Pareto расходов</h2><p className="text-sm text-gray-500">категории приведены к понятным русским названиям</p></div><span className="analytics-badge">TOP 10</span></div><div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={expenseCategories}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tickLine={false} axisLine={false} interval={0} angle={-18} textAnchor="end" height={75}/><YAxis tickLine={false} axisLine={false} tickFormatter={v => `${Math.round(Number(v) / 1000)}k`}/><Tooltip content={({ active, payload }) => active && payload?.length ? <div className="analytics-tooltip"><div className="analytics-tooltip-row"><span>{String(payload[0].payload?.name || '')}</span><strong>{formatMoney(Number(payload[0].value || 0), 'RUB')}</strong></div></div> : null}/><Bar dataKey="value" name="Сумма" radius={[8,8,0,0]}>{expenseCategories.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]}/>)}</Bar></BarChart></ResponsiveContainer></div></div><div className="analytics-card bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm"><h3 className="font-bold text-gray-900 dark:text-white">Контроль чеков</h3><div className="mt-5 text-center"><div className="text-4xl font-black text-red-500">{totals.expenseRub ? Math.round(totals.noReceiptRub / totals.expenseRub * 100) : 0}%</div><p className="text-sm text-gray-500 mt-2">расходов без подтверждения</p></div><div className="mt-6 space-y-3"><div className="flex justify-between text-sm"><span>Без чека</span><strong>{formatMoney(Math.round(totals.noReceiptRub), 'RUB')}</strong></div><div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-red-500 rounded-full" style={{ width: `${clamp(totals.expenseRub ? totals.noReceiptRub / totals.expenseRub * 100 : 0, 0, 100)}%` }}/></div><div className="flex justify-between text-sm"><span>С чеком</span><strong>{formatMoney(Math.round(totals.expenseRub - totals.noReceiptRub), 'RUB')}</strong></div></div></div></div><div className="analytics-table-wrap bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden"><div className="p-5 border-b border-gray-100 dark:border-gray-700"><h3 className="font-bold text-gray-900 dark:text-white">Аудит операций</h3></div><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th>Дата</th><th>Категория</th><th>Название</th><th>Проект</th><th>Сотрудник</th><th>Чек</th><th>Сумма</th></tr></thead><tbody>{[...filteredExpenses].sort((a,b) => rub(Number(b.amount || 0),b.currency)-rub(Number(a.amount || 0),a.currency)).slice(0, 30).map(e => <tr key={e.id}><td>{formatDate(e.date)}</td><td><span className="metric-pill neutral">{expenseLabel(e)}</span></td><td className="font-semibold">{e.name || '—'}</td><td>{e.projectName || '—'}</td><td>{users.find(u => u.id === e.userId)?.name || '—'}</td><td>{hasActualReceipt(e) ? <span className="metric-pill positive">Есть</span> : <span className="metric-pill negative">Нет</span>}</td><td className="font-black">{formatMoneyExact(rub(Number(e.amount || 0), e.currency))}</td></tr>)}</tbody></table></div></div></div>}
+      {tab === 'expenses' && <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-black text-gray-900 dark:text-white">Расходы за период</h2>
+            <p className="text-sm text-gray-500">{formatDate(period.from)} — {formatDate(period.to)}</p>
+          </div>
+          <div className="analytics-segment" aria-label="Период расходов">
+            <button onClick={() => setExpensePeriodPreset('month')} className={expensePeriodPreset === 'month' ? 'active' : ''}>Месяц</button>
+            <button onClick={() => setExpensePeriodPreset('halfYear')} className={expensePeriodPreset === 'halfYear' ? 'active' : ''}>Полугодие</button>
+            <button onClick={() => setExpensePeriodPreset('year')} className={expensePeriodPreset === 'year' ? 'active' : ''}>Год</button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className="analytics-card bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm lg:col-span-2"><div className="flex justify-between mb-5"><div><h2 className="text-lg font-bold text-gray-900 dark:text-white">Pareto расходов</h2><p className="text-sm text-gray-500">категории приведены к понятным русским названиям</p></div><span className="analytics-badge">TOP 10</span></div><div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={expenseCategories}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tickLine={false} axisLine={false} interval={0} angle={-18} textAnchor="end" height={75}/><YAxis tickLine={false} axisLine={false} tickFormatter={v => `${Math.round(Number(v) / 1000)}k`}/><Tooltip content={({ active, payload }) => active && payload?.length ? <div className="analytics-tooltip"><div className="analytics-tooltip-row"><span>{String(payload[0].payload?.name || '')}</span><strong>{formatMoney(Number(payload[0].value || 0), 'RUB')}</strong></div></div> : null}/><Bar dataKey="value" name="Сумма" radius={[8,8,0,0]}>{expenseCategories.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]}/>)}</Bar></BarChart></ResponsiveContainer></div></div><div className="analytics-card bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm"><h3 className="font-bold text-gray-900 dark:text-white">Контроль чеков</h3><div className="mt-5 text-center"><div className="text-4xl font-black text-red-500">{totals.expenseRub ? Math.round(totals.noReceiptRub / totals.expenseRub * 100) : 0}%</div><p className="text-sm text-gray-500 mt-2">расходов без подтверждения</p></div><div className="mt-6 space-y-3"><div className="flex justify-between text-sm"><span>Без чека</span><strong>{formatMoney(Math.round(totals.noReceiptRub), 'RUB')}</strong></div><div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-red-500 rounded-full" style={{ width: `${clamp(totals.expenseRub ? totals.noReceiptRub / totals.expenseRub * 100 : 0, 0, 100)}%` }}/></div><div className="flex justify-between text-sm"><span>С чеком</span><strong>{formatMoney(Math.round(totals.expenseRub - totals.noReceiptRub), 'RUB')}</strong></div></div></div></div><div className="analytics-table-wrap bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden"><div className="p-5 border-b border-gray-100 dark:border-gray-700"><h3 className="font-bold text-gray-900 dark:text-white">Аудит операций</h3></div><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th>Дата</th><th>Категория</th><th>Название</th><th>Проект</th><th>Сотрудник</th><th>Чек</th><th>Сумма</th></tr></thead><tbody>{[...filteredExpenses].sort((a,b) => rub(Number(b.amount || 0),b.currency)-rub(Number(a.amount || 0),a.currency)).slice(0, 30).map(e => <tr key={e.id}><td>{formatDate(e.date)}</td><td><span className="metric-pill neutral">{expenseLabel(e)}</span></td><td className="font-semibold">{e.name || '—'}</td><td>{e.projectName || '—'}</td><td>{users.find(u => u.id === e.userId)?.name || '—'}</td><td>{hasActualReceipt(e) ? <span className="metric-pill positive">Есть</span> : <span className="metric-pill negative">Нет</span>}</td><td className="font-black">{formatMoneyExact(rub(Number(e.amount || 0), e.currency))}</td></tr>)}</tbody></table></div></div></div>}
 
-      {tab === 'projects' && <div className="space-y-6"><div className="grid grid-cols-1 xl:grid-cols-2 gap-6"><div className="analytics-card bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm"><div className="flex justify-between mb-5"><div><h2 className="text-lg font-bold text-gray-900 dark:text-white">Экономика проектов</h2><p className="text-sm text-gray-500">затраты, часы и финансовое здоровье</p></div></div><div className="space-y-3">{projectMetrics.slice(0, 12).map(p => <button key={p.projectId} onClick={() => setSelectedProjectId(p.projectId)} className="project-health w-full text-left hover:border-emerald-300"><div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="font-bold text-gray-900 dark:text-white truncate">{p.name}</p><p className="text-xs text-gray-500">{p.employeeCount} чел. · {formatDuration(p.hours)} · {Math.round(p.expenseShare)}% расходов</p></div><div className="text-right shrink-0"><p className={`font-black ${p.marginPct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{Math.round(p.marginPct)}%</p><p className="text-xs text-gray-500">{formatMoney(Math.round(p.expenseRub), 'RUB')}</p></div></div><div className="health-bar"><span style={{ width: `${clamp(p.expenseRub / Math.max(p.revenueRub, p.expenseRub, 1) * 100, 0, 100)}%` }}/></div></button>)}</div></div><div className="analytics-card bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm"><h2 className="text-lg font-bold text-gray-900 dark:text-white">Рабочая нагрузка проектов</h2><p className="text-sm text-gray-500 mb-5">объём фактически внесённого времени</p><div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={projectMetrics.filter(p => p.hours > 0).slice(0, 10)}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tickLine={false} axisLine={false} tickFormatter={v => String(v).length > 12 ? `${String(v).slice(0,12)}…` : String(v)}/><YAxis/><Tooltip content={({ active, payload }) => active && payload?.length ? <div className="analytics-tooltip"><div className="analytics-tooltip-row"><span>Рабочее время</span><strong>{formatDuration(Number(payload[0].value || 0))}</strong></div></div> : null}/><Bar dataKey="hours" name="Часы" radius={[8,8,0,0]}>{projectMetrics.filter(p => p.hours > 0).slice(0, 10).map((project, index) => <Cell key={project.projectId} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Bar></BarChart></ResponsiveContainer></div><div className="project-chart-legend">{projectMetrics.filter(p => p.hours > 0).slice(0, 10).map((project, index) => <span key={project.projectId} className="project-chart-legend-item"><i style={{ background: CHART_COLORS[index % CHART_COLORS.length] }} />{project.name}</span>)}</div></div></div><div className="analytics-table-wrap bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th>Проект</th><th>Часы</th><th>Сотрудники</th><th>Затраты сотрудников</th><th>Суточные</th><th>Без чека</th><th>Доля расходов</th><th>Маржа</th><th></th></tr></thead><tbody>{projectMetrics.map(p => <tr key={p.projectId} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40" onClick={() => setSelectedProjectId(p.projectId)}><td className="font-bold text-gray-900 dark:text-white">{p.name}</td><td>{formatDuration(p.hours)}</td><td>{p.employeeCount}</td><td>{formatMoney(Math.round(p.employeeExpenseRub), 'RUB')}</td><td>{formatMoney(Math.round(p.perDiemRub), 'RUB')}</td><td>{formatMoney(Math.round(p.noReceiptRub), 'RUB')}</td><td>{Math.round(p.expenseShare)}%</td><td className={p.marginPct < 0 ? 'text-red-500 font-bold' : 'text-emerald-600 font-bold'}>{Math.round(p.marginPct)}%</td><td><button className="analytics-link" onClick={event => { event.stopPropagation(); setSelectedProjectId(p.projectId); }}>Открыть →</button></td></tr>)}</tbody></table></div></div></div>}
+      {tab === 'projects' && <div className="space-y-6"><div className="grid grid-cols-1 xl:grid-cols-2 gap-6"><div className="analytics-card bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm"><div className="flex justify-between mb-5"><div><h2 className="text-lg font-bold text-gray-900 dark:text-white">Экономика проектов</h2><p className="text-sm text-gray-500">затраты, часы и финансовое здоровье</p></div></div><div className="space-y-3">{projectMetrics.slice(0, 12).map(p => <button key={p.projectId} onClick={() => { setSelectedExpenseId(null); setSelectedProjectId(p.projectId); }} className="project-health w-full text-left hover:border-emerald-300"><div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="font-bold text-gray-900 dark:text-white truncate">{p.name}</p><p className="text-xs text-gray-500">{p.employeeCount} чел. · {formatDuration(p.hours)} · {Math.round(p.expenseShare)}% расходов</p></div><div className="text-right shrink-0"><p className={`font-black ${p.marginPct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{Math.round(p.marginPct)}%</p><p className="text-xs text-gray-500">{formatMoney(Math.round(p.expenseRub), 'RUB')}</p></div></div><div className="health-bar"><span style={{ width: `${clamp(p.expenseRub / Math.max(p.revenueRub, p.expenseRub, 1) * 100, 0, 100)}%` }}/></div></button>)}</div></div><div className="analytics-card bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm"><h2 className="text-lg font-bold text-gray-900 dark:text-white">Рабочая нагрузка проектов</h2><p className="text-sm text-gray-500 mb-5">объём фактически внесённого времени</p><div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={projectMetrics.filter(p => p.hours > 0).slice(0, 10)}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tickLine={false} axisLine={false} tickFormatter={v => String(v).length > 12 ? `${String(v).slice(0,12)}…` : String(v)}/><YAxis/><Tooltip content={({ active, payload }) => active && payload?.length ? <div className="analytics-tooltip"><div className="analytics-tooltip-row"><span>Рабочее время</span><strong>{formatDuration(Number(payload[0].value || 0))}</strong></div></div> : null}/><Bar dataKey="hours" name="Часы" radius={[8,8,0,0]}>{projectMetrics.filter(p => p.hours > 0).slice(0, 10).map((project, index) => <Cell key={project.projectId} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Bar></BarChart></ResponsiveContainer></div><div className="project-chart-legend">{projectMetrics.filter(p => p.hours > 0).slice(0, 10).map((project, index) => <span key={project.projectId} className="project-chart-legend-item"><i style={{ background: CHART_COLORS[index % CHART_COLORS.length] }} />{project.name}</span>)}</div></div></div><div className="analytics-table-wrap bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th>Проект</th><th>Часы</th><th>Сотрудники</th><th>Затраты сотрудников</th><th>Суточные</th><th>Без чека</th><th>Доля расходов</th><th>Маржа</th><th></th></tr></thead><tbody>{projectMetrics.map(p => <tr key={p.projectId} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40" onClick={() => { setSelectedExpenseId(null); setSelectedProjectId(p.projectId); }}><td className="font-bold text-gray-900 dark:text-white">{p.name}</td><td>{formatDuration(p.hours)}</td><td>{p.employeeCount}</td><td>{formatMoney(Math.round(p.employeeExpenseRub), 'RUB')}</td><td>{formatMoney(Math.round(p.perDiemRub), 'RUB')}</td><td>{formatMoney(Math.round(p.noReceiptRub), 'RUB')}</td><td>{Math.round(p.expenseShare)}%</td><td className={p.marginPct < 0 ? 'text-red-500 font-bold' : 'text-emerald-600 font-bold'}>{Math.round(p.marginPct)}%</td><td><button className="analytics-link" onClick={event => { event.stopPropagation(); setSelectedProjectId(p.projectId); }}>Открыть →</button></td></tr>)}</tbody></table></div></div></div>}
 
       {selectedEmployee && employeeDetail && createPortal(
         <div className="analytics-detail-overlay" onClick={() => setSelectedEmployeeId(null)}>
@@ -515,7 +556,7 @@ export function AnalyticsPage() {
                 <h2 className="truncate">{selectedProject.name}</h2>
                 <p>{formatDuration(selectedProject.hours)} · {selectedProject.employeeCount} сотрудников · затраты {formatMoneyExact(selectedProject.employeeExpenseRub)} · суточные {formatMoneyExact(selectedProject.perDiemRub)}</p>
               </div>
-              <button onClick={() => setSelectedProjectId(null)} className="analytics-close">×</button>
+              <button onClick={() => { setSelectedExpenseId(null); setSelectedProjectId(null); }} className="analytics-close">×</button>
             </div>
             <div className="analytics-detail-grid">
               <div className="detail-tone detail-amber"><span>Затраты сотрудников</span><strong>{formatMoneyExact(selectedProject.employeeExpenseRub)}</strong></div>
@@ -525,9 +566,67 @@ export function AnalyticsPage() {
               <div className="detail-tone detail-green"><span>Рабочее время</span><strong>{formatDuration(selectedProject.hours)}</strong></div>
               <div className={`detail-tone ${selectedProject.marginPct < 0 ? 'detail-red' : 'detail-green'}`}><span>Маржа</span><strong>{Math.round(selectedProject.marginPct)}%</strong></div>
             </div>
-            <div className="analytics-detail-section"><h3>Кто работал</h3><div className="space-y-2">{projectDetail.byEmployee.map(p => <button key={p.userId} onClick={() => { setSelectedProjectId(null); setSelectedEmployeeId(p.userId); }} className="analytics-detail-row"><span className="detail-main-label"><i className="detail-dot detail-dot-blue" />{shortPersonName(p.name)}</span><span className="detail-value detail-value-blue">{formatDuration(p.hours)} · {formatMoneyExact(p.expense)}</span></button>)}</div></div>
+            <div className="analytics-detail-section"><h3>Кто работал</h3><div className="space-y-2">{projectDetail.byEmployee.map(p => <button key={p.userId} onClick={() => { setSelectedExpenseId(null); setSelectedProjectId(null); setSelectedEmployeeId(p.userId); }} className="analytics-detail-row"><span className="detail-main-label"><i className="detail-dot detail-dot-blue" />{shortPersonName(p.name)}</span><span className="detail-value detail-value-blue">{formatDuration(p.hours)} · {formatMoneyExact(p.expense)}</span></button>)}</div></div>
             <div className="analytics-detail-section"><h3>Рабочее время</h3><div className="analytics-detail-scroll">{projectDetail.projectEntries.map(e => <div key={`${e.userId}-${e.date}-${e.hours}`} className="analytics-detail-row"><span><span className="detail-date">{formatDate(e.date)}</span> · {shortPersonName(users.find(u => u.id === e.userId)?.name || e.userName || '—')}</span><strong className="detail-value-green">{formatDuration(Number(e.hours || 0))}</strong></div>)}</div></div>
-            <div className="analytics-detail-section"><h3>Все расходы</h3><div className="analytics-detail-scroll">{projectDetail.projectExpenses.map(e => <div key={e.id} className="analytics-detail-row"><span><span className="detail-date detail-date-expense">{formatDate(e.date)}</span> · {shortPersonName(users.find(u => u.id === e.userId)?.name || '—')} · {e.name?.trim() || expenseLabel(e)}</span><strong className="detail-value-amber">{formatMoneyExact(rub(Number(e.amount || 0), e.currency))}</strong></div>)}</div></div>
+            <div className="analytics-detail-section">
+              <h3>Все расходы</h3>
+              <div className="analytics-detail-scroll">
+                {projectDetail.projectExpenses.map(expense => (
+                  <button
+                    key={expense.id}
+                    type="button"
+                    onClick={() => setSelectedExpenseId(expense.id)}
+                    aria-pressed={selectedExpenseId === expense.id}
+                    className={`analytics-detail-row w-full text-left ${selectedExpenseId === expense.id ? 'bg-amber-50 dark:bg-amber-950/20 rounded-lg' : ''}`}
+                  >
+                    <span className="min-w-0">
+                      <span className="detail-date detail-date-expense">{formatDate(expense.date)}</span>
+                      {' · '}
+                      {users.find(u => u.id === expense.userId)?.name || 'Неизвестный'}
+                      {' · '}
+                      {expense.name?.trim() || expenseLabel(expense)}
+                    </span>
+                    <strong className="detail-value-amber shrink-0">
+                      {formatMoneyExact(rub(Number(expense.amount || 0), expense.currency))}
+                    </strong>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {selectedExpense && (
+              <div className="analytics-detail-section rounded-xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white">Выбранный расход</h3>
+                    <p className="mt-1 font-semibold text-slate-900 dark:text-white">{selectedExpense.name?.trim() || expenseLabel(selectedExpense)}</p>
+                  </div>
+                  <button type="button" onClick={() => setSelectedExpenseId(null)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" aria-label="Снять выбор">×</button>
+                </div>
+                <dl className="mt-3 space-y-2 text-sm">
+                  <div className="flex justify-between gap-3"><dt className="text-slate-500 dark:text-slate-400">Сотрудник</dt><dd className="text-right font-semibold text-slate-900 dark:text-white">{users.find(u => u.id === selectedExpense.userId)?.name || 'Неизвестный'}</dd></div>
+                  <div className="flex justify-between gap-3"><dt className="text-slate-500 dark:text-slate-400">Дата</dt><dd className="font-semibold text-slate-900 dark:text-white">{formatDate(selectedExpense.date)}</dd></div>
+                  <div className="flex justify-between gap-3"><dt className="text-slate-500 dark:text-slate-400">Сумма</dt><dd className="font-black text-slate-900 dark:text-white">{formatMoneyExact(rub(Number(selectedExpense.amount || 0), selectedExpense.currency))}</dd></div>
+                  <div className="flex justify-between gap-3"><dt className="text-slate-500 dark:text-slate-400">Подтверждение</dt><dd className="font-semibold text-slate-900 dark:text-white">{hasActualReceipt(selectedExpense) ? 'Есть чек' : 'Без чека'}</dd></div>
+                </dl>
+                {selectedExpense.comment?.trim() && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{selectedExpense.comment}</p>}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      scope: 'all',
+                      userId: selectedExpense.userId,
+                      dateFrom: selectedExpense.date,
+                      dateTo: selectedExpense.date,
+                      expenseId: selectedExpense.id,
+                    });
+                    navigate(`/expenses?${params.toString()}`);
+                  }}
+                  className="analytics-link mt-3"
+                >
+                  Открыть расход в списке →
+                </button>
+              </div>
+            )}
           </div>
         </div>,
         document.body
