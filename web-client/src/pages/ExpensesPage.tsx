@@ -168,7 +168,7 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
   // Фильтр по датам
   const now = new Date();
   const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const currentMonthEnd = toISODateLocal(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  const currentMonthEnd = toISODateLocal(now);
   const [dateFrom, setDateFrom] = useState(searchParams.get('dateFrom') || currentMonthStart);
   const [dateTo, setDateTo] = useState(searchParams.get('dateTo') || currentMonthEnd);
   const [datePreset, setDatePreset] = useState<'month' | 'halfYear' | 'year' | 'last' | 'custom'>(
