@@ -237,13 +237,26 @@ private fun TripCard(
     val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
     val isCompleted = trip.status == "COMPLETED" ||
         (trip.endDate?.let { it <= today } == true)
-    val statusLabel = if (isCompleted) "Завершена" else "Начата"
-    val typeColor = if (isCompleted) ProlesPrimary else ProlesSecondary
+    val isCancelled = trip.status == "CANCELLED"
+    val statusLabel = when {
+        isCancelled -> "Отменена"
+        isCompleted -> "Завершена"
+        else -> "Начата"
+    }
+    val typeColor = when {
+        isCompleted -> ProlesPrimary
+        isCancelled -> ProlesMuted
+        else -> ProlesSecondary
+    }
 
     ProlesCard(containerColor = typeColor.copy(alpha = 0.04f)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             ProlesIconBadge(
-                if (isCompleted) Icons.Default.CheckCircle else Icons.Default.Train,
+                when {
+                    isCompleted -> Icons.Default.CheckCircle
+                    isCancelled -> Icons.Default.Cancel
+                    else -> Icons.Default.Train
+                },
                 typeColor,
                 size = 36.dp
             )
@@ -271,8 +284,11 @@ private fun TripCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (trip.city.isNotBlank()) {
-                    Text(trip.city, style = MaterialTheme.typography.bodySmall, color = ProlesMuted)
+                val destination = listOf(trip.city, trip.country)
+                    .filter { it.isNotBlank() }
+                    .joinToString(", ")
+                if (destination.isNotBlank()) {
+                    Text(destination, style = MaterialTheme.typography.bodySmall, color = ProlesMuted)
                 }
             }
         }
