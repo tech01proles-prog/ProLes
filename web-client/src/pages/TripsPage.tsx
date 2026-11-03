@@ -1023,7 +1023,7 @@ export function TripsPage() {
           📅 Дата {sortField === 'date' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
         </button>
         <button onClick={() => toggleSort('type')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${sortField === 'type' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>
-          🏷 Тип {sortField === 'type' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+          🏷 Статус {sortField === 'type' ? (sortDir === 'desc' ? '↓' : '↑') : ''}
         </button>
       </div>
 
@@ -1070,7 +1070,11 @@ export function TripsPage() {
                         Подпроект: {trip.subprojectName}
                       </div>
                     )}
-                    {trip.city && <div className="text-sm text-slate-600 dark:text-slate-400">📍 {trip.city}</div>}
+                    {([trip.city, trip.country].filter(Boolean).join(', ')) && (
+                      <div className="text-sm text-slate-600 dark:text-slate-400">
+                        📍 {[trip.city, trip.country].filter(Boolean).join(', ')}
+                      </div>
+                    )}
                     {/* 🛣 Отображение пунктов следования */}
                     {trip.waypoints && trip.waypoints.length > 0 && (
                       <div className="mt-2 space-y-1">
