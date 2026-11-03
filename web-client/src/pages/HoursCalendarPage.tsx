@@ -1,8 +1,8 @@
-import { formatDate, useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import type { TimeEntryDto, UserDto, ProjectDto, DayOffDto } from '../types';
-import { monthName } from '../lib/utils';
+import { formatDate, monthName } from '../lib/utils';
 
 // Стабильный цвет для сотрудника, чтобы его легко было узнавать в календаре.
 const USER_COLORS = [
