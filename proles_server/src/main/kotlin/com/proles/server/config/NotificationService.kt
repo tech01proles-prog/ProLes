@@ -353,7 +353,7 @@ object NotificationService {
         val project = listOf(trip.projectNumber.trim(), trip.projectName.trim())
             .filter { it.isNotBlank() }
             .joinToString(" — ")
-        val purpose = trip.purpose.ifBlank { trip.notes }.trim()
+        val purpose = trip.purpose.trim()
 
         fun dateLabel(raw: String?): String {
             if (raw.isNullOrBlank()) return ""
