@@ -308,14 +308,16 @@ internal fun Route.businessTripRoutes() {
 
                     val previousRow = BusinessTripsTable
                         .selectAll()
-                        .where {
-                            (BusinessTripsTable.userId eq userId) and
-                                (BusinessTripsTable.status eq "ACTIVE")
-                        }
+                        .where { BusinessTripsTable.userId eq userId }
                         .filter { row ->
+                            val rawStatus = row[BusinessTripsTable.status].uppercase()
+                            val rawType = row[BusinessTripsTable.type].uppercase()
                             val plannedEndDate = row[BusinessTripsTable.endDate]
                                 ?: row[BusinessTripsTable.completedDate]
-                            plannedEndDate == null || plannedEndDate >= startDate
+                            rawStatus != "CANCELLED" &&
+                                rawType != "COMPLETION" &&
+                                (plannedEndDate == null || plannedEndDate >= today) &&
+                                !(rawStatus == "COMPLETED" && plannedEndDate == null)
                         }
                         .maxWithOrNull(
                             compareBy<ResultRow>(
@@ -682,8 +684,12 @@ internal fun Route.businessTripRoutes() {
 
                     val ownerId =
                         existing[BusinessTripsTable.userId].value
+                    val existingStatus = existing[BusinessTripsTable.status].uppercase()
+                    val existingEndDate = existing[BusinessTripsTable.endDate]
+                        ?: existing[BusinessTripsTable.completedDate]
                     wasCompletedBeforeUpdate =
-                        existing[BusinessTripsTable.status].uppercase() == "COMPLETED"
+                        existingEndDate?.let { it <= today } == true ||
+                            (existingStatus == "COMPLETED" && existingEndDate == null)
 
                     if (
                         ownerId != session.userId &&
