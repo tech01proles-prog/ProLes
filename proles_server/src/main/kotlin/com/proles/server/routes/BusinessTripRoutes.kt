@@ -90,6 +90,7 @@ private fun mapRowToBusinessTripDto(row: ResultRow): BusinessTripDto {
         .toLocalDateTime(TimeZone.currentSystemDefault()).date
     val effectiveStatus = when {
         storedStatus == "CANCELLED" -> "CANCELLED"
+        storedStatus == "COMPLETED" -> "COMPLETED"
         storedEndDate != null && storedEndDate <= today -> "COMPLETED"
         else -> "ACTIVE"
     }
