@@ -347,10 +347,13 @@ object NotificationService {
     ): String {
         val participants = resolveTripParticipants(trip.userId, trip.participants)
             .joinToString(", ")
-        val cityAndCountry = "${trip.city.trim()}, ${trip.country.trim()}"
+        val cityAndCountry = listOf(trip.city.trim(), trip.country.trim())
+            .filter { it.isNotBlank() }
+            .joinToString(", ")
         val project = listOf(trip.projectNumber.trim(), trip.projectName.trim())
             .filter { it.isNotBlank() }
             .joinToString(" — ")
+        val purpose = trip.purpose.ifBlank { trip.notes }.trim()
 
         fun dateLabel(raw: String?): String {
             if (raw.isNullOrBlank()) return ""
@@ -369,7 +372,7 @@ object NotificationService {
             appendLine("Транспорт: ${escapeTelegram(trip.transport.trim())}")
             appendLine("Проект: ${escapeTelegram(project)}")
             appendLine("Клиент: ${escapeTelegram(trip.companyName.trim())}")
-            appendLine("Цель: ${escapeTelegram(trip.notes.trim())}")
+            appendLine("Цель: ${escapeTelegram(purpose)}")
         }.trim()
     }
 
