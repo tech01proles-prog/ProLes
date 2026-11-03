@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client';
 import type { ChatConversationDto, ChatMessageDto, ChatMessagesPageDto, ChatUserDto, UserDto } from '../types';
+import { formatDateTimeExact } from '../lib/utils';
 
 type ChatRealtimeEvent = {
   type:
@@ -352,7 +353,7 @@ export function ChatPage() {
                                 )}
                               </>
                             )}
-                            <div className="mt-1 flex items-center justify-end gap-2 text-[10px] opacity-65">{mine && <span>{statusLabel}</span>}{message.editedAt && !deleted && <span>отредактировано</span>}<span>{new Date(message.createdAt).toLocaleString('ru-RU')}</span></div>
+                            <div className="mt-1 flex items-center justify-end gap-2 text-[10px] opacity-65">{mine && <span>{statusLabel}</span>}{message.editedAt && !deleted && <span>отредактировано</span>}<span>{formatDateTimeExact(message.createdAt)}</span></div>
                           </>
                         )}
                       </div>
