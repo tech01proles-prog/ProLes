@@ -1219,7 +1219,7 @@ export function TripsPage() {
                     </div>
                     <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 mb-3">
                       <span>ℹ️</span>
-                      <span>Изменение размера суточных применится только к будущим начислениям</span>
+                      <span>При сохранении пересчитываются все дни командировки с учётом даты и ставки</span>
                     </div>
                     <button
                       onClick={handleSavePerDiemRate}
