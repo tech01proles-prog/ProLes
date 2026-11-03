@@ -24,7 +24,6 @@ type TripFormState = {
   subprojectId: string;
   companyName: string;
   country: string;
-  type: BusinessTripDto['type'];
   date: string;
   startDate: string;
   endDate: string;
@@ -45,7 +44,6 @@ const createEmptyTripForm = (): TripFormState => {
     subprojectId: '',
     companyName: '',
     country: 'РФ',
-    type: 'DEPARTURE',
     date: today,
     startDate: today,
     endDate: '',
@@ -245,7 +243,6 @@ export function TripsPage() {
         country: isStandardCountry
           ? activeTrip.country
           : 'Другое',
-        type: 'TRANSFER',
         date: today,
         startDate: today,
         endDate: '',
@@ -405,7 +402,6 @@ export function TripsPage() {
       subprojectId: trip.subprojectId || '',
       companyName: trip.companyName || '',
       country: standardCountry ? trip.country : 'Другое',
-      type: 'DEPARTURE',
       date: trip.startDate || trip.date,
       startDate: trip.startDate || trip.date,
       endDate: trip.endDate || '',
