@@ -183,7 +183,10 @@ data class BusinessTrip(
     val subprojectId: String? = null,
     val subprojectName: String = "",
     val projectName: String = "",
-    val type: String = "DEPARTURE", // DEPARTURE, TRANSFER, COMPLETION
+    val projectNumber: String = "",
+    val companyName: String = "",
+    val country: String = "",
+    val type: String = "DEPARTURE", // DEPARTURE; TRANSFER is only an action, not a stored trip type
     val date: LocalDate,
     val city: String = "",
     val waypoints: List<Waypoint> = emptyList(),  // 🆕 Пункты следования
