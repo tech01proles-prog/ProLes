@@ -15,45 +15,57 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toJavaLocalDateTime
 import kotlinx.datetime.toLocalDateTime
-import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import java.time.Duration
 import java.util.UUID
 import kotlin.time.Duration.Companion.days
 
 /**
- * Автоматические суточные синхронизируются со всеми командировками:
- * учитываются и поездки, созданные задним числом, и завершённые прошедшей датой.
- * День окончания включается в расчёт.
+ * Сверяет автоматически созданные суточные со всеми командировками.
+ *
+ * Начисление идёт за каждый календарный день от даты начала включительно
+ * до даты окончания включительно. Для незакрытой командировки расчёт
+ * ограничивается сегодняшним днём. Сверка восстанавливает пропущенные дни
+ * и корректирует начисления после изменения дат, ставки или удаления поездки.
  */
 object PerDiemService {
-
     private const val PER_DIEM_TYPE = "PER_DIEM"
     private const val PER_DIEM_EXTRA_TYPE = "PER_DIEM_EXTRA"
     private const val PER_DIEM_NAME = "Суточные"
     private const val PER_DIEM_EXTRA_NAME = "Суточные сверх."
     private const val STANDARD_PER_DIEM = 750.0
-    private const val AUTO_COMMENT_PREFIX = "Автоматическое начисление суточных"
-    private const val AUTO_EXTRA_COMMENT_PREFIX = "Автоматическое начисление сверхсуточных"
+    private const val AUTO_MARKER = "[AUTO_PER_DIEM]"
+    private const val LEGACY_STANDARD_MARKER =
+        "Автоматическое начисление суточных за командировку"
+    private const val LEGACY_EXTRA_MARKER = "Сверхсуточные:"
 
-    private data class TripDay(
+    private data class DayKey(val userId: UUID, val date: LocalDate)
+
+    private data class ExpectedDay(
         val tripId: UUID,
         val userId: UUID,
         val projectId: UUID?,
+        val subprojectId: UUID?,
+        val date: LocalDate,
         val startDate: LocalDate,
-        val rate: Double,
-        val sourceType: String,
-        val createdAt: Long
+        val createdAt: Long,
+        val tripType: String,
+        val rate: Double
     )
-
-    private data class ExpenseDayKey(val userId: UUID, val date: LocalDate)
 
     fun startScheduler() {
         println("⏰ PerDiemService: запуск планировщика...")
         processPerDiems()
 
         CoroutineScope(Dispatchers.IO).launch {
-            val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+            val now = Clock.System.now()
+                .toLocalDateTime(TimeZone.currentSystemDefault())
             val tomorrow = now.date.plus(1, DateTimeUnit.DAY)
             val nextRun = LocalDateTime(tomorrow, LocalTime(0, 0, 0))
             val delayMillis = Duration.between(
@@ -61,8 +73,11 @@ object PerDiemService {
                 nextRun.toJavaLocalDateTime()
             ).toMillis()
 
-            println("⏰ PerDiemService: следующее выполнение через ${delayMillis / 1000 / 60} мин (в $nextRun)")
-            delay(delayMillis)
+            println(
+                "⏰ PerDiemService: следующий запуск через " +
+                    "${delayMillis / 1000 / 60} мин (в $nextRun)"
+            )
+            delay(delayMillis.coerceAtLeast(0L))
 
             while (true) {
                 processPerDiems()
@@ -71,244 +86,188 @@ object PerDiemService {
         }
     }
 
-    /**
-     * Пересчитывает автоматические суточные за весь фактический период поездок.
-     * Повторный запуск безопасен: он не создаёт дубли и удаляет только свои
-     * автоматические записи, переставшие соответствовать датам командировок.
-     */
     fun processPerDiems() {
-        println("📒 PerDiemService: начало синхронизации суточных...")
-
+        println("📒 PerDiemService: сверка суточных...")
         try {
             val today = Clock.System.now()
                 .toLocalDateTime(TimeZone.currentSystemDefault())
                 .date
 
-            val (createdCount, updatedCount, removedCount, coveredDays) = transaction {
-                val expectedDays = mutableMapOf<ExpenseDayKey, TripDay>()
+            transaction {
+                val expectedDays = linkedMapOf<DayKey, ExpectedDay>()
 
-                BusinessTripsTable.selectAll().forEach { row ->
-                    val status = row[BusinessTripsTable.status].uppercase()
-                    val type = row[BusinessTripsTable.type].uppercase()
+                BusinessTripsTable.selectAll().forEach { trip ->
+                    val status = trip[BusinessTripsTable.status].uppercase()
+                    if (status == "CANCELLED") return@forEach
 
-                    if (status == "CANCELLED" || type == "COMPLETION") {
-                        return@forEach
+                    val startDate = trip[BusinessTripsTable.startDate]
+                        ?: trip[BusinessTripsTable.date]
+                    if (startDate > today) return@forEach
+
+                    val storedEndDate = trip[BusinessTripsTable.endDate]
+                        ?: trip[BusinessTripsTable.completedDate]
+                    val endDate = when {
+                        storedEndDate == null || storedEndDate > today -> today
+                        else -> storedEndDate
                     }
+                    if (endDate < startDate) return@forEach
 
-                    val startDate = row[BusinessTripsTable.startDate]
-                        ?: row[BusinessTripsTable.date]
-                    val endDate = row[BusinessTripsTable.endDate]
-                        ?: row[BusinessTripsTable.completedDate]
-
-                    // Будущие поездки пока не начисляют суточные.
-                    if (startDate > today || (endDate != null && endDate < startDate)) {
-                        return@forEach
-                    }
-
-                    // Дата окончания включается: в этот день поездка ещё учитывается.
-                    val lastChargeDate = minOf(endDate ?: today, today)
-                    val trip = TripDay(
-                        tripId = row[BusinessTripsTable.id].value,
-                        userId = row[BusinessTripsTable.userId].value,
-                        projectId = row[BusinessTripsTable.projectId]?.value,
+                    val userId = trip[BusinessTripsTable.userId].value
+                    val candidateBase = ExpectedDay(
+                        tripId = trip[BusinessTripsTable.id].value,
+                        userId = userId,
+                        projectId = trip[BusinessTripsTable.projectId]?.value,
+                        subprojectId = trip[BusinessTripsTable.subprojectId]?.value,
+                        date = startDate,
                         startDate = startDate,
-                        rate = row[BusinessTripsTable.perDiemRate].coerceAtLeast(0.0),
-                        sourceType = type,
-                        createdAt = row[BusinessTripsTable.createdAt]
+                        createdAt = trip[BusinessTripsTable.createdAt],
+                        tripType = trip[BusinessTripsTable.type],
+                        rate = trip[BusinessTripsTable.perDiemRate].coerceAtLeast(0.0)
                     )
 
-                    var date = startDate
-                    while (date <= lastChargeDate) {
-                        val key = ExpenseDayKey(trip.userId, date)
-                        val previous = expectedDays[key]
-
-                        // Если две поездки соприкасаются в один календарный день
-                        // (например, переезд), день относится к начавшейся позже.
+                    var day = startDate
+                    while (day <= endDate) {
+                        val key = DayKey(userId, day)
+                        val candidate = candidateBase.copy(date = day)
+                        val current = expectedDays[key]
                         if (
-                            previous == null ||
-                            trip.startDate > previous.startDate ||
-                            (trip.startDate == previous.startDate && trip.createdAt > previous.createdAt)
+                            current == null ||
+                            candidate.startDate > current.startDate ||
+                            (
+                                candidate.startDate == current.startDate &&
+                                    candidate.createdAt > current.createdAt
+                                )
                         ) {
-                            expectedDays[key] = trip
+                            expectedDays[key] = candidate
                         }
-
-                        date = date.plus(1, DateTimeUnit.DAY)
+                        day = day.plus(1, DateTimeUnit.DAY)
                     }
                 }
 
-                val perDiemRows = ExpensesTable.selectAll()
-                    .filter {
-                        it[ExpensesTable.type] == PER_DIEM_TYPE ||
-                            it[ExpensesTable.type] == PER_DIEM_EXTRA_TYPE
-                    }
-                    .toList()
+                fun isAutoPerDiem(comment: String): Boolean =
+                    comment.contains(AUTO_MARKER) ||
+                        comment.startsWith(LEGACY_STANDARD_MARKER) ||
+                        comment.startsWith(LEGACY_EXTRA_MARKER)
 
-                fun isAutomatic(row: ResultRow): Boolean {
-                    val comment = row[ExpensesTable.comment]
-                    return when (row[ExpensesTable.type]) {
-                        PER_DIEM_TYPE -> comment.startsWith(AUTO_COMMENT_PREFIX)
-                        PER_DIEM_EXTRA_TYPE ->
-                            comment.startsWith(AUTO_EXTRA_COMMENT_PREFIX) ||
-                                comment.startsWith("Сверхсуточные:")
-                        else -> false
+                val existingAutoExpenses = ExpensesTable.selectAll()
+                    .where {
+                        ExpensesTable.type inList listOf(
+                            PER_DIEM_TYPE,
+                            PER_DIEM_EXTRA_TYPE
+                        )
                     }
-                }
+                    .filter { row ->
+                        row[ExpensesTable.deletedAt] == null &&
+                            isAutoPerDiem(row[ExpensesTable.comment])
+                    }
 
-                var removed = 0
-                // Убираем только автоматические начисления, для которых больше
-                // нет действующей даты командировки (включая даты после завершения).
-                perDiemRows.filter(::isAutomatic).forEach { row ->
-                    val key = ExpenseDayKey(
+                val rowsByUserDate = existingAutoExpenses.groupBy { row ->
+                    DayKey(
                         row[ExpensesTable.userId].value,
                         row[ExpensesTable.date]
                     )
-                    if (key !in expectedDays) {
-                        ExpensesTable.deleteWhere {
-                            ExpensesTable.id eq row[ExpensesTable.id].value
+                }
+
+                val staleIds = mutableListOf<UUID>()
+                var inserted = 0
+                var updated = 0
+                var removed = 0
+
+                rowsByUserDate.forEach { (key, rows) ->
+                    val expected = expectedDays[key]
+                    val expectedTypes = when {
+                        expected == null -> emptySet()
+                        expected.rate > STANDARD_PER_DIEM ->
+                            setOf(PER_DIEM_TYPE, PER_DIEM_EXTRA_TYPE)
+                        else -> setOf(PER_DIEM_TYPE)
+                    }
+                    rows.forEach { row ->
+                        if (row[ExpensesTable.type] !in expectedTypes) {
+                            staleIds += row[ExpensesTable.id].value
                         }
-                        removed++
                     }
                 }
 
-                val remainingRows = ExpensesTable.selectAll()
-                    .filter {
-                        it[ExpensesTable.type] == PER_DIEM_TYPE ||
-                            it[ExpensesTable.type] == PER_DIEM_EXTRA_TYPE
-                    }
-                    .toList()
-
-                var created = 0
-                var updated = 0
-
-                expectedDays.forEach { (key, trip) ->
-                    val dayRows = remainingRows.filter {
-                        it[ExpensesTable.userId].value == key.userId &&
-                            it[ExpensesTable.date] == key.date
-                    }
-                    val automaticRows = dayRows.filter(::isAutomatic)
-                    val manualRows = dayRows.filterNot(::isAutomatic)
-
-                    // Ручные суточные не дублируем и не изменяем.
-                    if (manualRows.isNotEmpty()) {
-                        automaticRows.forEach { row ->
-                            ExpensesTable.deleteWhere {
-                                ExpensesTable.id eq row[ExpensesTable.id].value
-                            }
-                            removed++
+                expectedDays.forEach { (key, expected) ->
+                    val baseAmount = minOf(expected.rate, STANDARD_PER_DIEM)
+                    val extraAmount = (expected.rate - STANDARD_PER_DIEM)
+                        .coerceAtLeast(0.0)
+                    val desired = buildMap {
+                        put(PER_DIEM_TYPE, baseAmount to PER_DIEM_NAME)
+                        if (extraAmount > 0.0) {
+                            put(PER_DIEM_EXTRA_TYPE, extraAmount to PER_DIEM_EXTRA_NAME)
                         }
-                        return@forEach
                     }
 
-                    if (trip.rate <= 0.0) {
-                        automaticRows.forEach { row ->
-                            ExpensesTable.deleteWhere {
-                                ExpensesTable.id eq row[ExpensesTable.id].value
-                            }
-                            removed++
+                    desired.forEach { (expenseType, amountAndName) ->
+                        val (amount, name) = amountAndName
+                        val matchingRows = rowsByUserDate[key].orEmpty()
+                            .filter { it[ExpensesTable.type] == expenseType }
+                        val comment = if (expenseType == PER_DIEM_TYPE) {
+                            "$AUTO_MARKER Командировка ${expected.tripId} " +
+                                "(${expected.tripType}) от ${expected.startDate}"
+                        } else {
+                            "$AUTO_MARKER Сверхсуточные за командировку " +
+                                "${expected.tripId}: ${expected.rate} ₽ − " +
+                                "${STANDARD_PER_DIEM.toInt()} ₽"
                         }
-                        return@forEach
-                    }
 
-                    val standardAmount = minOf(trip.rate, STANDARD_PER_DIEM)
-                    val extraAmount = (trip.rate - STANDARD_PER_DIEM).coerceAtLeast(0.0)
-                    val tripMarker = "[trip:${trip.tripId}]"
-                    val standardComment =
-                        "$AUTO_COMMENT_PREFIX $tripMarker за ${key.date} (начало ${trip.startDate})"
-                    val extraComment =
-                        "$AUTO_EXTRA_COMMENT_PREFIX $tripMarker: ${trip.rate} ₽ − ${STANDARD_PER_DIEM.toInt()} ₽"
-
-                    val standardRow = automaticRows.firstOrNull {
-                        it[ExpensesTable.type] == PER_DIEM_TYPE
-                    }
-
-                    if (standardRow == null) {
-                        ExpensesTable.insert {
-                            it[ExpensesTable.id] = UUID.randomUUID()
-                            it[ExpensesTable.userId] = key.userId
-                            it[ExpensesTable.projectId] = trip.projectId
-                            it[ExpensesTable.date] = key.date
-                            it[ExpensesTable.type] = PER_DIEM_TYPE
-                            it[ExpensesTable.name] = PER_DIEM_NAME
-                            it[ExpensesTable.amount] = standardAmount
-                            it[ExpensesTable.currency] = "RUB"
-                            it[ExpensesTable.comment] = standardComment
-                            it[ExpensesTable.receiptSubmitted] = false
-                            it[ExpensesTable.hasReceiptPhoto] = false
-                            it[ExpensesTable.category] = "WORK"
-                            it[ExpensesTable.createdAt] = System.currentTimeMillis()
-                        }
-                        created++
-                    } else {
-                        ExpensesTable.update({ ExpensesTable.id eq standardRow[ExpensesTable.id].value }) {
-                            it[ExpensesTable.projectId] = trip.projectId
-                            it[ExpensesTable.name] = PER_DIEM_NAME
-                            it[ExpensesTable.amount] = standardAmount
-                            it[ExpensesTable.comment] = standardComment
-                        }
-                        updated++
-                    }
-
-                    val extraRow = automaticRows.firstOrNull {
-                        it[ExpensesTable.type] == PER_DIEM_EXTRA_TYPE
-                    }
-
-                    if (extraAmount > 0.0) {
-                        if (extraRow == null) {
+                        val existing = matchingRows.firstOrNull()
+                        if (existing == null) {
                             ExpensesTable.insert {
                                 it[ExpensesTable.id] = UUID.randomUUID()
-                                it[ExpensesTable.userId] = key.userId
-                                it[ExpensesTable.projectId] = trip.projectId
-                                it[ExpensesTable.date] = key.date
-                                it[ExpensesTable.type] = PER_DIEM_EXTRA_TYPE
-                                it[ExpensesTable.name] = PER_DIEM_EXTRA_NAME
-                                it[ExpensesTable.amount] = extraAmount
+                                it[ExpensesTable.userId] = expected.userId
+                                it[ExpensesTable.projectId] = expected.projectId
+                                it[ExpensesTable.subprojectId] = expected.subprojectId
+                                it[ExpensesTable.date] = expected.date
+                                it[ExpensesTable.type] = expenseType
+                                it[ExpensesTable.name] = name
+                                it[ExpensesTable.amount] = amount
                                 it[ExpensesTable.currency] = "RUB"
-                                it[ExpensesTable.comment] = extraComment
+                                it[ExpensesTable.comment] = comment
                                 it[ExpensesTable.receiptSubmitted] = false
                                 it[ExpensesTable.hasReceiptPhoto] = false
                                 it[ExpensesTable.category] = "WORK"
                                 it[ExpensesTable.createdAt] = System.currentTimeMillis()
                             }
-                            created++
+                            inserted++
                         } else {
-                            ExpensesTable.update({ ExpensesTable.id eq extraRow[ExpensesTable.id].value }) {
-                                it[ExpensesTable.projectId] = trip.projectId
-                                it[ExpensesTable.name] = PER_DIEM_EXTRA_NAME
-                                it[ExpensesTable.amount] = extraAmount
-                                it[ExpensesTable.comment] = extraComment
+                            val expenseId = existing[ExpensesTable.id].value
+                            ExpensesTable.update({ ExpensesTable.id eq expenseId }) {
+                                it[ExpensesTable.projectId] = expected.projectId
+                                it[ExpensesTable.subprojectId] = expected.subprojectId
+                                it[ExpensesTable.name] = name
+                                it[ExpensesTable.amount] = amount
+                                it[ExpensesTable.currency] = "RUB"
+                                it[ExpensesTable.comment] = comment
                             }
                             updated++
+                            matchingRows.drop(1).forEach {
+                                staleIds += it[ExpensesTable.id].value
+                            }
                         }
-                    } else if (extraRow != null) {
-                        ExpensesTable.deleteWhere {
-                            ExpensesTable.id eq extraRow[ExpensesTable.id].value
-                        }
-                        removed++
                     }
                 }
 
-                Quadruple(created, updated, removed, expectedDays.size)
-            }
+                if (staleIds.isNotEmpty()) {
+                    removed = ExpensesTable.deleteWhere {
+                        ExpensesTable.id inList staleIds.distinct()
+                    }
+                }
 
-            println(
-                "📒 PerDiemService: завершено. Дней к начислению: $coveredDays, " +
-                    "создано: $createdCount, обновлено: $updatedCount, удалено: $removedCount"
-            )
+                println(
+                    "📒 PerDiemService: дней=${expectedDays.size}, " +
+                        "добавлено=$inserted, обновлено=$updated, удалено=$removed"
+                )
+            }
         } catch (e: Exception) {
-            println("❌ PerDiemService: ошибка синхронизации суточных: ${e.message}")
+            println("❌ PerDiemService: ошибка сверки суточных: ${e.message}")
             e.printStackTrace()
         }
     }
 
-    private data class Quadruple<A, B, C, D>(
-        val first: A,
-        val second: B,
-        val third: C,
-        val fourth: D
-    )
-
     fun triggerManual() {
-        println("🔧 PerDiemService: ручная синхронизация суточных...")
+        println("🔧 PerDiemService: ручной запуск...")
         processPerDiems()
     }
 }
