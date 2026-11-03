@@ -13,6 +13,7 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
 import java.time.LocalDate as JavaLocalDate
+import java.time.format.DateTimeFormatter
 
 /** Единая доставка событий в Web/FCM/Telegram с разделением системных и персональных сообщений. */
 object NotificationService {
@@ -295,7 +296,7 @@ object NotificationService {
             senderUserId = runCatching { UUID.fromString(trip.userId) }.getOrDefault(UUID(0L, 0L)),
             type = "TRIP_CREATED",
             title = "🚆 Новая командировка",
-            message = buildBusinessTripCreatedMessage(trip).removePrefix("#КОМАНДИРОВКА\n").removePrefix("<b>🚆 НОВАЯ КОМАНДИРОВКА</b>\n"),
+            message = buildBusinessTripCreatedMessage(trip),
             payload = "{\"tripId\":\"${trip.id}\"}",
             preferenceKey = "trip",
             deliverTelegram = false
@@ -319,7 +320,7 @@ object NotificationService {
                 senderUserId = ownerId,
                 type = "TRIP_COMPLETED",
                 title = "✅ Командировка завершена",
-                message = buildBusinessTripCompletedMessage(trip).removePrefix("#КОМАНДИРОВКА\n").removePrefix("<b>🚆 КОМАНДИРОВКА ЗАВЕРШЕНА</b>\n"),
+                message = buildBusinessTripCompletedMessage(trip),
                 payload = "{\"tripId\":\"${trip.id}\"}",
                 preferenceKey = "tripChange",
                 deliverTelegram = false
@@ -334,38 +335,40 @@ object NotificationService {
         }
     }
 
-    private fun buildBusinessTripCreatedMessage(trip: BusinessTripDto): String {
+    private fun buildBusinessTripCreatedMessage(trip: BusinessTripDto): String =
+        buildBusinessTripTelegramMessage(trip, "начата")
+
+    private fun buildBusinessTripCompletedMessage(trip: BusinessTripDto): String =
+        buildBusinessTripTelegramMessage(trip, "завершена")
+
+    private fun buildBusinessTripTelegramMessage(
+        trip: BusinessTripDto,
+        statusLabel: String
+    ): String {
         val participants = resolveTripParticipants(trip.userId, trip.participants)
-            .ifEmpty { listOf("Участники не указаны") }
-        val typeLabel = if (trip.type == "TRANSFER") "Переезд" else "Выезд"
-        val projectTag = projectTag(trip.projectName)
+            .joinToString(", ")
+        val project = listOf(trip.projectNumber.trim(), trip.projectName.trim())
+            .filter { it.isNotBlank() }
+            .joinToString(" — ")
+
         return buildString {
-            appendLine("#КОМАНДИРОВКА")
-            appendLine("<b>🚆 НОВАЯ КОМАНДИРОВКА</b>")
-            appendLine(participants.joinToString(", "))
-            appendLine(trip.startDate.ifBlank { trip.date })
-            appendLine((typeLabel + if (projectTag.isNotBlank()) " $projectTag" else "").trim())
-            if (trip.transport.isNotBlank()) appendLine(trip.transport.trim())
-            if (trip.notes.isNotBlank()) appendLine(trip.notes.trim())
+            appendLine("#Командировка $statusLabel")
+            appendLine("Сотрудники: ${escapeTelegram(participants)}")
+            appendLine("Город: ${escapeTelegram(trip.city.trim())}, ${escapeTelegram(trip.country.trim())}")
+            appendLine("Дата начала: ${formatBusinessTripDate(trip.startDate.ifBlank { trip.date })}")
+            appendLine("Дата окончания: ${formatBusinessTripDate(trip.endDate ?: trip.completedDate)}")
+            appendLine("Транспорт: ${escapeTelegram(trip.transport.trim())}")
+            appendLine("Проект: ${escapeTelegram(project)}")
+            appendLine("Клиент: ${escapeTelegram(trip.companyName.trim())}")
+            appendLine("Цель: ${escapeTelegram(trip.notes.trim())}")
         }.trim()
     }
 
-    private fun buildBusinessTripCompletedMessage(trip: BusinessTripDto): String {
-        val participants = resolveTripParticipants(trip.userId, trip.participants)
-            .ifEmpty { listOf("Участники не указаны") }
-        val dateRange = listOf(
-            trip.startDate.ifBlank { trip.date },
-            trip.endDate ?: trip.completedDate
-        ).filter { !it.isNullOrBlank() }.joinToString(" — ")
-        val projectTag = projectTag(trip.projectName)
-        return buildString {
-            appendLine("#КОМАНДИРОВКА")
-            appendLine("<b>🚆 КОМАНДИРОВКА ЗАВЕРШЕНА</b>")
-            appendLine(participants.joinToString(", "))
-            appendLine(dateRange)
-            if (trip.city.isNotBlank()) appendLine("Вернулся из: ${escapeTelegram(trip.city.trim())}")
-            if (projectTag.isNotBlank()) appendLine(projectTag)
-        }.trim()
+    private fun formatBusinessTripDate(rawDate: String?): String {
+        if (rawDate.isNullOrBlank()) return ""
+        return runCatching {
+            JavaLocalDate.parse(rawDate).format(DateTimeFormatter.ofPattern("dd.MM.yy"))
+        }.getOrDefault(rawDate)
     }
 
     private fun resolveTripParticipants(ownerIdRaw: String, participantIds: Collection<String>): List<String> {
