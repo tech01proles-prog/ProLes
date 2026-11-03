@@ -655,9 +655,12 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
             .maxByOrNull { it.startDate }
 
         return apiClient.transferBusinessTrip(trip).onSuccess { created ->
+            val today = kotlinx.datetime.Clock.System.todayIn(
+                kotlinx.datetime.TimeZone.currentSystemDefault()
+            )
             val updatedPrevious = previousTrip?.copy(
                 endDate = trip.startDate,
-                status = "COMPLETED"
+                status = if (trip.startDate <= today) "COMPLETED" else "ACTIVE"
             )
             _trips.value = listOf(created) + _trips.value.map { current ->
                 if (updatedPrevious != null && current.id == updatedPrevious.id) {
