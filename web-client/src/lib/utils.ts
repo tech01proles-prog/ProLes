@@ -9,13 +9,45 @@ export function generateUUID(): string {
   });
 }
 
+export function toISODateLocal(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function formatDate(date: string): string {
-  const d = new Date(date);
-  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const value = String(date ?? '').trim();
+  if (!value) return '—';
+
+  // API dates are ISO YYYY-MM-DD. Read the calendar parts directly to avoid
+  // timezone offsets shifting a displayed date to the previous/next day.
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[3]}.${isoMatch[2]}.${isoMatch[1]}`;
+  }
+
+  const dayFirstMatch = value.match(/^(\d{2})[./-](\d{2})[./-](\d{4})/);
+  if (dayFirstMatch) {
+    return `${dayFirstMatch[1]}.${dayFirstMatch[2]}.${dayFirstMatch[3]}`;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return `${String(parsed.getDate()).padStart(2, '0')}.${String(parsed.getMonth() + 1).padStart(2, '0')}.${parsed.getFullYear()}`;
+}
+
+export function formatDateTimeExact(timestamp: number): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '—';
+  const datePart = formatDate(toISODateLocal(date));
+  const timePart = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  return `${datePart} ${timePart}`;
 }
 
 export function formatDateTime(timestamp: number): string {
   const d = new Date(timestamp);
+  if (Number.isNaN(d.getTime())) return '—';
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -26,7 +58,7 @@ export function formatDateTime(timestamp: number): string {
   if (diffMins < 60) return `${diffMins} мин назад`;
   if (diffHours < 24) return `${diffHours} ч назад`;
   if (diffDays < 7) return `${diffDays} дн назад`;
-  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatDateTimeExact(timestamp);
 }
 
 export function fileToBase64(file: File): Promise<string> {
