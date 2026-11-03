@@ -6,6 +6,13 @@ import type { BusinessTripDto, ProjectDto, UserDto, WaypointDto } from '../types
 import { generateUUID, formatDate } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 
+const getLocalDateInputValue = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const TRIP_STATUS = {
   ACTIVE: { label: 'Начата', color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900' },
   COMPLETED: { label: 'Завершена', color: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900' },
@@ -37,7 +44,7 @@ type TripFormState = {
 };
 
 const createEmptyTripForm = (): TripFormState => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateInputValue();
 
   return {
     projectId: '',
@@ -76,7 +83,7 @@ export function TripsPage() {
   useState(false);
 
   const [completionDate, setCompletionDate] = useState(
-    new Date().toISOString().slice(0, 10),
+    getLocalDateInputValue(),
   );
 
   const [completingTrip, setCompletingTrip] =
@@ -118,8 +125,8 @@ export function TripsPage() {
   // 🆕 Состояние для модального окна перерасчета суточных
   const [showPerDiemRecalc, setShowPerDiemRecalc] = useState(false);
   const [recalcParams, setRecalcParams] = useState({
-    dateFrom: new Date().toISOString().slice(0, 10),
-    dateTo: new Date().toISOString().slice(0, 10),
+    dateFrom: getLocalDateInputValue(),
+    dateTo: getLocalDateInputValue(),
     rate: 750,
   });
   const [recalculating, setRecalculating] = useState(false);
@@ -208,7 +215,7 @@ export function TripsPage() {
       return a.status.localeCompare(b.status) * dir;
     });
 
-  const todayDate = new Date().toISOString().slice(0, 10);
+  const todayDate = getLocalDateInputValue();
   const activeTrip =
     trips.find(
       trip =>
@@ -227,7 +234,7 @@ export function TripsPage() {
     setSelectedTrip(null);
     setTripAction(mode);
     if (mode === 'transfer' && activeTrip) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getLocalDateInputValue();
       const project = projects.find(item => item.id === activeTrip.projectId);
       const isStandardCountry = [
         'РБ',
@@ -265,7 +272,7 @@ export function TripsPage() {
     if (!activeTrip) return;
 
     setCompletionDate(
-      new Date().toISOString().slice(0, 10),
+      getLocalDateInputValue(),
     );
 
     setShowCompleteDialog(true);
@@ -445,7 +452,7 @@ export function TripsPage() {
     setSelectedTrip(trip);
     setRecalcParams({
       dateFrom: trip.date,
-      dateTo: new Date().toISOString().slice(0, 10),
+      dateTo: getLocalDateInputValue(),
       rate: trip.perDiemRate || 750,
     });
     setShowPerDiemRecalc(true);
@@ -569,7 +576,7 @@ export function TripsPage() {
     const endValue =
       trip.endDate ||
       trip.completedDate ||
-      new Date().toISOString().slice(0, 10);
+      getLocalDateInputValue();
     const end = new Date(`${endValue}T00:00:00`);
 
     const millisecondsPerDay = 24 * 60 * 60 * 1000;
