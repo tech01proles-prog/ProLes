@@ -9,7 +9,7 @@ export function generateUUID(): string {
   });
 }
 
-export function toISODateLocal(date: Date = new Date()): string {
+function toISODateLocal(date: Date = new Date()): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -37,7 +37,7 @@ export function formatDate(date: string): string {
   return `${String(parsed.getDate()).padStart(2, '0')}.${String(parsed.getMonth() + 1).padStart(2, '0')}.${parsed.getFullYear()}`;
 }
 
-export function formatDateTimeExact(timestamp: number): string {
+function formatDateTimeExact(timestamp: number): string {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return '—';
   const datePart = formatDate(toISODateLocal(date));
@@ -121,3 +121,6 @@ export async function readFileAsBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+// Keep the shared date helpers available to all web-client pages.
+export { toISODateLocal, formatDateTimeExact };
