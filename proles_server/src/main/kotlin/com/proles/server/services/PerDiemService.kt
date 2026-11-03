@@ -228,7 +228,7 @@ object PerDiemService {
                                 it[ExpensesTable.comment] = comment
                                 it[ExpensesTable.receiptSubmitted] = false
                                 it[ExpensesTable.hasReceiptPhoto] = false
-                                it[ExpensesTable.category] = "WORK"
+                                it[ExpensesTable.category] = "WITHOUT_RECEIPT"
                                 it[ExpensesTable.createdAt] = System.currentTimeMillis()
                             }
                             inserted++
