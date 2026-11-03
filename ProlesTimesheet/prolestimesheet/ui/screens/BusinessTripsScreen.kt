@@ -433,7 +433,7 @@ fun TripDialog(
             trip?.companyName?.takeIf { it.isNotBlank() }
                 ?: initialProject?.client?.takeIf { it.isNotBlank() }
                 ?: initialProject?.customer?.takeIf { it.isNotBlank() }
-                ?: activeTrip?.companyName.orEmpty()
+                ?: ""
         )
     }
     var country by remember { mutableStateOf(trip?.country ?: activeTrip?.country.orEmpty()) }
@@ -442,7 +442,7 @@ fun TripDialog(
     var date by remember { mutableStateOf(trip?.startDate ?: trip?.date ?: today) }
     var endDate by remember { mutableStateOf(trip?.endDate) }
     var city by remember {
-        mutableStateOf(trip?.city?.takeIf { it.isNotBlank() } ?: initialProject?.location ?: activeTrip?.city.orEmpty())
+        mutableStateOf(trip?.city?.takeIf { it.isNotBlank() } ?: initialProject?.location.orEmpty())
     }
     var waypoints by remember { mutableStateOf(trip?.waypoints ?: emptyList()) }
 
@@ -468,15 +468,14 @@ fun TripDialog(
     var showParticipantPicker by remember { mutableStateOf(false) }
     var transport by remember { mutableStateOf(trip?.transport ?: "") }
     var notes by remember {
-        mutableStateOf(trip?.notes ?: activeTrip?.notes.orEmpty())
+        mutableStateOf(trip?.notes.orEmpty())
     }
     var purpose by remember {
         mutableStateOf(
             trip?.purpose?.takeIf { it.isNotBlank() }
                 ?: trip?.notes?.takeIf { it.isNotBlank() }
                 ?: initialProject?.productService?.takeIf { it.isNotBlank() }
-                ?: activeTrip?.purpose?.takeIf { it.isNotBlank() }
-                ?: activeTrip?.notes.orEmpty()
+                ?: ""
         )
     }
     var showProjectPicker by remember { mutableStateOf(false) }
