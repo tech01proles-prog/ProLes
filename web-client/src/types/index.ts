@@ -188,6 +188,7 @@ export interface BusinessTripDto {
   participants: string[];
   transport: string;
   notes: string;
+  purpose?: string;
   createdAt: number;
   perDiemRate: number;
 }
