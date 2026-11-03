@@ -22,7 +22,6 @@ type SubprojectOption = {
 type TripFormState = {
   projectId: string;
   subprojectId: string;
-  projectNumber: string;
   companyName: string;
   country: string;
   type: BusinessTripDto['type'];
@@ -35,6 +34,7 @@ type TripFormState = {
   participants: string[];
   transport: string;
   notes: string;
+  purpose: string;
 };
 
 const createEmptyTripForm = (): TripFormState => {
@@ -43,7 +43,6 @@ const createEmptyTripForm = (): TripFormState => {
   return {
     projectId: '',
     subprojectId: '',
-    projectNumber: '',
     companyName: '',
     country: 'РФ',
     type: 'DEPARTURE',
@@ -56,6 +55,7 @@ const createEmptyTripForm = (): TripFormState => {
     participants: [],
     transport: '',
     notes: '',
+    purpose: '',
   };
 };
 
@@ -210,12 +210,13 @@ export function TripsPage() {
       return a.status.localeCompare(b.status) * dir;
     });
 
+  const todayDate = new Date().toISOString().slice(0, 10);
   const activeTrip =
     trips.find(
       trip =>
         trip.userId === user?.id &&
         trip.status === 'ACTIVE' &&
-        !trip.endDate,
+        (!trip.endDate || trip.endDate >= todayDate),
     ) || null;
 
   const resetTripForm = () => {
@@ -240,7 +241,6 @@ export function TripsPage() {
       setForm({
         projectId: activeTrip.projectId || '',
         subprojectId: activeTrip.subprojectId || '',
-        projectNumber: project?.projectNumber || activeTrip.projectNumber || '',
         companyName: project?.client || project?.customer || activeTrip.companyName || '',
         country: isStandardCountry
           ? activeTrip.country
@@ -254,7 +254,8 @@ export function TripsPage() {
         waypoints: [],
         participants: activeTrip.participants || [],
         transport: activeTrip.transport || '',
-        notes: project?.productService || '',
+        notes: '',
+        purpose: project?.productService || activeTrip.purpose || '',
       });
       setCustomCountry(['РБ','РФ','Казахстан','Китай'].includes(activeTrip.country) ? '' : activeTrip.country || '');
     } else {
@@ -293,12 +294,13 @@ export function TripsPage() {
       );
 
       setShowCompleteDialog(false);
+      const effectiveStatus = completionDate <= todayDate ? 'COMPLETED' : 'ACTIVE';
       setTrips(current =>
         current.map(trip =>
           trip.id === activeTrip.id
             ? {
                 ...trip,
-                status: 'COMPLETED',
+                status: effectiveStatus,
                 endDate: completionDate,
                 completedDate: completionDate,
               }
@@ -338,7 +340,7 @@ export function TripsPage() {
         userId: editingTripId ? (selectedTrip?.userId || user.id) : user.id,
         projectId: form.projectId || null,
         projectName: selectedProject?.name || '',
-        projectNumber: selectedProject?.projectNumber || form.projectNumber,
+        projectNumber: selectedProject?.projectNumber || selectedTrip?.projectNumber || '',
         companyName: form.companyName,
         country: form.country === 'Другое' ? customCountry.trim() : form.country,
                 subprojectId: form.subprojectId || null,
@@ -346,16 +348,21 @@ export function TripsPage() {
           subprojects.find(item => item.id === form.subprojectId)?.name ||
           selectedTrip?.subprojectName ||
           '',
-        type: form.type,
+        type: tripAction === 'transfer' ? 'TRANSFER' : 'DEPARTURE',
         date: form.startDate,
         startDate: form.startDate,
         endDate: form.endDate || null,
-        status: form.status,
+        status: form.status === 'CANCELLED'
+          ? 'CANCELLED'
+          : form.endDate && form.endDate <= todayDate
+            ? 'COMPLETED'
+            : 'ACTIVE',
         city: form.city,
         waypoints: form.waypoints,
         participants: form.participants,
         transport: form.transport,
         notes: form.notes,
+        purpose: form.purpose,
         createdAt: editingTripId ? (selectedTrip?.createdAt || Date.now()) : Date.now(),
         perDiemRate: editingTripId ? (selectedTrip?.perDiemRate || 750) : 750,
       };
@@ -396,10 +403,9 @@ export function TripsPage() {
         setForm({
       projectId: trip.projectId || '',
       subprojectId: trip.subprojectId || '',
-      projectNumber: trip.projectNumber || '',
       companyName: trip.companyName || '',
       country: standardCountry ? trip.country : 'Другое',
-      type: trip.type,
+      type: 'DEPARTURE',
       date: trip.startDate || trip.date,
       startDate: trip.startDate || trip.date,
       endDate: trip.endDate || '',
@@ -409,6 +415,7 @@ export function TripsPage() {
       participants: trip.participants || [],
       transport: trip.transport || '',
       notes: trip.notes || '',
+      purpose: trip.purpose || trip.notes || '',
     });
     setShowTripDetail(false);
     setShowForm(true);
@@ -779,10 +786,10 @@ export function TripsPage() {
                         ...current,
                         projectId: event.target.value,
                         subprojectId: '',
-                        projectNumber: project?.projectNumber || '',
                         companyName: project?.client || project?.customer || '',
                         city: project?.location || '',
-                        notes: project?.productService || '',
+                        purpose: project?.productService || '',
+                        notes: '',
                       }));
                     }} className="input bg-white dark:bg-slate-900">
                       <option value="">Без привязки к проекту</option>
@@ -869,7 +876,7 @@ export function TripsPage() {
                         setForm(current => ({
                           ...current,
                           endDate: event.target.value,
-                          status: event.target.value
+                          status: event.target.value && event.target.value <= todayDate
                             ? 'COMPLETED'
                             : 'ACTIVE',
                         }))
@@ -887,7 +894,7 @@ export function TripsPage() {
                 <div className="proles-modal-section-title">Детали поездки</div>
                 <div className="proles-modal-grid">
                   <div className="proles-input-group">
-                    <label>Основной населённый пункт</label>
+                    <label>Город</label>
                     <input type="text" placeholder="Например: Москва" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="input" />
                   </div>
                   <div className="proles-input-group">
@@ -983,7 +990,7 @@ export function TripsPage() {
                 <div className="proles-modal-section-title">Дополнительно</div>
                 <div className="proles-input-group">
                   <label>Цель командировки</label>
-                  <textarea placeholder="Цель поездки или ожидаемый результат..." value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input min-h-[80px]" />
+                  <textarea placeholder="Цель поездки или ожидаемый результат..." value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} className="input min-h-[80px]" />
                 </div>
               </div>
             </div>
@@ -1132,7 +1139,7 @@ export function TripsPage() {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Проект:</span>
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.projectName || selectedTrip.projectNumber || selectedTrip.companyName || "—"}</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.projectName || selectedTrip.projectNumber || "—"}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Сотрудник:</span>
@@ -1167,8 +1174,16 @@ export function TripsPage() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">Клиент:</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.companyName || "—"}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Город:</span>
                     <span className="font-semibold text-slate-900 dark:text-slate-100">{[selectedTrip.country, selectedTrip.city].filter(Boolean).join(", ") || "—"}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">Цель:</span>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{selectedTrip.purpose || selectedTrip.notes || "—"}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800">
                     <span className="text-sm text-slate-500 dark:text-slate-400">Дней в командировке:</span>
