@@ -837,12 +837,6 @@ export function TripsPage() {
                     {form.country === 'Другое' && <input className="input mt-2" value={customCountry} placeholder="Введите страну" onChange={e => setCustomCountry(e.target.value)} />}
                   </div>
                   <div className="proles-input-group">
-                    <label>Тип поездки</label>
-                    <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as any })} className="input bg-white dark:bg-slate-900">
-                      {Object.entries(TRIP_TYPES).filter(([k]) => k !== 'COMPLETION' && k !== 'TRANSFER').map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="proles-input-group">
                     <label>Дата начала *</label>
 
                     <input
