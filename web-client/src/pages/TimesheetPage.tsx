@@ -322,14 +322,7 @@ function StandardTimesheetPage({
       getCalendarDays(viewYear, viewMonth).map((day) => ({
         key: day.date,
         dayNumber: day.day,
-        dateLabel: parseDate(day.date).toLocaleDateString(
-          'ru-RU',
-          {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-          },
-        ),
+        dateLabel: formatDate(day.date),
         currentMonth: day.currentMonth,
         today: day.date === formatDateKey(now),
         weekend: day.weekend,
@@ -367,14 +360,7 @@ function StandardTimesheetPage({
     [periodEntries, projects],
   );
 
-  const selectedDateLabel = parseDate(
-    selectedDate,
-  ).toLocaleDateString('ru-RU', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const selectedDateLabel = formatDate(selectedDate);
 
   const monthLabel = new Date(
     viewYear,
