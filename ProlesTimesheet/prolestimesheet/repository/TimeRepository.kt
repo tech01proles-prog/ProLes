@@ -646,6 +646,30 @@ class TimeRepository(val context: Context, private val apiClient: ApiClient = Ap
         }
     }
 
+    suspend fun transferBusinessTrip(trip: BusinessTrip): Result<BusinessTrip> {
+        val previousTrip = _trips.value
+            .filter {
+                it.userId == trip.userId &&
+                    it.status == "ACTIVE" &&
+                    it.endDate == null
+            }
+            .maxByOrNull { it.startDate }
+
+        return apiClient.transferBusinessTrip(trip).onSuccess { created ->
+            val updatedPrevious = previousTrip?.copy(
+                endDate = trip.startDate,
+                status = "COMPLETED"
+            )
+            _trips.value = listOf(created) + _trips.value.map { current ->
+                if (updatedPrevious != null && current.id == updatedPrevious.id) {
+                    updatedPrevious
+                } else {
+                    current
+                }
+            }
+        }
+    }
+
     suspend fun completeBusinessTrip(tripId: String, endDate: kotlinx.datetime.LocalDate): Result<BusinessTrip> {
         return apiClient.completeBusinessTrip(tripId, endDate).onSuccess { updated ->
             _trips.value = _trips.value.map { if (it.id == updated.id) updated else it }
