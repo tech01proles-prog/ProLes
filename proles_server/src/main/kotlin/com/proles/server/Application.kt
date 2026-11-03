@@ -162,6 +162,12 @@ fun Application.module() {
         exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_link_code ON notification_preferences(telegram_link_code) WHERE telegram_link_code IS NOT NULL")
         exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_chat_id ON notification_preferences(telegram_chat_id) WHERE telegram_chat_id IS NOT NULL")
 
+        // Поля, появившиеся после первоначального создания таблицы командировок.
+        exec("""
+            ALTER TABLE business_trips
+                ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT ''
+        """.trimIndent())
+
         // 🔥 Миграция старых вариантов типа суточных в единый PER_DIEM.
         // Обновляем только значение типа — сами расходы, суммы и связи не затрагиваются.
         exec("UPDATE expenses SET type = 'PER_DIEM' WHERE LOWER(type) IN ('per_diem', 'perdiem')")
