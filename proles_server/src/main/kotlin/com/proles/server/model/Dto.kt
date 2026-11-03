@@ -257,7 +257,7 @@ data class BusinessTripDto(
     val companyName: String = "",
     val country: String = "",
     val projectName: String = "",
-    val type: String, // DEPARTURE / TRANSFER / COMPLETION
+    val type: String, // DEPARTURE; TRANSFER is a request action only
     val date: String,
     val completedDate: String? = null,
     val city: String = "",  // ← оставить для обратной совместимости
