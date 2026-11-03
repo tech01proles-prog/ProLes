@@ -11,7 +11,10 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate as KtLocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -138,6 +141,7 @@ private fun mapRowToBusinessTripDto(row: ResultRow): BusinessTripDto {
         waypoints = waypoints,
         transport = row[BusinessTripsTable.transport],
         notes = row[BusinessTripsTable.notes],
+        purpose = row[BusinessTripsTable.purpose],
         participants = participants,
         createdAt = row[BusinessTripsTable.createdAt],
         perDiemRate = row[BusinessTripsTable.perDiemRate],
@@ -280,6 +284,8 @@ internal fun Route.businessTripRoutes() {
                 )
             }
 
+            val today = Clock.System.now()
+                .toLocalDateTime(TimeZone.currentSystemDefault()).date
             val newTripId = trip.id.toBusinessTripUuidOrNull() ?: UUID.randomUUID()
             val transferResult = try {
                 transaction {
@@ -346,12 +352,13 @@ internal fun Route.businessTripRoutes() {
                         it[completedDate] = endDate
                         it[BusinessTripsTable.startDate] = startDate
                         it[BusinessTripsTable.endDate] = endDate
-                        it[status] = if (endDate != null) "COMPLETED" else "ACTIVE"
+                        it[status] = if (endDate != null && endDate <= today) "COMPLETED" else "ACTIVE"
                         it[city] = trip.city
                         it[participants] =
                             businessTripJson.encodeToString(trip.participants)
                         it[transport] = trip.transport
                         it[notes] = trip.notes
+                        it[purpose] = trip.purpose
                         it[waypoints] =
                             businessTripJson.encodeToString(trip.waypoints)
                         it[perDiemRate] = trip.perDiemRate
@@ -488,10 +495,12 @@ internal fun Route.businessTripRoutes() {
                 )
             }
 
+            val today = Clock.System.now()
+                .toLocalDateTime(TimeZone.currentSystemDefault()).date
             val id = trip.id.toBusinessTripUuidOrNull() ?: UUID.randomUUID()
             val normalizedStatus = when {
-                endDate != null -> "COMPLETED"
                 trip.status.uppercase() == "CANCELLED" -> "CANCELLED"
+                endDate != null && endDate <= today -> "COMPLETED"
                 else -> "ACTIVE"
             }
 
@@ -542,6 +551,7 @@ internal fun Route.businessTripRoutes() {
                             businessTripJson.encodeToString(trip.participants)
                         it[transport] = trip.transport
                         it[notes] = trip.notes
+                        it[purpose] = trip.purpose
                         it[waypoints] =
                             businessTripJson.encodeToString(trip.waypoints)
                         it[perDiemRate] = trip.perDiemRate
@@ -645,6 +655,15 @@ internal fun Route.businessTripRoutes() {
                 )
             }
 
+            if (!trip.perDiemRate.isFinite() || trip.perDiemRate < 0.0) {
+                return@put call.respond(
+                    HttpStatusCode.BadRequest,
+                    "perDiemRate must be non-negative"
+                )
+            }
+
+            val today = Clock.System.now()
+                .toLocalDateTime(TimeZone.currentSystemDefault()).date
             var wasCompletedBeforeUpdate = false
             val result = try {
                 transaction {
@@ -657,9 +676,7 @@ internal fun Route.businessTripRoutes() {
                     val ownerId =
                         existing[BusinessTripsTable.userId].value
                     wasCompletedBeforeUpdate =
-                        existing[BusinessTripsTable.status].uppercase() == "COMPLETED" ||
-                            existing[BusinessTripsTable.endDate] != null ||
-                            existing[BusinessTripsTable.completedDate] != null
+                        existing[BusinessTripsTable.status].uppercase() == "COMPLETED"
 
                     if (
                         ownerId != session.userId &&
@@ -686,9 +703,8 @@ internal fun Route.businessTripRoutes() {
                     }
 
                     val normalizedStatus = when {
-                        endDate != null -> "COMPLETED"
-                        trip.status.uppercase() == "CANCELLED" ->
-                            "CANCELLED"
+                        trip.status.uppercase() == "CANCELLED" -> "CANCELLED"
+                        endDate != null && endDate <= today -> "COMPLETED"
                         else -> "ACTIVE"
                     }
 
@@ -701,7 +717,7 @@ internal fun Route.businessTripRoutes() {
                         it[projectNumber] = trip.projectNumber
                         it[companyName] = trip.companyName
                         it[country] = trip.country
-                        it[type] = trip.type
+                        it[type] = "DEPARTURE"
                         it[date] = startDate
                         it[completedDate] = endDate
                         it[BusinessTripsTable.startDate] = startDate
@@ -712,6 +728,7 @@ internal fun Route.businessTripRoutes() {
                             businessTripJson.encodeToString(trip.participants)
                         it[transport] = trip.transport
                         it[notes] = trip.notes
+                        it[purpose] = trip.purpose
                         it[waypoints] =
                             businessTripJson.encodeToString(trip.waypoints)
                         it[perDiemRate] = trip.perDiemRate
@@ -811,9 +828,11 @@ internal fun Route.businessTripRoutes() {
                 BusinessTripsTable.update(
                     { BusinessTripsTable.id eq tripId }
                 ) {
+                    val today = Clock.System.now()
+                        .toLocalDateTime(TimeZone.currentSystemDefault()).date
                     it[BusinessTripsTable.endDate] = endDate
                     it[completedDate] = endDate
-                    it[status] = "COMPLETED"
+                    it[status] = if (endDate <= today) "COMPLETED" else "ACTIVE"
                 }
 
                 BusinessTripResult.UPDATED
@@ -827,10 +846,10 @@ internal fun Route.businessTripRoutes() {
                         .singleOrNull()
                         ?.let(::mapRowToBusinessTripDto)
                 }
-                if (completedTrip != null) {
+                PerDiemService.processPerDiems()
+                if (completedTrip?.status == "COMPLETED") {
                     NotificationService.notifyBusinessTripCompleted(completedTrip!!)
                 }
-                PerDiemService.processPerDiems()
             }
 
             when (result) {
