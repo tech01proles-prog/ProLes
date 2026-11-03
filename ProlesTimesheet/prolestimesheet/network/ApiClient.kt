@@ -998,6 +998,27 @@ object ApiClient {
         }
     }
 
+    // Переезд атомарно завершает предыдущую командировку и создаёт новую.
+    suspend fun transferBusinessTrip(trip: BusinessTrip): Result<BusinessTrip> {
+        return try {
+            val response = client.post("$BASE_URL/business-trips/transfer") {
+                contentType(ContentType.Application.Json)
+                setBody(trip)
+                authToken?.let { header("X-Session-Token", it) }
+            }
+            Log.d("ApiClient", "📡 transferBusinessTrip: ${response.status}")
+            if (response.status == HttpStatusCode.Created) {
+                Result.success(response.body<BusinessTrip>())
+            } else {
+                val error = runCatching { response.bodyAsText() }.getOrNull().orEmpty()
+                Result.failure(Exception("Server error ${response.status}: $error"))
+            }
+        } catch (e: Exception) {
+            Log.e("ApiClient", "💥 transferBusinessTrip exception", e)
+            Result.failure(e)
+        }
+    }
+
     // 🆕 Обновить командировку
     suspend fun updateBusinessTrip(trip: BusinessTrip): Result<BusinessTrip> {
         return try {
