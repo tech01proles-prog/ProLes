@@ -11,7 +11,7 @@ import type {
   UserDto,
 } from '../types';
 import { CurrencySummary } from '../components/ui';
-import { generateUUID, formatDate, formatMoney } from '../lib/utils';
+import { generateUUID, formatDate, formatMoney, toISODateLocal } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 import { ScopeTabs } from '../components/ScopeTabs';
 import * as XLSX from 'xlsx';
@@ -148,7 +148,7 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
   const [filterSubcategory, setFilterSubcategory] = useState('all');  // 🆕 Фильтр по подкатегории (типу расхода)
   const [reportPreset, setReportPreset] = useState<ReportPreset | null>(null);
   
-  // Автоматически переключаем на 'all' если в URL есть userId или scope=all
+  // Deep links from analytics open the all-expenses view and select a specific employee/expense.
   useEffect(() => {
     const userIdFromUrl = searchParams.get('userId');
     const scopeFromUrl = searchParams.get('scope');
@@ -156,17 +156,25 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
       setScope('all');
       setFilterUser(userIdFromUrl || 'all');
     }
+    if (searchParams.get('expenseId')) {
+      setFilterEntryType('EXPENSE');
+    }
+    const fromUrl = searchParams.get('dateFrom');
+    const toUrl = searchParams.get('dateTo');
+    if (fromUrl) setDateFrom(fromUrl);
+    if (toUrl) setDateTo(toUrl);
   }, [searchParams, canViewAll]);
   
   // Фильтр по датам
   const now = new Date();
   const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const currentMonthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-31`;
+  const currentMonthEnd = toISODateLocal(new Date(now.getFullYear(), now.getMonth() + 1, 0));
   const [dateFrom, setDateFrom] = useState(searchParams.get('dateFrom') || currentMonthStart);
   const [dateTo, setDateTo] = useState(searchParams.get('dateTo') || currentMonthEnd);
-  const [datePreset, setDatePreset] = useState<'current' | 'last' | 'custom'>(
-    searchParams.get('dateFrom') ? 'custom' : 'current'
+  const [datePreset, setDatePreset] = useState<'month' | 'halfYear' | 'year' | 'last' | 'custom'>(
+    searchParams.get('dateFrom') ? 'custom' : 'month'
   );
+  const selectedExpenseId = searchParams.get('expenseId');
 
   const [form, setForm] = useState({
     projectId: '',
@@ -174,7 +182,7 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
     type: 'ROAD',
     amount: '',
     currency: 'RUB',
-    date: new Date().toISOString().slice(0, 10),
+    date: toISODateLocal(),
     comment: '',
     name: '',
     category: 'WITH_RECEIPT',
@@ -359,6 +367,12 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
       if (sortField === 'type') return a.type.localeCompare(b.type) * dir;
       return 0;
     });
+
+  useEffect(() => {
+    if (!selectedExpenseId) return;
+    const target = document.getElementById(`expense-row-${selectedExpenseId}`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [selectedExpenseId, filtered.length]);
 
   const incomeTotals = filtered.reduce<Record<string, number>>(
     (result, entry) => {
@@ -985,30 +999,41 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
           </div>
         </div>
 
-        {/* Предустановки дат */}
-        <div className="flex flex-wrap gap-2 mb-3">
+        {/* Быстрый выбор периода */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {([
+            ['month', 'Месяц'],
+            ['halfYear', 'Полугодие'],
+            ['year', 'Год'],
+          ] as const).map(([preset, label]) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => {
+                const today = new Date();
+                const startMonth = preset === 'month'
+                  ? today.getMonth()
+                  : preset === 'halfYear'
+                    ? Math.floor(today.getMonth() / 6) * 6
+                    : 0;
+                setDateFrom(toISODateLocal(new Date(today.getFullYear(), startMonth, 1)));
+                setDateTo(toISODateLocal(today));
+                setDatePreset(preset);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${datePreset === preset ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}
+            >
+              {label}
+            </button>
+          ))}
           <button
-            onClick={() => {
-              const now = new Date();
-              const year = now.getFullYear();
-              const month = String(now.getMonth() + 1).padStart(2, '0');
-              setDateFrom(`${year}-${month}-01`);
-              setDateTo(`${year}-${month}-31`);
-              setDatePreset('current');
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${datePreset === 'current' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}
-          >
-            Текущий месяц
-          </button>
-          <button
+            type="button"
             onClick={() => {
               const now = new Date();
               const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
               const year = lastMonth.getFullYear();
-              const month = String(lastMonth.getMonth() + 1).padStart(2, '0');
-              const lastDay = new Date(year, lastMonth.getMonth() + 1, 0).getDate();
-              setDateFrom(`${year}-${month}-01`);
-              setDateTo(`${year}-${month}-${lastDay}`);
+              const month = lastMonth.getMonth();
+              setDateFrom(toISODateLocal(lastMonth));
+              setDateTo(toISODateLocal(new Date(year, month + 1, 0)));
               setDatePreset('last');
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${datePreset === 'last' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}
@@ -1016,13 +1041,14 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
             Прошлый месяц
           </button>
           <button
+            type="button"
             onClick={() => setDatePreset('custom')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${datePreset === 'custom' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}
           >
             Произвольный
           </button>
         </div>
-        
+
         {/* Поля ввода дат */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <div>
@@ -1133,7 +1159,11 @@ export function ExpensesPage({ directorMode = false }: { directorMode?: boolean 
                     }
                   }
                   return (
-                    <tr key={entry.id} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${rowBgClass}`}>
+                    <tr
+                      key={entry.id}
+                      id={entry.id === selectedExpenseId ? `expense-row-${entry.id}` : undefined}
+                      className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${rowBgClass} ${entry.id === selectedExpenseId ? 'ring-2 ring-inset ring-indigo-500 dark:ring-indigo-400' : ''}`}
+                    >
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-400">{formatDate(entry.date)}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${entry.type === 'INCOME' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'}`}>
