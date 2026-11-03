@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatDate, toISODateLocal } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { usePermissions } from '../hooks/usePermissions';
@@ -73,11 +74,7 @@ export function DashboardPage() {
   const todayProgress = Math.min((todayHours / 8) * 100, 100);
   const remainingHours = Math.max(8 - todayHours, 0);
 
-  const currentDateLabel = new Intl.DateTimeFormat('ru-RU', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  }).format(new Date());
+  const currentDateLabel = formatDate(toISODateLocal());
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
 
