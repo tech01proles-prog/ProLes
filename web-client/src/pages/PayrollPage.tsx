@@ -5,7 +5,7 @@ import type {
   SalaryComponentDto, SalaryBreakdownResponse, SalaryRecordDto,
   PayrollExportResponse, UserDto, ProjectDto, TimeEntryDto, SubprojectDto
 } from '../types';
-import { generateUUID, formatMoney, monthName } from '../lib/utils';
+import { generateUUID, formatDate, formatDateTimeExact, formatMoney, monthName } from '../lib/utils';
 import { exportPayrollToExcel, exportPayrollToPdf, exportMySalaryToExcel, exportMySalaryToPdf } from '../lib/export';
 import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../components/Toast/ToastContext';
@@ -627,7 +627,7 @@ export function PayrollPage() {
                       {c.subprojectName && <div className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mt-1">Подпроект: {c.subprojectName}</div>}
                       {c.description && <div className="text-xs text-slate-600 dark:text-slate-400 mt-1 truncate">{c.description}</div>}
                       <div className="text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                        С {new Date(c.effectiveFrom).toLocaleDateString('ru-RU')}
+                        С {formatDate(c.effectiveFrom)}
                       </div>
                     </div>
                   );
@@ -820,7 +820,7 @@ export function PayrollPage() {
                             <div key={tx.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                               <div>
                                 <div className="font-semibold">{tx.transactionType === 'WITHHOLDING' ? 'Удержание' : 'Погашение'}</div>
-                                <div className="text-xs text-slate-500">{tx.comment || 'Без комментария'} · {new Date(tx.createdAt).toLocaleString('ru-RU')}</div>
+                                <div className="text-xs text-slate-500">{tx.comment || 'Без комментария'} · {formatDateTimeExact(tx.createdAt)}</div>
                               </div>
                               <div className={`font-black ${tx.amount >= 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{tx.amount >= 0 ? '+' : ''}{formatMoney(tx.amount)}</div>
                             </div>
