@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { formatDate, useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/client';
 import type { TimeEntryDto, UserDto, ProjectDto, DayOffDto } from '../types';
@@ -139,9 +139,7 @@ export function HoursCalendarPage() {
     return <div className="flex justify-center py-20"><div className="animate-spin text-3xl">⏳</div></div>;
   }
 
-  const selectedDateLabel = new Date(`${selectedDate}T12:00:00`).toLocaleDateString('ru-RU', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  });
+  const selectedDateLabel = formatDate(selectedDate);
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -552,9 +550,7 @@ function SelectedUsersHoursPanel({
                             className="border-t border-slate-100 dark:border-slate-800"
                           >
                             <td className="px-4 py-2 whitespace-nowrap">
-                              {new Date(
-                                `${entry.date}T00:00:00`,
-                              ).toLocaleDateString('ru-RU')}
+                              {formatDate(entry.date)}
                             </td>
 
                             <td className="px-4 py-2 text-slate-500">
