@@ -137,7 +137,7 @@ private fun mapRowToBusinessTripDto(row: ResultRow): BusinessTripDto {
         companyName = row[BusinessTripsTable.companyName],
         country = row[BusinessTripsTable.country],
         projectName = projectName,
-        type = row[BusinessTripsTable.type],
+        type = "DEPARTURE",
         date = row[BusinessTripsTable.date].toString(),
         completedDate = storedEndDate?.toString(),
         city = row[BusinessTripsTable.city],
