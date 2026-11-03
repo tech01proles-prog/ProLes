@@ -11,7 +11,7 @@ import type {
   TimeEntryDto,
   UserDto,
 } from '../types';
-import { generateUUID, isWeekend } from '../lib/utils';
+import { formatDate, generateUUID, isWeekend } from '../lib/utils';
 import {
   PeriodNavigator,
   TimesheetCalendar,
