@@ -5,6 +5,7 @@ import com.proles.server.config.PermissionMiddleware
 import com.proles.server.config.SessionManager
 import com.proles.server.data.*
 import com.proles.server.model.*
+import com.proles.server.services.PerDiemService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -79,7 +80,14 @@ private fun mapRowToBusinessTripDto(row: ResultRow): BusinessTripDto {
     val userId = row[BusinessTripsTable.userId].value
     val projectId = row[BusinessTripsTable.projectId]?.value
     val startDate = row[BusinessTripsTable.startDate] ?: row[BusinessTripsTable.date]
-    val endDate = row[BusinessTripsTable.endDate]
+    val storedEndDate = row[BusinessTripsTable.endDate]
+        ?: row[BusinessTripsTable.completedDate]
+    val storedStatus = row[BusinessTripsTable.status].uppercase()
+    val effectiveStatus = when {
+        storedStatus == "CANCELLED" -> "CANCELLED"
+        storedEndDate != null -> "COMPLETED"
+        else -> "ACTIVE"
+    }
 
     val userName = UsersTable
         .selectAll()
@@ -125,9 +133,7 @@ private fun mapRowToBusinessTripDto(row: ResultRow): BusinessTripDto {
         projectName = projectName,
         type = row[BusinessTripsTable.type],
         date = row[BusinessTripsTable.date].toString(),
-        completedDate = row[
-            BusinessTripsTable.completedDate
-        ]?.toString(),
+        completedDate = storedEndDate?.toString(),
         city = row[BusinessTripsTable.city],
         waypoints = waypoints,
         transport = row[BusinessTripsTable.transport],
@@ -136,8 +142,8 @@ private fun mapRowToBusinessTripDto(row: ResultRow): BusinessTripDto {
         createdAt = row[BusinessTripsTable.createdAt],
         perDiemRate = row[BusinessTripsTable.perDiemRate],
         startDate = startDate.toString(),
-        endDate = endDate?.toString(),
-        status = row[BusinessTripsTable.status]
+        endDate = storedEndDate?.toString(),
+        status = effectiveStatus
     )
 }
 
@@ -215,6 +221,174 @@ internal fun Route.businessTripRoutes() {
             }
 
             call.respond(HttpStatusCode.OK, trips)
+        }
+
+        post("/transfer") {
+            val session = call.checkBusinessTripSession() ?: return@post
+
+            val trip = try {
+                call.receive<BusinessTripDto>()
+            } catch (e: Exception) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON: ${e.message}"
+                )
+            }
+
+            val userId = trip.userId.toBusinessTripUuidOrNull() ?: session.userId
+            if (
+                userId != session.userId &&
+                session.role !in setOf("superadmin", "admin", "director", "logist")
+            ) {
+                return@post call.respond(HttpStatusCode.Forbidden, "Access denied")
+            }
+
+            val projectId = trip.projectId.toBusinessTripUuidOrNull()
+            val subprojectId = trip.subprojectId.toBusinessTripUuidOrNull()
+            if (trip.projectId?.isNotBlank() == true && projectId == null) {
+                return@post call.respond(HttpStatusCode.BadRequest, "Invalid projectId")
+            }
+            if (trip.subprojectId?.isNotBlank() == true && subprojectId == null) {
+                return@post call.respond(HttpStatusCode.BadRequest, "Invalid subprojectId")
+            }
+            if (projectId == null && subprojectId != null) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Нельзя выбрать подпроект без проекта"
+                )
+            }
+
+            val startDate = runCatching {
+                KtLocalDate.parse(trip.startDate.ifBlank { trip.date })
+            }.getOrElse {
+                return@post call.respond(HttpStatusCode.BadRequest, "Invalid startDate")
+            }
+            val endDate = trip.endDate?.takeIf(String::isNotBlank)?.let {
+                runCatching { KtLocalDate.parse(it) }.getOrNull()
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, "Invalid endDate")
+            }
+            if (endDate != null && endDate < startDate) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Дата окончания раньше даты начала"
+                )
+            }
+            if (!trip.perDiemRate.isFinite() || trip.perDiemRate < 0.0) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "perDiemRate must be non-negative"
+                )
+            }
+
+            val newTripId = trip.id.toBusinessTripUuidOrNull() ?: UUID.randomUUID()
+            val transferResult = try {
+                transaction {
+                    if (!validateBusinessTripSubproject(projectId, subprojectId)) {
+                        throw IllegalArgumentException(
+                            "Подпроект не принадлежит проекту или архивирован"
+                        )
+                    }
+                    if (
+                        projectId != null &&
+                        ProjectsTable.selectAll()
+                            .where { ProjectsTable.id eq projectId }
+                            .limit(1)
+                            .none()
+                    ) {
+                        throw IllegalArgumentException("Проект не найден")
+                    }
+
+                    val previousRow = BusinessTripsTable
+                        .selectAll()
+                        .where {
+                            (BusinessTripsTable.userId eq userId) and
+                                (BusinessTripsTable.status eq "ACTIVE") and
+                                BusinessTripsTable.endDate.isNull()
+                        }
+                        .orderBy(
+                            BusinessTripsTable.startDate to SortOrder.DESC,
+                            BusinessTripsTable.createdAt to SortOrder.DESC
+                        )
+                        .firstOrNull()
+                        ?: throw IllegalStateException(
+                            "Нет активной командировки для переезда"
+                        )
+
+                    val previousStartDate =
+                        previousRow[BusinessTripsTable.startDate]
+                            ?: previousRow[BusinessTripsTable.date]
+                    if (startDate < previousStartDate) {
+                        throw IllegalArgumentException(
+                            "Дата начала новой командировки раньше начала текущей"
+                        )
+                    }
+
+                    val previousId = previousRow[BusinessTripsTable.id].value
+                    BusinessTripsTable.update(
+                        { BusinessTripsTable.id eq previousId }
+                    ) {
+                        it[BusinessTripsTable.endDate] = startDate
+                        it[BusinessTripsTable.completedDate] = startDate
+                        it[BusinessTripsTable.status] = "COMPLETED"
+                    }
+
+                    BusinessTripsTable.insert {
+                        it[BusinessTripsTable.id] = newTripId
+                        it[BusinessTripsTable.userId] = userId
+                        it[BusinessTripsTable.projectId] = projectId
+                        it[BusinessTripsTable.subprojectId] = subprojectId
+                        it[projectNumber] = trip.projectNumber
+                        it[companyName] = trip.companyName
+                        it[country] = trip.country
+                        // Переезд — действие пользователя, а не тип записи.
+                        it[type] = "DEPARTURE"
+                        it[date] = startDate
+                        it[completedDate] = endDate
+                        it[BusinessTripsTable.startDate] = startDate
+                        it[BusinessTripsTable.endDate] = endDate
+                        it[status] = if (endDate != null) "COMPLETED" else "ACTIVE"
+                        it[city] = trip.city
+                        it[participants] =
+                            businessTripJson.encodeToString(trip.participants)
+                        it[transport] = trip.transport
+                        it[notes] = trip.notes
+                        it[waypoints] =
+                            businessTripJson.encodeToString(trip.waypoints)
+                        it[perDiemRate] = trip.perDiemRate
+                        it[createdAt] = System.currentTimeMillis()
+                    }
+
+                    val completed = BusinessTripsTable.selectAll()
+                        .where { BusinessTripsTable.id eq previousId }
+                        .single()
+                        .let(::mapRowToBusinessTripDto)
+                    val created = BusinessTripsTable.selectAll()
+                        .where { BusinessTripsTable.id eq newTripId }
+                        .single()
+                        .let(::mapRowToBusinessTripDto)
+
+                    completed to created
+                }
+            } catch (e: SecurityException) {
+                return@post call.respond(HttpStatusCode.Forbidden, e.message ?: "Access denied")
+            } catch (e: IllegalArgumentException) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Invalid business trip"
+                )
+            } catch (e: IllegalStateException) {
+                return@post call.respond(HttpStatusCode.Conflict, e.message ?: "Transfer failed")
+            }
+
+            NotificationService.notifyBusinessTripCompleted(transferResult.first)
+            if (transferResult.second.status == "COMPLETED") {
+                NotificationService.notifyBusinessTripCompleted(transferResult.second)
+            } else {
+                NotificationService.notifyBusinessTripCreated(transferResult.second)
+            }
+            PerDiemService.processPerDiems()
+
+            call.respond(HttpStatusCode.Created, transferResult.second)
         }
 
         post {
@@ -357,7 +531,7 @@ internal fun Route.businessTripRoutes() {
                         it[projectNumber] = trip.projectNumber
                         it[companyName] = trip.companyName
                         it[country] = trip.country
-                        it[type] = trip.type
+                        it[type] = "DEPARTURE"
                         it[date] = startDate
                         it[completedDate] = endDate
                         it[BusinessTripsTable.startDate] = startDate
@@ -392,6 +566,7 @@ internal fun Route.businessTripRoutes() {
             } else {
                 NotificationService.notifyBusinessTripCreated(created)
             }
+            PerDiemService.processPerDiems()
 
             call.respond(HttpStatusCode.Created, created)
         }
@@ -470,6 +645,7 @@ internal fun Route.businessTripRoutes() {
                 )
             }
 
+            var wasCompletedBeforeUpdate = false
             val result = try {
                 transaction {
                     val existing = BusinessTripsTable
@@ -480,6 +656,10 @@ internal fun Route.businessTripRoutes() {
 
                     val ownerId =
                         existing[BusinessTripsTable.userId].value
+                    wasCompletedBeforeUpdate =
+                        existing[BusinessTripsTable.status].uppercase() == "COMPLETED" ||
+                            existing[BusinessTripsTable.endDate] != null ||
+                            existing[BusinessTripsTable.completedDate] != null
 
                     if (
                         ownerId != session.userId &&
@@ -562,6 +742,10 @@ internal fun Route.businessTripRoutes() {
                 )
             }
 
+            if (!wasCompletedBeforeUpdate && result.status == "COMPLETED") {
+                NotificationService.notifyBusinessTripCompleted(result)
+            }
+            PerDiemService.processPerDiems()
             call.respond(HttpStatusCode.OK, result)
         }
 
@@ -624,13 +808,6 @@ internal fun Route.businessTripRoutes() {
                     )
                 }
 
-                // Завершение задним числом: удаляем уже начисленные суточные после новой даты окончания.
-                ExpensesTable.deleteWhere {
-                    (ExpensesTable.userId eq ownerId) and
-                        (ExpensesTable.date greater endDate) and
-                        (ExpensesTable.type inList listOf("PER_DIEM", "PER_DIEM_EXTRA"))
-                }
-
                 BusinessTripsTable.update(
                     { BusinessTripsTable.id eq tripId }
                 ) {
@@ -653,6 +830,7 @@ internal fun Route.businessTripRoutes() {
                 if (completedTrip != null) {
                     NotificationService.notifyBusinessTripCompleted(completedTrip!!)
                 }
+                PerDiemService.processPerDiems()
             }
 
             when (result) {
@@ -717,6 +895,10 @@ internal fun Route.businessTripRoutes() {
                 }
 
                 BusinessTripResult.DELETED
+            }
+
+            if (result == BusinessTripResult.DELETED) {
+                PerDiemService.processPerDiems()
             }
 
             when (result) {
