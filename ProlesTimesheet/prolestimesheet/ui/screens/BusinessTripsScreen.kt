@@ -289,9 +289,14 @@ private fun TripCard(
             Text("Сотрудник: " + employeeName, style = MaterialTheme.typography.bodySmall, color = ProlesMuted)
         }
 
-        if (trip.notes.isNotBlank()) {
+        if (trip.purpose.isNotBlank() || trip.notes.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
-            Text(trip.notes, style = MaterialTheme.typography.bodySmall, color = ProlesMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (trip.purpose.isNotBlank()) {
+                Text("Цель: ${trip.purpose}", style = MaterialTheme.typography.bodySmall, color = ProlesMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (trip.notes.isNotBlank()) {
+                Text(trip.notes, style = MaterialTheme.typography.bodySmall, color = ProlesMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
         }
 
         if (!isAdminView) {
@@ -438,10 +443,13 @@ fun TripDialog(
     var showParticipantPicker by remember { mutableStateOf(false) }
     var transport by remember { mutableStateOf(trip?.transport ?: "") }
     var notes by remember {
+        mutableStateOf(trip?.notes ?: activeTrip?.notes.orEmpty())
+    }
+    var purpose by remember {
         mutableStateOf(
-            trip?.notes?.takeIf { it.isNotBlank() }
+            trip?.purpose?.takeIf { it.isNotBlank() }
                 ?: initialProject?.productService
-                ?: activeTrip?.notes.orEmpty()
+                ?: activeTrip?.purpose.orEmpty()
         )
     }
     var showProjectPicker by remember { mutableStateOf(false) }
@@ -642,12 +650,21 @@ fun TripDialog(
                     singleLine = true
                 )
 
-                // 🔥 ЗАМЕТКИ
-                Text("Заметки:", style = MaterialTheme.typography.labelLarge)
+                Text("Цель командировки:", style = MaterialTheme.typography.labelLarge)
+                OutlinedTextField(
+                    value = purpose,
+                    onValueChange = { purpose = it },
+                    placeholder = { Text("Цель поездки или ожидаемый результат") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 1,
+                    maxLines = 3
+                )
+
+                Text("Дополнительная информация:", style = MaterialTheme.typography.labelLarge)
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    placeholder = { Text("Дополнительная информация") },
+                    placeholder = { Text("Заметки к командировке") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 1,
                     maxLines = 3
@@ -799,6 +816,7 @@ fun TripDialog(
                         participants = selectedParticipants.toList(),
                         transport = transport.trim(),
                         notes = notes.trim(),
+                        purpose = purpose.trim(),
                         createdAt = trip?.createdAt ?: System.currentTimeMillis(),
                         perDiemRate = perDiemRate  // 🆕 Размер суточных
                     )
@@ -828,6 +846,7 @@ fun TripDialog(
                                 companyName = ""
                                 city = ""
                                 notes = ""
+                                purpose = ""
                                 subprojectId = null
                                 subprojectName = ""
                                 showProjectPicker = false
@@ -842,7 +861,8 @@ fun TripDialog(
                                 projectNumber = proj.projectNumber
                                 companyName = proj.client.ifBlank { proj.customer }
                                 city = proj.location
-                                notes = proj.productService
+                                notes = ""
+                                purpose = proj.productService
                                 subprojectId = null
                                 subprojectName = ""
                                 showProjectPicker = false
@@ -856,7 +876,10 @@ fun TripDialog(
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(Modifier.width(12.dp))
-                            Text(proj.name, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                listOf(proj.projectNumber, proj.name).filter { it.isNotBlank() }.joinToString(" — "),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                         }
                     }
                 }
