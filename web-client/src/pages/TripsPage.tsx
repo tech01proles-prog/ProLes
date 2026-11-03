@@ -1089,10 +1089,11 @@ export function TripsPage() {
                     )}
                   </div>
                 </div>
-                {(trip.transport || participants.length > 0 || trip.notes) && (
+                {(trip.transport || participants.length > 0 || trip.purpose || trip.notes) && (
                   <div className="space-y-1 text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
                     {trip.transport && <div>🚗 {trip.transport}</div>}
                     {participants.length > 0 && <div>👥 {participants.join(', ')}</div>}
+                    {trip.purpose && <div>🎯 {trip.purpose}</div>}
                     {trip.notes && <div className="italic">📝 {trip.notes}</div>}
                   </div>
                 )}
