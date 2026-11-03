@@ -86,9 +86,11 @@ private fun mapRowToBusinessTripDto(row: ResultRow): BusinessTripDto {
     val storedEndDate = row[BusinessTripsTable.endDate]
         ?: row[BusinessTripsTable.completedDate]
     val storedStatus = row[BusinessTripsTable.status].uppercase()
+    val today = Clock.System.now()
+        .toLocalDateTime(TimeZone.currentSystemDefault()).date
     val effectiveStatus = when {
         storedStatus == "CANCELLED" -> "CANCELLED"
-        storedEndDate != null -> "COMPLETED"
+        storedEndDate != null && storedEndDate <= today -> "COMPLETED"
         else -> "ACTIVE"
     }
 
