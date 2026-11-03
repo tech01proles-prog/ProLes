@@ -1,7 +1,10 @@
 package com.proles.server.services
 
+import com.proles.server.config.NotificationService
 import com.proles.server.data.BusinessTripsTable
 import com.proles.server.data.ExpensesTable
+import com.proles.server.data.ProjectsTable
+import com.proles.server.model.BusinessTripDto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -15,6 +18,8 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toJavaLocalDateTime
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.deleteWhere
@@ -35,6 +40,8 @@ import kotlin.time.Duration.Companion.days
  * и корректирует начисления после изменения дат, ставки или удаления поездки.
  */
 object PerDiemService {
+    private val tripJson = Json { ignoreUnknownKeys = true }
+
     private const val PER_DIEM_TYPE = "PER_DIEM"
     private const val PER_DIEM_EXTRA_TYPE = "PER_DIEM_EXTRA"
     private const val PER_DIEM_NAME = "Суточные"
@@ -86,12 +93,87 @@ object PerDiemService {
         }
     }
 
+    /**
+     * Автоматически закрывает поездки с наступившей датой окончания.
+     * Отправка уведомления выполняется только для перехода ACTIVE -> COMPLETED,
+     * поэтому ручное завершение и переезд не приводят к дублям.
+     */
+    private fun completeTripsDueToday(today: LocalDate) {
+        val completedTrips = transaction {
+            val dueTrips = BusinessTripsTable.selectAll().filter { row ->
+                row[BusinessTripsTable.status].uppercase() == "ACTIVE" &&
+                    (row[BusinessTripsTable.endDate]
+                        ?: row[BusinessTripsTable.completedDate])?.let { it <= today } == true
+            }
+
+            dueTrips.map { row ->
+                val tripId = row[BusinessTripsTable.id].value
+                val endDate = row[BusinessTripsTable.endDate]
+                    ?: row[BusinessTripsTable.completedDate]!!
+
+                BusinessTripsTable.update({ BusinessTripsTable.id eq tripId }) {
+                    it[BusinessTripsTable.status] = "COMPLETED"
+                }
+
+                val projectId = row[BusinessTripsTable.projectId]?.value
+                val projectName = projectId?.let { id ->
+                    ProjectsTable.selectAll()
+                        .where { ProjectsTable.id eq id }
+                        .singleOrNull()
+                        ?.get(ProjectsTable.name)
+                }.orEmpty()
+                val participants = runCatching {
+                    tripJson.decodeFromString<List<String>>(
+                        row[BusinessTripsTable.participants]
+                    )
+                }.getOrDefault(emptyList())
+
+                BusinessTripDto(
+                    id = tripId.toString(),
+                    userId = row[BusinessTripsTable.userId].value.toString(),
+                    projectId = projectId?.toString(),
+                    projectNumber = row[BusinessTripsTable.projectNumber],
+                    companyName = row[BusinessTripsTable.companyName],
+                    country = row[BusinessTripsTable.country],
+                    projectName = projectName,
+                    type = "DEPARTURE",
+                    date = row[BusinessTripsTable.date].toString(),
+                    completedDate = endDate.toString(),
+                    startDate = (row[BusinessTripsTable.startDate]
+                        ?: row[BusinessTripsTable.date]).toString(),
+                    endDate = endDate.toString(),
+                    city = row[BusinessTripsTable.city],
+                    transport = row[BusinessTripsTable.transport],
+                    notes = row[BusinessTripsTable.notes],
+                    purpose = row[BusinessTripsTable.purpose],
+                    participants = participants,
+                    createdAt = row[BusinessTripsTable.createdAt],
+                    perDiemRate = row[BusinessTripsTable.perDiemRate],
+                    status = "COMPLETED"
+                )
+            }
+        }
+
+        completedTrips.forEach { trip ->
+            runCatching {
+                NotificationService.notifyBusinessTripCompleted(trip)
+            }.onFailure { error ->
+                println(
+                    "⚠️ PerDiemService: не удалось отправить уведомление " +
+                        "о завершении командировки ${trip.id}: ${error.message}"
+                )
+            }
+        }
+    }
+
     fun processPerDiems() {
         println("📒 PerDiemService: сверка суточных...")
         try {
             val today = Clock.System.now()
                 .toLocalDateTime(TimeZone.currentSystemDefault())
                 .date
+
+            completeTripsDueToday(today)
 
             transaction {
                 val expectedDays = linkedMapOf<DayKey, ExpectedDay>()
