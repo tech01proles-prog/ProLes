@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
 import type { UserDto, PositionDto } from '../types';
-import { generateUUID, formatMoney } from '../lib/utils';
+import { generateUUID, formatDate, formatMoney } from '../lib/utils';
 import { usePermissions } from '../hooks/usePermissions';
 
 export function EmployeesPage() {
@@ -477,7 +477,7 @@ export function EmployeesPage() {
                   {profileUser.role}
                 </span>
                 <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 space-y-1">
-                  <div>📧 {profileUser.email || '—'}</div><div>📞 {profileUser.phone || '—'}</div><div>💬 {profileUser.telegramUsername || '—'}</div><div>🎂 {profileUser.birthDate ? new Date(profileUser.birthDate).toLocaleDateString('ru-RU') : '—'}</div>
+                  <div>📧 {profileUser.email || '—'}</div><div>📞 {profileUser.phone || '—'}</div><div>💬 {profileUser.telegramUsername || '—'}</div><div>🎂 {profileUser.birthDate ? formatDate(profileUser.birthDate) : '—'}</div>
                 </div>
               </div>
             </div>
