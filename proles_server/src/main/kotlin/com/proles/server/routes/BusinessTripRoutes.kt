@@ -340,11 +340,11 @@ internal fun Route.businessTripRoutes() {
                         throw IllegalArgumentException("Проект не найден")
                     }
 
-                    val participants = trip.participants
+                    val participantIds = trip.participants
                         .mapNotNull { it.toBusinessTripUuidOrNull() }
                         .filter { it != session.userId && it != userId }
                         .distinct()
-                        .map(UUID::toString)
+                        .map { it.toString() }
 
                     BusinessTripsTable.insert {
                         it[BusinessTripsTable.id] = tripId
@@ -361,7 +361,8 @@ internal fun Route.businessTripRoutes() {
                         it[BusinessTripsTable.endDate] = endDate
                         it[status] = "COMPLETED"
                         it[city] = trip.city
-                        it[participants] = businessTripJson.encodeToString(participants)
+                        it[BusinessTripsTable.participants] =
+                            businessTripJson.encodeToString(participantIds)
                         it[transport] = trip.transport
                         it[notes] = trip.notes
                         it[purpose] = trip.purpose
