@@ -64,12 +64,14 @@ private fun normalizeExpenseScope(
     creatorRole: String
 ): String {
     val requested = requestedScope.orEmpty().trim().uppercase()
-    val role = creatorRole.lowercase()
 
-    return when {
-        requested == "DIRECTOR" && role == "director" -> "DIRECTOR"
-        requested == "AUTO_PER_DIEM" && role in directorExpenseRoles -> "AUTO_PER_DIEM"
-        else -> "GENERAL"
+    return if (
+        requested == "DIRECTOR" &&
+        creatorRole.lowercase() == "director"
+    ) {
+        "DIRECTOR"
+    } else {
+        "GENERAL"
     }
 }
 
@@ -693,6 +695,10 @@ internal fun Route.expenseRoutes() {
                 expense.expenseScope,
                 session.role
             )
+            val isSystemPerDiem =
+                expense.type.trim().uppercase() in setOf("PER_DIEM", "PER_DIEM_EXTRA") &&
+                    expense.creatorRole.trim().equals("SYSTEM_PER_DIEM", ignoreCase = true) &&
+                    session.role.lowercase() in directorExpenseRoles
 
             val id = UUID.randomUUID()
 
@@ -734,8 +740,10 @@ internal fun Route.expenseRoutes() {
                             } else {
                                 expense.hasReceiptPhoto
                             }
+                        // Служебный маркер хранится в снимке creator_role,
+                        // а expense_scope остаётся GENERAL для видимости владельцу.
                         it[ExpensesTable.expenseScope] = expenseScope
-                        it[creatorRole] = session.role
+                        it[creatorRole] = if (isSystemPerDiem) "SYSTEM_PER_DIEM" else session.role
                         it[createdAt] = System.currentTimeMillis()
                         it[deletedAt] = null
                         it[deletedBy] = null
