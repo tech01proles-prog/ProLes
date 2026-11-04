@@ -239,7 +239,8 @@ object PerDiemService {
 
                 fun isAutoPerDiem(row: ResultRow): Boolean {
                     val comment = row[ExpensesTable.comment]
-                    return row[ExpensesTable.expenseScope] == "AUTO_PER_DIEM" ||
+                    return row[ExpensesTable.creatorRole] == "SYSTEM_PER_DIEM" ||
+                        row[ExpensesTable.expenseScope] == "AUTO_PER_DIEM" ||
                         comment.contains(AUTO_MARKER) ||
                         comment.startsWith(LEGACY_STANDARD_MARKER) ||
                         comment.startsWith(LEGACY_EXTRA_MARKER)
@@ -318,7 +319,8 @@ object PerDiemService {
                                 it[ExpensesTable.receiptSubmitted] = true
                                 it[ExpensesTable.hasReceiptPhoto] = false
                                 it[ExpensesTable.category] = "WITHOUT_RECEIPT"
-                                it[ExpensesTable.expenseScope] = "AUTO_PER_DIEM"
+                                it[ExpensesTable.expenseScope] = "GENERAL"
+                                it[ExpensesTable.creatorRole] = "SYSTEM_PER_DIEM"
                                 it[ExpensesTable.createdAt] = System.currentTimeMillis()
                             }
                             inserted++
@@ -332,7 +334,8 @@ object PerDiemService {
                                 it[ExpensesTable.currency] = "RUB"
                                 it[ExpensesTable.comment] = comment
                                 it[ExpensesTable.category] = "WITHOUT_RECEIPT"
-                                it[ExpensesTable.expenseScope] = "AUTO_PER_DIEM"
+                                it[ExpensesTable.expenseScope] = "GENERAL"
+                                it[ExpensesTable.creatorRole] = "SYSTEM_PER_DIEM"
                                 it[ExpensesTable.receiptSubmitted] = true
                                 it[ExpensesTable.hasReceiptPhoto] = false
                             }
