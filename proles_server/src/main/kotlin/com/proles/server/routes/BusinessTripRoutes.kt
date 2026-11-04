@@ -231,6 +231,164 @@ internal fun Route.businessTripRoutes() {
             call.respond(HttpStatusCode.OK, trips)
         }
 
+        post("/admin/retroactive") {
+            val session = call.checkBusinessTripSession() ?: return@post
+            if (session.role != "superadmin") {
+                return@post call.respond(HttpStatusCode.Forbidden, "Только супер-администратор может создавать прошедшие командировки")
+            }
+
+            val trip = try {
+                call.receive<BusinessTripDto>()
+            } catch (e: Exception) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Invalid JSON: ${e.message}"
+                )
+            }
+
+            val userId = trip.userId.toBusinessTripUuidOrNull()
+                ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Не выбран сотрудник, для которого оформляется командировка"
+                )
+            if (userId == session.userId) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Для этого действия необходимо выбрать другого сотрудника"
+                )
+            }
+
+            val projectId = trip.projectId.toBusinessTripUuidOrNull()
+            val subprojectId = trip.subprojectId.toBusinessTripUuidOrNull()
+            if (trip.projectId?.isNotBlank() == true && projectId == null) {
+                return@post call.respond(HttpStatusCode.BadRequest, "Invalid projectId")
+            }
+            if (trip.subprojectId?.isNotBlank() == true && subprojectId == null) {
+                return@post call.respond(HttpStatusCode.BadRequest, "Invalid subprojectId")
+            }
+            if (projectId == null && subprojectId != null) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Нельзя выбрать подпроект без проекта"
+                )
+            }
+
+            val startDate = runCatching {
+                KtLocalDate.parse(trip.startDate.ifBlank { trip.date })
+            }.getOrElse {
+                return@post call.respond(HttpStatusCode.BadRequest, "Укажите корректную дату начала")
+            }
+            val endDate = trip.endDate
+                ?.takeIf(String::isNotBlank)
+                ?.let {
+                    runCatching { KtLocalDate.parse(it) }.getOrNull()
+                        ?: return@post call.respond(
+                            HttpStatusCode.BadRequest,
+                            "Для прошедшей командировки обязательно укажите дату окончания"
+                        )
+                }
+                ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Для прошедшей командировки обязательно укажите дату окончания"
+                )
+
+            if (endDate < startDate) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Дата окончания раньше даты начала"
+                )
+            }
+
+            val today = Clock.System.now()
+                .toLocalDateTime(TimeZone.currentSystemDefault()).date
+            if (startDate > today || endDate > today) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "Обе даты прошедшей командировки должны быть не позднее сегодняшней даты"
+                )
+            }
+            if (!trip.perDiemRate.isFinite() || trip.perDiemRate < 0.0) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "perDiemRate must be non-negative"
+                )
+            }
+
+            val tripId = trip.id.toBusinessTripUuidOrNull() ?: UUID.randomUUID()
+            val created = try {
+                transaction {
+                    if (
+                        UsersTable.selectAll()
+                            .where { UsersTable.id eq userId }
+                            .limit(1)
+                            .none()
+                    ) {
+                        throw IllegalArgumentException("Сотрудник не найден")
+                    }
+                    if (!validateBusinessTripSubproject(projectId, subprojectId)) {
+                        throw IllegalArgumentException(
+                            "Подпроект не принадлежит проекту или архивирован"
+                        )
+                    }
+                    if (
+                        projectId != null &&
+                        ProjectsTable.selectAll()
+                            .where { ProjectsTable.id eq projectId }
+                            .limit(1)
+                            .none()
+                    ) {
+                        throw IllegalArgumentException("Проект не найден")
+                    }
+
+                    val participants = trip.participants
+                        .mapNotNull { it.toBusinessTripUuidOrNull() }
+                        .filter { it != session.userId && it != userId }
+                        .distinct()
+                        .map(UUID::toString)
+
+                    BusinessTripsTable.insert {
+                        it[BusinessTripsTable.id] = tripId
+                        it[BusinessTripsTable.userId] = userId
+                        it[BusinessTripsTable.projectId] = projectId
+                        it[BusinessTripsTable.subprojectId] = subprojectId
+                        it[projectNumber] = trip.projectNumber
+                        it[companyName] = trip.companyName
+                        it[country] = trip.country
+                        it[type] = "DEPARTURE"
+                        it[date] = startDate
+                        it[completedDate] = endDate
+                        it[BusinessTripsTable.startDate] = startDate
+                        it[BusinessTripsTable.endDate] = endDate
+                        it[status] = "COMPLETED"
+                        it[city] = trip.city
+                        it[participants] = businessTripJson.encodeToString(participants)
+                        it[transport] = trip.transport
+                        it[notes] = trip.notes
+                        it[purpose] = trip.purpose
+                        it[waypoints] = businessTripJson.encodeToString(trip.waypoints)
+                        it[perDiemRate] = trip.perDiemRate
+                        it[createdAt] = System.currentTimeMillis()
+                    }
+
+                    BusinessTripsTable
+                        .selectAll()
+                        .where { BusinessTripsTable.id eq tripId }
+                        .single()
+                        .let(::mapRowToBusinessTripDto)
+                }
+            } catch (e: IllegalArgumentException) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    e.message ?: "Invalid business trip"
+                )
+            }
+
+            // Историческая командировка создаётся без уведомлений.
+            // Суточные начисляются синхронно за каждый день, включая обе границы.
+            PerDiemService.processPerDiems()
+            call.respond(HttpStatusCode.Created, created)
+        }
+
         post("/transfer") {
             val session = call.checkBusinessTripSession() ?: return@post
 
