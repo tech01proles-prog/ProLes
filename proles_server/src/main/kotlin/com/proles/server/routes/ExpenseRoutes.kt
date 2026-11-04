@@ -64,14 +64,12 @@ private fun normalizeExpenseScope(
     creatorRole: String
 ): String {
     val requested = requestedScope.orEmpty().trim().uppercase()
+    val role = creatorRole.lowercase()
 
-    return if (
-        requested == "DIRECTOR" &&
-        creatorRole.lowercase() == "director"
-    ) {
-        "DIRECTOR"
-    } else {
-        "GENERAL"
+    return when {
+        requested == "DIRECTOR" && role == "director" -> "DIRECTOR"
+        requested == "AUTO_PER_DIEM" && role in directorExpenseRoles -> "AUTO_PER_DIEM"
+        else -> "GENERAL"
     }
 }
 
@@ -756,37 +754,41 @@ internal fun Route.expenseRoutes() {
                 )
             }
 
-            val senderName = transaction {
-                UsersTable
-                    .selectAll()
-                    .where { UsersTable.id eq userId }
-                    .singleOrNull()
-                    ?.get(UsersTable.name)
-                    ?: "Сотрудник"
-            }
+            // Суточные являются системными начислениями/перерасчётами:
+            // они не должны создавать уведомления в приложении или Telegram.
+            if (expense.type.trim().uppercase() !in setOf("PER_DIEM", "PER_DIEM_EXTRA")) {
+                val senderName = transaction {
+                    UsersTable
+                        .selectAll()
+                        .where { UsersTable.id eq userId }
+                        .singleOrNull()
+                        ?.get(UsersTable.name)
+                        ?: "Сотрудник"
+                }
 
-            val financeRecipients = transaction {
-                val roles = if (expenseScope == "DIRECTOR") listOf("director") else directorExpenseRoles.toList()
-                UsersTable.selectAll().where { UsersTable.role inList roles }.map { it[UsersTable.id].value }.filter { it != userId }
-            }
+                val financeRecipients = transaction {
+                    val roles = if (expenseScope == "DIRECTOR") listOf("director") else directorExpenseRoles.toList()
+                    UsersTable.selectAll().where { UsersTable.role inList roles }.map { it[UsersTable.id].value }.filter { it != userId }
+                }
 
-            NotificationService.notifyUsers(
-                financeRecipients,
-                userId,
-                "EXPENSE_CREATED",
-                if (expenseScope == "DIRECTOR") "Новый расход учредителя" else "Новый расход",
-                "$senderName: ${expense.name} — " +
-                    "${"%.2f".format(expense.amount)} " +
-                    expense.currency,
-                expenseJson.encodeToString(
-                    mapOf(
-                        "expenseId" to created.id,
-                        "projectId" to (projectId?.toString() ?: ""),
-                        "expenseScope" to expenseScope
-                    )
-                ),
-                "expense"
-            )
+                NotificationService.notifyUsers(
+                    financeRecipients,
+                    userId,
+                    "EXPENSE_CREATED",
+                    if (expenseScope == "DIRECTOR") "Новый расход учредителя" else "Новый расход",
+                    "$senderName: ${expense.name} — " +
+                        "${"%.2f".format(expense.amount)} " +
+                        expense.currency,
+                    expenseJson.encodeToString(
+                        mapOf(
+                            "expenseId" to created.id,
+                            "projectId" to (projectId?.toString() ?: ""),
+                            "expenseScope" to expenseScope
+                        )
+                    ),
+                    "expense"
+                )
+            }
 
             call.respond(HttpStatusCode.Created, created)
         }
