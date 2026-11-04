@@ -535,14 +535,15 @@ export function TripsPage() {
       
       // Генерируем список дат в интервале
       const datesInRange: string[] = [];
-      const currentDate = new Date(recalcParams.dateFrom);
-      const endDate = new Date(recalcParams.dateTo);
-      
+      const [fromYear, fromMonth, fromDay] = recalcParams.dateFrom.split('-').map(Number);
+      const [toYear, toMonth, toDay] = recalcParams.dateTo.split('-').map(Number);
+      const currentDate = new Date(Date.UTC(fromYear, fromMonth - 1, fromDay));
+      const endDate = new Date(Date.UTC(toYear, toMonth - 1, toDay));
+
       while (currentDate <= endDate) {
         datesInRange.push(currentDate.toISOString().slice(0, 10));
-        currentDate.setDate(currentDate.getDate() + 1);
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
       }
-      
       // Удаляем существующие обычные и сверхсуточные, чтобы повторный перерасчет не создавал дубли.
       const deletePromises = existingExpenses
         .filter((exp: any) => isPerDiemExpense(exp))
