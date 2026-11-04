@@ -58,6 +58,7 @@ object PerDiemService {
         val tripId: UUID,
         val userId: UUID,
         val projectId: UUID?,
+        val projectName: String,
         val subprojectId: UUID?,
         val date: LocalDate,
         val startDate: LocalDate,
@@ -196,10 +197,19 @@ object PerDiemService {
                     if (endDate < startDate) return@forEach
 
                     val userId = trip[BusinessTripsTable.userId].value
+                    val projectId = trip[BusinessTripsTable.projectId]?.value
+                    val projectName = projectId?.let { id ->
+                        ProjectsTable.selectAll()
+                            .where { ProjectsTable.id eq id }
+                            .limit(1)
+                            .singleOrNull()
+                            ?.get(ProjectsTable.name)
+                    }.orEmpty()
                     val candidateBase = ExpectedDay(
                         tripId = trip[BusinessTripsTable.id].value,
                         userId = userId,
-                        projectId = trip[BusinessTripsTable.projectId]?.value,
+                        projectId = projectId,
+                        projectName = projectName,
                         subprojectId = trip[BusinessTripsTable.subprojectId]?.value,
                         date = startDate,
                         startDate = startDate,
@@ -227,10 +237,13 @@ object PerDiemService {
                     }
                 }
 
-                fun isAutoPerDiem(comment: String): Boolean =
-                    comment.contains(AUTO_MARKER) ||
+                fun isAutoPerDiem(row: ResultRow): Boolean {
+                    val comment = row[ExpensesTable.comment]
+                    return row[ExpensesTable.expenseScope] == "AUTO_PER_DIEM" ||
+                        comment.contains(AUTO_MARKER) ||
                         comment.startsWith(LEGACY_STANDARD_MARKER) ||
                         comment.startsWith(LEGACY_EXTRA_MARKER)
+                }
 
                 val existingAutoExpenses = ExpensesTable.selectAll()
                     .where {
@@ -241,7 +254,7 @@ object PerDiemService {
                     }
                     .filter { row ->
                         row[ExpensesTable.deletedAt] == null &&
-                            isAutoPerDiem(row[ExpensesTable.comment])
+                            isAutoPerDiem(row)
                     }
 
                 val rowsByUserDate = existingAutoExpenses.groupBy { row ->
@@ -286,14 +299,8 @@ object PerDiemService {
                         val (amount, name) = amountAndName
                         val matchingRows = rowsByUserDate[key].orEmpty()
                             .filter { it[ExpensesTable.type] == expenseType }
-                        val comment = if (expenseType == PER_DIEM_TYPE) {
-                            "$AUTO_MARKER Командировка ${expected.tripId} " +
-                                "(${expected.tripType}) от ${expected.startDate}"
-                        } else {
-                            "$AUTO_MARKER Сверхсуточные за командировку " +
-                                "${expected.tripId}: ${expected.rate} ₽ − " +
-                                "${STANDARD_PER_DIEM.toInt()} ₽"
-                        }
+                        val projectLabel = expected.projectName.ifBlank { "без проекта" }
+                        val comment = "Командировка ($projectLabel)"
 
                         val existing = matchingRows.firstOrNull()
                         if (existing == null) {
@@ -311,6 +318,7 @@ object PerDiemService {
                                 it[ExpensesTable.receiptSubmitted] = true
                                 it[ExpensesTable.hasReceiptPhoto] = false
                                 it[ExpensesTable.category] = "WITHOUT_RECEIPT"
+                                it[ExpensesTable.expenseScope] = "AUTO_PER_DIEM"
                                 it[ExpensesTable.createdAt] = System.currentTimeMillis()
                             }
                             inserted++
@@ -324,6 +332,7 @@ object PerDiemService {
                                 it[ExpensesTable.currency] = "RUB"
                                 it[ExpensesTable.comment] = comment
                                 it[ExpensesTable.category] = "WITHOUT_RECEIPT"
+                                it[ExpensesTable.expenseScope] = "AUTO_PER_DIEM"
                                 it[ExpensesTable.receiptSubmitted] = true
                                 it[ExpensesTable.hasReceiptPhoto] = false
                             }
