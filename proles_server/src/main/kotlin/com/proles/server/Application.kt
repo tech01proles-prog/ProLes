@@ -162,6 +162,13 @@ fun Application.module() {
         exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_link_code ON notification_preferences(telegram_link_code) WHERE telegram_link_code IS NOT NULL")
         exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_chat_id ON notification_preferences(telegram_chat_id) WHERE telegram_chat_id IS NOT NULL")
 
+        // Служебный флаг автоматических расходов (в том числе суточных).
+        // expense_scope остаётся GENERAL/DIRECTOR и продолжает управлять видимостью.
+        exec("""
+            ALTER TABLE expenses
+                ADD COLUMN IF NOT EXISTS is_auto_generated BOOLEAN NOT NULL DEFAULT FALSE
+        """.trimIndent())
+
         // Поля, появившиеся после первоначального создания таблицы командировок.
         exec("""
             ALTER TABLE business_trips
