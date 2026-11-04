@@ -385,7 +385,7 @@ internal fun Route.businessTripRoutes() {
 
             // Историческая командировка создаётся без уведомлений.
             // Суточные начисляются синхронно за каждый день, включая обе границы.
-            PerDiemService.processPerDiems()
+            PerDiemService.processPerDiems(notifyTripCompletions = false)
             call.respond(HttpStatusCode.Created, created)
         }
 
