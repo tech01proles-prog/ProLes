@@ -72,15 +72,40 @@ object SalaryCalculator {
                 }
                 .toList()
 
-            val piece = components
+            val pieceComponents = components
                 .filter { it[SalaryComponentsTable.type] == "PIECE" }
-                .sumOf { comp ->
-                    val projectId = comp[SalaryComponentsTable.projectId]?.value
-                    val ratePerUnit = comp[SalaryComponentsTable.ratePerUnit] ?: 0.0
-                    periodEntries.count { entry ->
-                        (projectId == null || entry[TimeEntriesTable.projectId].value == projectId)
-                    } * ratePerUnit
+
+            // Приоритет назначения: точный подпроект -> весь проект -> общий компонент.
+            // Поэтому компонент проекта не забирает записи подпроектов, которым
+            // уже назначен отдельный сдельный компонент.
+            fun applicablePieceComponents(entry: ResultRow): List<ResultRow> {
+                val entryProjectId = entry[TimeEntriesTable.projectId].value
+                val entrySubprojectId = entry[TimeEntriesTable.subprojectId]?.value
+
+                val exactSubproject = pieceComponents.filter { comp ->
+                    entrySubprojectId != null &&
+                        comp[SalaryComponentsTable.projectId]?.value == entryProjectId &&
+                        comp[SalaryComponentsTable.subprojectId]?.value == entrySubprojectId
                 }
+                if (exactSubproject.isNotEmpty()) return exactSubproject
+
+                val projectSpecific = pieceComponents.filter { comp ->
+                    comp[SalaryComponentsTable.projectId]?.value == entryProjectId &&
+                        comp[SalaryComponentsTable.subprojectId] == null
+                }
+                if (projectSpecific.isNotEmpty()) return projectSpecific
+
+                return pieceComponents.filter { comp ->
+                    comp[SalaryComponentsTable.projectId] == null &&
+                        comp[SalaryComponentsTable.subprojectId] == null
+                }
+            }
+
+            val piece = periodEntries.sumOf { entry ->
+                applicablePieceComponents(entry).sumOf {
+                    it[SalaryComponentsTable.ratePerUnit] ?: 0.0
+                }
+            }
 
             val hourlyComponents = components
                 .filter { it[SalaryComponentsTable.type] == "HOURLY" }
