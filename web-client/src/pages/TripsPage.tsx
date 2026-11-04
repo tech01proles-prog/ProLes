@@ -120,7 +120,10 @@ export function TripsPage() {
 
   // 🆕 Состояние для модального окна просмотра командировки
   const [selectedTrip, setSelectedTrip] = useState<BusinessTripDto | null>(null);
-  const isSuperAdmin = !permLoading && user?.role?.toLowerCase() === 'superadmin';
+  const isSuperAdmin = !permLoading && user?.role?.trim().toLowerCase() === 'superadmin';
+  const canManagePerDiem = ['superadmin', 'admin', 'director'].includes(
+    user?.role?.trim().toLowerCase() || '',
+  );
   const formOwnerId = editingTripId
     ? selectedTrip?.userId || user?.id || ''
     : excludeSelf
@@ -1321,7 +1324,7 @@ export function TripsPage() {
               </div>
 
               {/* Суточные - редактирование для админов */}
-              {(isAdmin || (user?.role === 'superadmin')) && (
+              {canManagePerDiem && (
                 <div className="proles-modal-section">
                   <div className="proles-modal-section-title flex items-center justify-between">
                     <span>💰 Суточные</span>
