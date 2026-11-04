@@ -99,7 +99,10 @@ object PerDiemService {
      * Отправка уведомления выполняется только для перехода ACTIVE -> COMPLETED,
      * поэтому ручное завершение и переезд не приводят к дублям.
      */
-    private fun completeTripsDueToday(today: LocalDate) {
+    private fun completeTripsDueToday(
+        today: LocalDate,
+        notifyCompletions: Boolean = true
+    ) {
         val completedTrips = transaction {
             val dueTrips = BusinessTripsTable.selectAll().filter { row ->
                 row[BusinessTripsTable.status].uppercase() == "ACTIVE" &&
@@ -155,26 +158,31 @@ object PerDiemService {
             }
         }
 
-        completedTrips.forEach { trip ->
-            runCatching {
-                NotificationService.notifyBusinessTripCompleted(trip)
-            }.onFailure { error ->
-                println(
-                    "⚠️ PerDiemService: не удалось отправить уведомление " +
-                        "о завершении командировки ${trip.id}: ${error.message}"
-                )
+        if (notifyCompletions) {
+            completedTrips.forEach { trip ->
+                runCatching {
+                    NotificationService.notifyBusinessTripCompleted(trip)
+                }.onFailure { error ->
+                    println(
+                        "⚠️ PerDiemService: не удалось отправить уведомление " +
+                            "о завершении командировки ${trip.id}: ${error.message}"
+                    )
+                }
             }
         }
     }
 
-    fun processPerDiems() {
+    fun processPerDiems(notifyTripCompletions: Boolean = true) {
         println("📒 PerDiemService: сверка суточных...")
         try {
             val today = Clock.System.now()
                 .toLocalDateTime(TimeZone.currentSystemDefault())
                 .date
 
-            completeTripsDueToday(today)
+            completeTripsDueToday(
+                today,
+                notifyCompletions = notifyTripCompletions
+            )
 
             transaction {
                 val expectedDays = linkedMapOf<DayKey, ExpectedDay>()
