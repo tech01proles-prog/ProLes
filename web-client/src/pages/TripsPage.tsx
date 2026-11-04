@@ -564,6 +564,8 @@ export function TripsPage() {
           userId: selectedTrip.userId,
           projectId: selectedTrip.projectId,
           projectName: selectedTrip.projectName || '',
+          subprojectId: selectedTrip.subprojectId || null,
+          subprojectName: selectedTrip.subprojectName || '',
           date,
           type: 'PER_DIEM',
           name: 'Суточные',
@@ -573,7 +575,8 @@ export function TripsPage() {
           receiptSubmitted: false,
           hasReceiptPhoto: false,
           category: 'WITHOUT_RECEIPT',
-          expenseScope: 'AUTO_PER_DIEM',
+          expenseScope: 'GENERAL',
+          creatorRole: 'SYSTEM_PER_DIEM',
         };
 
         if (extraRate <= 0) return [baseExpense];
