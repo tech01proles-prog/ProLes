@@ -115,9 +115,17 @@ export function TripsPage() {
   const [saving, setSaving] = useState(false);
   const [customCountry, setCustomCountry] = useState('');
   const [tripAction, setTripAction] = useState<'create' | 'edit' | 'transfer'>('create');
+  const [excludeSelf, setExcludeSelf] = useState(false);
+  const [retroactiveUserId, setRetroactiveUserId] = useState('');
 
   // 🆕 Состояние для модального окна просмотра командировки
   const [selectedTrip, setSelectedTrip] = useState<BusinessTripDto | null>(null);
+  const isSuperAdmin = !permLoading && user?.role?.toLowerCase() === 'superadmin';
+  const formOwnerId = editingTripId
+    ? selectedTrip?.userId || user?.id || ''
+    : excludeSelf
+      ? retroactiveUserId
+      : user?.id || '';
   const [showTripDetail, setShowTripDetail] = useState(false);
   const [editingPerDiemRate, setEditingPerDiemRate] = useState<number>(750);
   const [savingPerDiem, setSavingPerDiem] = useState(false);
@@ -227,11 +235,15 @@ export function TripsPage() {
   const resetTripForm = () => {
     setForm(createEmptyTripForm());
     setCustomCountry('');
+    setExcludeSelf(false);
+    setRetroactiveUserId('');
   };
 
   const openNewTrip = (mode: 'create' | 'transfer' = 'create') => {
     setEditingTripId(null);
     setSelectedTrip(null);
+    setExcludeSelf(false);
+    setRetroactiveUserId('');
     setTripAction(mode);
     if (mode === 'transfer' && activeTrip) {
       const today = getLocalDateInputValue();
@@ -326,6 +338,24 @@ export function TripsPage() {
 
   const handleSaveTrip = async () => {
     if (!user) return;
+    const isRetroactiveAdminTrip =
+      isSuperAdmin && excludeSelf && !editingTripId && tripAction === 'create';
+
+    if (isRetroactiveAdminTrip) {
+      if (!retroactiveUserId) {
+        alert('Выберите сотрудника, для которого оформляется командировка');
+        return;
+      }
+      if (!form.startDate || !form.endDate) {
+        alert('Для прошедшей командировки укажите обе даты');
+        return;
+      }
+      if (form.startDate > todayDate || form.endDate > todayDate) {
+        alert('Обе даты должны быть не позднее сегодняшней');
+        return;
+      }
+    }
+
     if (!form.startDate) {
       alert('Укажите дату начала командировки');
       return;
@@ -339,9 +369,14 @@ export function TripsPage() {
     setSaving(true);
     try {
       const selectedProject = projects.find(project => project.id === form.projectId);
+      const ownerUserId = editingTripId
+        ? selectedTrip?.userId || user.id
+        : isRetroactiveAdminTrip
+          ? retroactiveUserId
+          : user.id;
       const payload: BusinessTripDto = {
         id: editingTripId || generateUUID(),
-        userId: editingTripId ? (selectedTrip?.userId || user.id) : user.id,
+        userId: ownerUserId,
         projectId: form.projectId || null,
         projectName: selectedProject?.name || '',
         projectNumber: selectedProject?.projectNumber || selectedTrip?.projectNumber || '',
@@ -356,23 +391,33 @@ export function TripsPage() {
         date: form.startDate,
         startDate: form.startDate,
         endDate: form.endDate || null,
-        status: form.status === 'CANCELLED'
-          ? 'CANCELLED'
-          : form.endDate && form.endDate <= todayDate
-            ? 'COMPLETED'
-            : 'ACTIVE',
+        status: isRetroactiveAdminTrip
+          ? 'COMPLETED'
+          : form.status === 'CANCELLED'
+            ? 'CANCELLED'
+            : form.endDate && form.endDate <= todayDate
+              ? 'COMPLETED'
+              : 'ACTIVE',
         city: form.city,
         waypoints: form.waypoints,
-        participants: form.participants,
+        participants: form.participants.filter(
+          participantId => participantId !== user.id && participantId !== ownerUserId,
+        ),
         transport: form.transport,
         notes: form.notes,
         purpose: form.purpose,
         createdAt: editingTripId ? (selectedTrip?.createdAt || Date.now()) : Date.now(),
         perDiemRate: editingTripId ? (selectedTrip?.perDiemRate || 750) : 750,
       };
-      if (editingTripId) await api.put('/business-trips', payload);
-      else if (tripAction === 'transfer') await api.post('/business-trips/transfer', payload);
-      else await api.post('/business-trips', payload);
+      if (isRetroactiveAdminTrip) {
+        await api.post('/business-trips/admin/retroactive', payload);
+      } else if (editingTripId) {
+        await api.put('/business-trips', payload);
+      } else if (tripAction === 'transfer') {
+        await api.post('/business-trips/transfer', payload);
+      } else {
+        await api.post('/business-trips', payload);
+      }
       setShowForm(false);
       setEditingTripId(null);
       setSelectedTrip(null);
@@ -401,6 +446,8 @@ export function TripsPage() {
   const handleEditTrip = (trip: BusinessTripDto) => {
     setSelectedTrip(trip);
     setEditingTripId(trip.id);
+    setExcludeSelf(false);
+    setRetroactiveUserId('');
     setTripAction('edit');
     const standardCountry = ['РБ','РФ','Казахстан','Китай'].includes(trip.country);
     setCustomCountry(standardCountry ? '' : trip.country || '');
@@ -508,6 +555,9 @@ export function TripsPage() {
 
       // За каждый день: базовые 750 ₽ (или текущая ставка, если она ниже 750)
       // и отдельная запись со сверхсуточными при ставке выше 750 ₽.
+      const tripProjectLabel = selectedTrip.projectName || selectedTrip.projectNumber || 'без проекта';
+      const tripComment = `Командировка (${tripProjectLabel})`;
+
       const newExpenses = datesInRange.flatMap(date => {
         const baseExpense = {
           id: generateUUID(),
@@ -519,10 +569,11 @@ export function TripsPage() {
           name: 'Суточные',
           amount: recalcParams.rate > standardRate ? standardRate : recalcParams.rate,
           currency: 'RUB',
-          comment: `Автоматическое начисление суточных за командировку (${selectedTrip.type}) от ${selectedTrip.date}`,
+          comment: tripComment,
           receiptSubmitted: false,
           hasReceiptPhoto: false,
           category: 'WITHOUT_RECEIPT',
+          expenseScope: 'AUTO_PER_DIEM',
         };
 
         if (extraRate <= 0) return [baseExpense];
@@ -535,7 +586,7 @@ export function TripsPage() {
             type: 'PER_DIEM_EXTRA',
             name: 'Суточные сверх.',
             amount: extraRate,
-            comment: `Сверхсуточные: ${recalcParams.rate} ₽ − ${standardRate} ₽ за ${date}`,
+            comment: tripComment,
           },
         ];
       });
@@ -589,6 +640,7 @@ export function TripsPage() {
   };
 
   const toggleParticipant = (uid: string) => {
+    if (uid === user?.id || uid === formOwnerId) return;
     setForm(f => ({
       ...f,
       participants: f.participants.includes(uid)
@@ -778,6 +830,62 @@ export function TripsPage() {
               <button onClick={() => setShowForm(false)} className="proles-modal-close">✕</button>
             </div>
             <div className="proles-modal-body">
+              {isSuperAdmin && !editingTripId && tripAction === 'create' && (
+                <div className="proles-modal-section border border-violet-200 dark:border-violet-900 bg-violet-50/60 dark:bg-violet-950/20">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-violet-900 dark:text-violet-200">Создание прошедшей командировки</div>
+                      <div className="mt-1 text-xs text-violet-700 dark:text-violet-300">
+                        Можно оформить поездку на сотрудника без добавления вас в участники.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExcludeSelf(current => !current);
+                        setRetroactiveUserId('');
+                        setForm(current => ({
+                          ...current,
+                          participants: current.participants.filter(id => id !== user?.id),
+                        }));
+                      }}
+                      className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${excludeSelf
+                        ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+                        : 'bg-violet-600 text-white hover:bg-violet-700'}`}
+                    >
+                      {excludeSelf ? 'Отменить исключение себя' : 'Исключить себя'}
+                    </button>
+                  </div>
+                  {excludeSelf && (
+                    <div className="mt-3 space-y-2">
+                      <div className="proles-input-group">
+                        <label>Командировка оформляется на сотрудника *</label>
+                        <select
+                          value={retroactiveUserId}
+                          onChange={event => {
+                            const selectedUserId = event.target.value;
+                            setRetroactiveUserId(selectedUserId);
+                            setForm(current => ({
+                              ...current,
+                              participants: current.participants.filter(id => id !== selectedUserId),
+                            }));
+                          }}
+                          className="input bg-white dark:bg-slate-900"
+                        >
+                          <option value="">Выберите сотрудника</option>
+                          {allUsers.filter(item => item.id !== user?.id).map(item => (
+                            <option key={item.id} value={item.id}>{item.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <p className="text-xs text-violet-700 dark:text-violet-300">
+                        Запись появится в личном списке выбранного сотрудника. Вы и сам сотрудник не будут добавлены повторно в участники.
+                        Укажите дату начала и окончания: суточные начислятся за каждый день включительно.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="proles-modal-section">
                 <div className="proles-modal-section-title">Основная информация</div>
                 <div className="proles-modal-grid">
@@ -851,6 +959,7 @@ export function TripsPage() {
 
                     <input
                       type="date"
+                      max={excludeSelf ? todayDate : undefined}
                       value={form.startDate}
                       onChange={event =>
                         setForm(current => ({
@@ -869,11 +978,12 @@ export function TripsPage() {
                   </div>
 
                   <div className="proles-input-group">
-                    <label>Дата окончания</label>
+                    <label>{excludeSelf ? 'Дата окончания *' : 'Дата окончания'}</label>
 
                     <input
                       type="date"
                       min={form.startDate}
+                      max={excludeSelf ? todayDate : undefined}
                       value={form.endDate}
                       onChange={event =>
                         setForm(current => ({
@@ -888,7 +998,9 @@ export function TripsPage() {
                     />
 
                     <span className="text-xs text-slate-500">
-                      Можно указать позднее при завершении командировки
+                      {excludeSelf
+                        ? 'Для прошедшей командировки дата обязательна; суточные начисляются за все дни включительно.'
+                        : 'Можно указать позднее при завершении командировки'}
                     </span>
                   </div>
                 </div>
@@ -976,7 +1088,7 @@ export function TripsPage() {
                 <div className="proles-modal-section">
                   <div className="proles-modal-section-title">Участники ({form.participants.length})</div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-                    {allUsers.filter(u => u.id !== user?.id).map(u => (
+                    {allUsers.filter(u => u.id !== user?.id && u.id !== formOwnerId).map(u => (
                       <label key={u.id} className={`flex items-center gap-2 p-1.5 rounded cursor-pointer text-xs transition-all ${
                         form.participants.includes(u.id)
                           ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-300'
@@ -999,7 +1111,11 @@ export function TripsPage() {
             </div>
             <div className="proles-modal-footer">
               <button onClick={() => setShowForm(false)} className="proles-btn-cancel">Отмена</button>
-              <button onClick={handleSaveTrip} disabled={saving || !form.startDate} className="proles-btn-save">
+              <button
+                onClick={handleSaveTrip}
+                disabled={saving || !form.startDate || (excludeSelf && (!isSuperAdmin || !retroactiveUserId || !form.endDate || form.startDate > todayDate || form.endDate > todayDate))}
+                className="proles-btn-save"
+              >
                 {saving ? '⏳ Сохранение...' : (editingTripId ? '💾 Сохранить' : '💾 Создать')}
               </button>
             </div>
