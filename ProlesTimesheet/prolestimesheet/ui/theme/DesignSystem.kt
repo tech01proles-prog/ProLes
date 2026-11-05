@@ -20,15 +20,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 
-val ProlesCanvas = Color(0xFFF7F9F2)
+val ProlesCanvas = Color(0xFFFAFAFA)
 val ProlesSurface = Color(0xFFFFFFFF)
-val ProlesBorder = Color(0xFFD2DCC3)
-val ProlesText = Color(0xFF1D2616)
-val ProlesMuted = Color(0xFF65715D)
-val ProlesPrimary = Color(0xFF4D7C0F)
-val ProlesPrimarySoft = Color(0xFFEAF4D3)
-val ProlesSecondary = Color(0xFF15803D)
-val ProlesSecondarySoft = Color(0xFFE4F3E8)
+val ProlesBorder = Color(0xFFE2E8F0)
+val ProlesText = Color(0xFF0F172A)
+val ProlesMuted = Color(0xFF64748B)
+val ProlesPrimary = Color(0xFF10B981)
+val ProlesPrimarySoft = Color(0xFFD1FAE5)
+val ProlesSecondary = Color(0xFF059669)
+val ProlesSecondarySoft = Color(0xFFECFDF5)
 val ProlesExpense = Color(0xFFE11D48)
 val ProlesExpenseSoft = Color(0xFFFFE4E6)
 val ProlesRestSoft = Color(0xFFFFF7ED)
@@ -44,7 +44,7 @@ fun incomeTypeLabel(type: String): String = when (type.uppercase()) {
 @Composable
 fun ProlesCard(
     modifier: Modifier = Modifier,
-    shape: RoundedCornerShape = RoundedCornerShape(20.dp),
+    shape: RoundedCornerShape = RoundedCornerShape(16.dp),
     containerColor: Color = ProlesSurface,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
@@ -92,7 +92,7 @@ fun ProlesIconBadge(
     Box(
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(tint.copy(alpha = 0.10f)),
         contentAlignment = Alignment.Center
     ) {
@@ -130,7 +130,7 @@ fun ProlesMetricCard(
     tint: Color = ProlesPrimary,
     modifier: Modifier = Modifier
 ) {
-    ProlesCard(modifier = modifier, shape = RoundedCornerShape(18.dp)) {
+    ProlesCard(modifier = modifier, shape = RoundedCornerShape(16.dp)) {
         ProlesIconBadge(icon = icon, tint = tint, size = 32.dp)
         Spacer(Modifier.height(10.dp))
         Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = ProlesMuted)
@@ -191,7 +191,7 @@ fun ProlesCompactAction(
     Card(
         modifier = modifier
             .height(72.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = tint.copy(alpha = 0.055f)
@@ -238,7 +238,7 @@ fun ProlesPrimaryButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.fillMaxWidth().height(50.dp),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = ProlesPrimary,
             contentColor = Color.White
@@ -263,7 +263,7 @@ fun ProlesSecondaryButton(
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.fillMaxWidth().height(44.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, ProlesBorder)
     ) {
         if (icon != null) {
@@ -284,7 +284,7 @@ fun ProlesDestructiveButton(
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.fillMaxWidth().height(48.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = ProlesExpenseSoft,
             contentColor = ProlesExpense
@@ -304,10 +304,10 @@ fun ProlesHero(
     title: String,
     subtitle: String,
     icon: ImageVector,
-    gradient: List<Color> = listOf(Color(0xFF365314), Color(0xFF15803D), Color(0xFF4D7C0F)),
+    gradient: List<Color> = listOf(Color(0xFF059669), Color(0xFF047857), Color(0xFF10B981)),
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(18.dp)
     Box(
         modifier = modifier
             .fillMaxWidth()
