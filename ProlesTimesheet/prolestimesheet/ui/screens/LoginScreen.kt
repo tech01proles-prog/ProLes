@@ -34,7 +34,7 @@ fun LoginScreen(viewModel: TimesheetViewModel, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(ProlesCanvas)
+            .background(Brush.linearGradient(listOf(Color(0xFFEFF6FF), Color(0xFFECFEFF))))
     ) {
         Box(
             modifier = Modifier
@@ -43,9 +43,9 @@ fun LoginScreen(viewModel: TimesheetViewModel, modifier: Modifier = Modifier) {
                 .background(
                     Brush.linearGradient(
                         listOf(
+                            Color(0xFF10B981),
                             Color(0xFF059669),
-                            Color(0xFF0EA5A4),
-                            Color(0xFF4F46E5)
+                            Color(0xFF047857)
                         )
                     ),
                     RoundedCornerShape(bottomStart = 42.dp, bottomEnd = 42.dp)
@@ -75,7 +75,7 @@ fun LoginScreen(viewModel: TimesheetViewModel, modifier: Modifier = Modifier) {
             Spacer(Modifier.height(36.dp))
 
             ProlesCard(
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(18.dp),
                 containerColor = Color.White
             ) {
                 Text("Добро пожаловать", style = MaterialTheme.typography.headlineMedium)
@@ -94,7 +94,7 @@ fun LoginScreen(viewModel: TimesheetViewModel, modifier: Modifier = Modifier) {
                     isError = error != null,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(12.dp)
                 )
                 Spacer(Modifier.height(10.dp))
 
@@ -143,7 +143,7 @@ fun LoginScreen(viewModel: TimesheetViewModel, modifier: Modifier = Modifier) {
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     enabled = uiState !is TimesheetViewModel.UiState.Loading,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ProlesPrimary,
                         contentColor = Color.White
