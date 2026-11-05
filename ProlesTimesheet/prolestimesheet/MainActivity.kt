@@ -44,10 +44,10 @@ class MainActivity : ComponentActivity() {
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
 
-        // 🆕 Светлые иконки на тёмном фоне (или наоборот — зависит от темы)
+        // Светлые поверхности приложения используют тёмные системные иконки.
         androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = false  // белые иконки (для тёмной темы)
-            isAppearanceLightNavigationBars = false
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
         }
 
         // 🆕 Инициализируем NetworkMonitor
