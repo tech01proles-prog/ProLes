@@ -146,7 +146,7 @@ private fun ticketReceiptAttachments(
     return listOf(
         TicketReceiptDto(
             id = "legacy",
-            fileName = legacyName?.takeIf(String::isNotBlank)
+            fileName = legacyName?.takeIf { it.isNotBlank() }
                 ?: legacyPath.substringAfterLast('/'),
             downloadUrl = "/api/v1/tickets/$ticketId/receipt"
         )
@@ -695,6 +695,11 @@ internal fun Route.ticketRoutes() {
                     .orderBy(TicketsTable.uploadedAt to SortOrder.DESC)
                     .map { row ->
                         val ticketId = row[TicketsTable.id].value
+                        val receiptAttachments = ticketReceiptAttachments(
+                            ticketId,
+                            row[TicketsTable.receiptPath],
+                            row[TicketsTable.receiptOriginalName]
+                        )
                         val projectId = row[TicketsTable.projectId].value
                         val projectName = ProjectsTable.selectAll()
                             .where { ProjectsTable.id eq projectId }.single()[ProjectsTable.name]
@@ -715,21 +720,9 @@ internal fun Route.ticketRoutes() {
                             accountantEmail = row[TicketsTable.accountantEmail],
                             amount = row[TicketsTable.amount],          //
                             currency = row[TicketsTable.currency],      //
-                            hasReceipt = ticketReceiptAttachments(
-                                ticketId,
-                                row[TicketsTable.receiptPath],
-                                row[TicketsTable.receiptOriginalName]
-                            ).isNotEmpty(),
-                            receiptDownloadUrl = ticketReceiptAttachments(
-                                ticketId,
-                                row[TicketsTable.receiptPath],
-                                row[TicketsTable.receiptOriginalName]
-                            ).firstOrNull()?.downloadUrl,
-                            receiptAttachments = ticketReceiptAttachments(
-                                ticketId,
-                                row[TicketsTable.receiptPath],
-                                row[TicketsTable.receiptOriginalName]
-                            ),
+                            hasReceipt = receiptAttachments.isNotEmpty(),
+                            receiptDownloadUrl = receiptAttachments.firstOrNull()?.downloadUrl,
+                            receiptAttachments = receiptAttachments,
                             recipients = emptyList()
                         )
                     }
@@ -746,6 +739,11 @@ internal fun Route.ticketRoutes() {
                     .orderBy(TicketsTable.uploadedAt to SortOrder.DESC)
                     .map { row ->
                         val ticketId = row[TicketsTable.id].value
+                        val receiptAttachments = ticketReceiptAttachments(
+                            ticketId,
+                            row[TicketsTable.receiptPath],
+                            row[TicketsTable.receiptOriginalName]
+                        )
                         val recipients = TicketRecipientsTable.selectAll()
                             .where { TicketRecipientsTable.ticketId eq ticketId }
                             .map { recipientRow ->
@@ -863,7 +861,7 @@ internal fun Route.ticketRoutes() {
             val file = java.io.File("." + storedPath)
             if (!file.isFile) return@get call.respond(HttpStatusCode.NotFound, "Receipt file not found")
             val fileName = ticket[TicketsTable.receiptOriginalName]
-                ?.takeIf(String::isNotBlank)
+                ?.takeIf { it.isNotBlank() }
                 ?: ticketReceiptFileName(ticketId, storedPath)
             call.response.header(HttpHeaders.ContentDisposition, ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, fileName).toString())
             call.respondFile(file)
