@@ -126,7 +126,6 @@ private fun ticketReceiptAttachments(
         .map { row ->
             val id = row[TicketReceiptsTable.id].value.toString()
             val path = row[TicketReceiptsTable.imageUrl]
-            val storedName = path.substringAfterLast('/')
             val fileName = ticketReceiptFileName(ticketId, path)
             TicketReceiptDto(
                 id = id,
