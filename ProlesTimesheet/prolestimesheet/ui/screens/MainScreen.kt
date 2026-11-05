@@ -21,7 +21,6 @@ import com.example.prolestimesheet.model.User
 import com.example.prolestimesheet.navigation.PendingNavigationHolder
 import com.example.prolestimesheet.network.NetworkMonitor
 import com.example.prolestimesheet.ui.viewmodel.TimesheetViewModel
-import com.example.prolestimesheet.ui.theme.ProlesCanvas
 
 // 🔥 Обновлённый список экранов
 sealed class Screen(val title: String, val icon: ImageVector) {
@@ -119,7 +118,7 @@ fun MainScreen(
     Scaffold(
         bottomBar = {
             NavigationBar(
-                containerColor = Color.White.copy(alpha = 0.96f),
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
                 tonalElevation = 0.dp,
             ) {
                 bottomScreens.forEach { screen ->
@@ -134,11 +133,11 @@ fun MainScreen(
                         label = { Text(screen.title, maxLines = 1) },
                         selected = selectedScreen == screen,
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = com.example.prolestimesheet.ui.theme.ProlesPrimary,
-                            selectedTextColor = com.example.prolestimesheet.ui.theme.ProlesPrimary,
-                            indicatorColor = com.example.prolestimesheet.ui.theme.ProlesPrimarySoft,
-                            unselectedIconColor = com.example.prolestimesheet.ui.theme.ProlesMuted,
-                            unselectedTextColor = com.example.prolestimesheet.ui.theme.ProlesMuted
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
                         onClick = {
                             navigationStack.clear()
@@ -149,7 +148,7 @@ fun MainScreen(
             }
         },
         // 🆕 Убираем белые полосы — Scaffold не добавляет insets для системных баров
-        containerColor = ProlesCanvas
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Box(
             modifier = Modifier
