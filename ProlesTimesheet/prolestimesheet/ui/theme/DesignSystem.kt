@@ -154,7 +154,7 @@ fun ProlesQuickAction(
 ) {
     ProlesCard(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         onClick = onClick
     ) {
         Row(verticalAlignment = Alignment.Top) {
