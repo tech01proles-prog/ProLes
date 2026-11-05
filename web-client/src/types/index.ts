@@ -362,6 +362,12 @@ export interface TicketRecipientDto {
   userName: string;
 }
 
+export interface TicketReceiptDto {
+  id: string;
+  fileName: string;
+  downloadUrl: string;
+}
+
 export interface TicketDto {
   id: string;
   projectId: string;
@@ -379,8 +385,9 @@ export interface TicketDto {
   accountantEmail: string;
   amount: number;
   currency: string;
-  hasReceipt: boolean;  // 🆕 Флаг наличия чека
+  hasReceipt: boolean;
   receiptDownloadUrl: string | null;
+  receiptAttachments?: TicketReceiptDto[];
   recipients: TicketRecipientDto[];
 }
 
