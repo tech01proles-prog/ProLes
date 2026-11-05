@@ -158,6 +158,16 @@ export function TicketsPage() {
       return;
     }
 
+    const hasInvalidAmount = ticketAmounts.some(value => {
+      if (!value.trim()) return false;
+      const amount = Number(value);
+      return !Number.isFinite(amount) || amount < 0;
+    });
+    if (hasInvalidAmount) {
+      addToast('Стоимость каждого билета должна быть неотрицательным числом.', 'error');
+      return;
+    }
+
     const receiptCounts = selectedFiles.map((_, ticketIndex) =>
       receiptAssignments.filter(assignedTicket => assignedTicket === ticketIndex).length,
     );
