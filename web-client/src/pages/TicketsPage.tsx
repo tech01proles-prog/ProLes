@@ -296,7 +296,7 @@ export function TicketsPage() {
           </p>
         </div>
         <button onClick={() => setShowForm(!showForm)} className="btn-primary px-5 py-2.5 shadow-indigo-200 shadow-md">
-          {showForm ? '✕ Закрыть' : '＋ Загрузить билет'}
+          {showForm ? '✕ Закрыть' : '＋ Загрузить билеты'}
         </button>
       </div>
 
@@ -320,7 +320,7 @@ export function TicketsPage() {
               <div className="proles-modal-title">
                 <div className="proles-modal-icon">🎫</div>
                 <div>
-                  <div>Загрузка билета</div>
+                  <div>Загрузка билетов</div>
                   <div style={{ fontSize: '0.75rem', fontWeight: 500, opacity: 0.85, marginTop: 2 }}>
                     Проездной документ
                   </div>
@@ -330,7 +330,7 @@ export function TicketsPage() {
             </div>
             <div className="proles-modal-body">
               <div className="proles-modal-section">
-                <div className="proles-modal-section-title">Файл билета *</div>
+                <div className="proles-modal-section-title">Файлы билетов *</div>
                 <div
                   onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
                   onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
@@ -409,7 +409,7 @@ export function TicketsPage() {
               </div>
               {/* 🆕 Поле для загрузки чека */}
               <div className="proles-modal-section">
-                <div className="proles-modal-section-title">Чек (прилагается к билету)</div>
+                <div className="proles-modal-section-title">Чеки (назначьте каждый к нужному билету)</div>
                 <div
                   onDragEnter={(e) => { e.preventDefault(); }}
                   onDragOver={(e) => { e.preventDefault(); }}
