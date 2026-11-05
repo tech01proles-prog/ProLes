@@ -27,6 +27,13 @@ import io.ktor.server.response.header
 import io.ktor.server.response.respondFile
 
 @Serializable
+data class TicketReceiptUploadRequest(
+    val fileBase64: String,
+    val fileName: String,
+    val fileType: String
+)
+
+@Serializable
 data class TicketUploadRequest(
     val projectId: String,
     val subprojectId: String? = null,
@@ -41,13 +48,21 @@ data class TicketUploadRequest(
     val currency: String = "RUB",
     val receiptBase64: String? = null,
     val receiptFileName: String? = null,
-    val receiptFileType: String? = null
+    val receiptFileType: String? = null,
+    val receiptFiles: List<TicketReceiptUploadRequest> = emptyList()
 )
 
 @Serializable
 data class TicketRecipientDto(
     val userId: String,
     val userName: String
+)
+
+@Serializable
+data class TicketReceiptDto(
+    val id: String,
+    val fileName: String,
+    val downloadUrl: String
 )
 
 @Serializable
@@ -70,6 +85,7 @@ data class TicketDto(
     val currency: String = "RUB",
     val hasReceipt: Boolean = false,
     val receiptDownloadUrl: String? = null,
+    val receiptAttachments: List<TicketReceiptDto> = emptyList(),
     val recipients: List<TicketRecipientDto> = emptyList()
 )
 
@@ -92,6 +108,43 @@ private suspend fun ApplicationCall.checkTicketSession():
 }
 
 
+private fun ticketReceiptAttachments(
+    ticketId: UUID,
+    legacyPath: String?,
+    legacyName: String?
+): List<TicketReceiptDto> {
+    val storedAttachments = TicketReceiptsTable
+        .selectAll()
+        .where { TicketReceiptsTable.ticketId eq ticketId }
+        .orderBy(TicketReceiptsTable.uploadedAt to SortOrder.ASC)
+        .map { row ->
+            val id = row[TicketReceiptsTable.id].value.toString()
+            val path = row[TicketReceiptsTable.imageUrl]
+            val storedName = path.substringAfterLast('/')
+            val fileName = storedName
+                .removePrefix("${ticketId}_receipt_")
+                .substringAfter('_')
+                .ifBlank { storedName }
+            TicketReceiptDto(
+                id = id,
+                fileName = fileName,
+                downloadUrl = "/api/v1/tickets/$ticketId/receipts/$id"
+            )
+        }
+
+    if (storedAttachments.isNotEmpty()) return storedAttachments
+    if (legacyPath.isNullOrBlank()) return emptyList()
+    return listOf(
+        TicketReceiptDto(
+            id = "legacy",
+            fileName = legacyName?.takeIf(String::isNotBlank)
+                ?: legacyPath.substringAfterLast('/'),
+            downloadUrl = "/api/v1/tickets/$ticketId/receipt"
+        )
+    )
+}
+
+private const val MAX_TICKET_RECEIPTS_PER_TICKET = 20
 private const val MAX_TICKET_FILE_BYTES = 100 * 1024 * 1024
 private const val MAX_TICKET_RECEIPT_BYTES = 25 * 1024 * 1024
 
@@ -247,17 +300,50 @@ internal fun Route.ticketRoutes() {
                 "Invalid Base64 or ticket exceeds 100 MB"
             )
 
-            val receiptBytes = request.receiptBase64
-                ?.takeIf(String::isNotBlank)
-                ?.let {
-                    decodeBase64OrNull(
-                        it,
-                        MAX_TICKET_RECEIPT_BYTES
-                    ) ?: return@post call.respond(
-                        HttpStatusCode.PayloadTooLarge,
-                        "Invalid Base64 or receipt exceeds 25 MB"
+            val rawReceiptFiles = request.receiptFiles.ifEmpty {
+                if (request.receiptBase64.isNullOrBlank()) {
+                    emptyList()
+                } else {
+                    listOf(
+                        TicketReceiptUploadRequest(
+                            fileBase64 = request.receiptBase64,
+                            fileName = request.receiptFileName.orEmpty(),
+                            fileType = request.receiptFileType.orEmpty()
+                        )
                     )
                 }
+            }
+
+            if (rawReceiptFiles.size > MAX_TICKET_RECEIPTS_PER_TICKET) {
+                return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    "No more than $MAX_TICKET_RECEIPTS_PER_TICKET receipts are allowed per ticket"
+                )
+            }
+
+            val receiptUploads = mutableListOf<Triple<String, String, ByteArray>>()
+            for (receipt in rawReceiptFiles) {
+                if (receipt.fileBase64.isBlank()) {
+                    return@post call.respond(
+                        HttpStatusCode.BadRequest,
+                        "Receipt file data is empty"
+                    )
+                }
+                val bytes = decodeBase64OrNull(
+                    receipt.fileBase64,
+                    MAX_TICKET_RECEIPT_BYTES
+                ) ?: return@post call.respond(
+                    HttpStatusCode.PayloadTooLarge,
+                    "Invalid Base64 or receipt exceeds 25 MB"
+                )
+                receiptUploads += Triple(
+                    sanitizeTicketFileName(receipt.fileName),
+                    receipt.fileType.trim().take(100).ifBlank {
+                        "application/octet-stream"
+                    },
+                    bytes
+                )
+            }
 
             val recipientIds = request.recipientIds
                 .mapNotNull { raw ->
@@ -319,37 +405,27 @@ internal fun Route.ticketRoutes() {
             }
             val ticketFile = java.io.File(uploadDir, uniqueFileName)
 
-                        // Подготавливаем и сохраняем файлы до создания записей в БД.
-            val receiptFile = receiptBytes?.let { bytes ->
-                val receiptName = sanitizeTicketFileName(
-                    request.receiptFileName.orEmpty()
+            val receiptFiles = receiptUploads.mapIndexed { index, receipt ->
+                val (originalName, fileType, bytes) = receipt
+                val storedName = "${ticketId}_receipt_${index}_$originalName"
+                val file = java.io.File(uploadDir, storedName)
+                Triple(
+                    file,
+                    "/uploads/tickets/$storedName",
+                    Triple(originalName, fileType, bytes.size.toLong())
                 )
-                java.io.File(
-                    uploadDir,
-                    "${ticketId}_receipt_$receiptName"
-                ).also { file ->
-                    file.writeBytes(bytes)
-                }
             }
 
-            val receiptFilePath = receiptFile?.let {
-                "/uploads/tickets/${it.name}"
-            }
-            val receiptOriginalName = receiptFile?.let {
-                sanitizeTicketFileName(
-                    request.receiptFileName.orEmpty()
-                )
-            }
-            val receiptFileType = receiptFile?.let {
-                request.receiptFileType
-                    ?.trim()
-                    ?.take(100)
-                    ?.ifBlank { "application/octet-stream" }
-                    ?: "application/octet-stream"
-            }
+            val firstReceipt = receiptFiles.firstOrNull()
+            val receiptFilePath = firstReceipt?.second
+            val receiptOriginalName = firstReceipt?.third?.first
+            val receiptFileType = firstReceipt?.third?.second
 
             try {
                 ticketFile.writeBytes(fileBytes)
+                receiptFiles.forEachIndexed { index, storedReceipt ->
+                    storedReceipt.first.writeBytes(receiptUploads[index].third)
+                }
 
                 transaction {
                     val companyUser = UsersTable
@@ -392,10 +468,19 @@ internal fun Route.ticketRoutes() {
                             receiptFileType
                     }
 
+                    receiptFiles.forEach { storedReceipt ->
+                        TicketReceiptsTable.insert {
+                            it[id] = UUID.randomUUID()
+                            it[TicketReceiptsTable.ticketId] = ticketId
+                            it[imageUrl] = storedReceipt.second
+                            it[uploadedAt] = System.currentTimeMillis()
+                        }
+                    }
+
                     if (request.amount > 0.0) {
                         val expenseUserId =
                             companyUserId ?: session.userId
-                        val hasReceipt = receiptFilePath != null
+                        val hasReceipt = receiptFiles.isNotEmpty()
                         val todayJava = java.time.LocalDate.now()
                         val todayKt = kotlinx.datetime.LocalDate(
                             todayJava.year,
@@ -425,14 +510,15 @@ internal fun Route.ticketRoutes() {
                         }
 
                         if (hasReceipt) {
-                            ExpenseReceiptsTable.insert {
-                                it[id] = UUID.randomUUID()
-                                it[ExpenseReceiptsTable.expenseId] =
-                                    expenseId
-                                it[imageUrl] =
-                                    requireNotNull(receiptFilePath)
-                                it[uploadedAt] =
-                                    System.currentTimeMillis()
+                            receiptFiles.forEach { storedReceipt ->
+                                ExpenseReceiptsTable.insert {
+                                    it[id] = UUID.randomUUID()
+                                    it[ExpenseReceiptsTable.expenseId] =
+                                        expenseId
+                                    it[imageUrl] = storedReceipt.second
+                                    it[uploadedAt] =
+                                        System.currentTimeMillis()
+                                }
                             }
                         }
                     }
@@ -452,8 +538,10 @@ internal fun Route.ticketRoutes() {
                 runCatching {
                     ticketFile.takeIf { it.isFile }?.delete()
                 }
-                runCatching {
-                    receiptFile?.takeIf { it.isFile }?.delete()
+                receiptFiles.forEach { storedReceipt ->
+                    runCatching {
+                        storedReceipt.first.takeIf { it.isFile }?.delete()
+                    }
                 }
                 throw error
             }
@@ -548,7 +636,7 @@ internal fun Route.ticketRoutes() {
                 fileBytes = fileBytes,
                 fileName = originalFileName
             )
-            if (request.receiptBase64 != null && request.amount > 0.0) {
+            if (receiptFiles.isNotEmpty() && request.amount > 0.0) {
                 val financeRecipients = transaction {
                     UsersTable.selectAll().where { (UsersTable.role eq "superadmin") or (UsersTable.role eq "director") or (UsersTable.role eq "admin") }.map { it[UsersTable.id].value }.distinct()
                 }
@@ -556,12 +644,25 @@ internal fun Route.ticketRoutes() {
                 NotificationService.notifyUsers(
                     financeRecipients, session.userId, "TICKET_RECEIPT", "🧷 Чек билета сохранён",
                     "Расход на Proles Company: ${"%.2f".format(request.amount)} ${currency}",
-                    ticketJson.encodeToString(mapOf("ticketId" to ticketId.toString(), "receiptPath" to (receiptFilePath ?: ""))),
+                    ticketJson.encodeToString(
+                        mapOf(
+                            "ticketId" to ticketId.toString(),
+                            "receiptPath" to (receiptFilePath ?: ""),
+                            "receiptPaths" to receiptFiles.map { it.second }
+                        )
+                    ),
                     "ticketReceipt"
                 )
             }
             println("🎫 [Ticket upload] completed: ticketId=$ticketId")
-            call.respond(HttpStatusCode.Created, mapOf("id" to ticketId.toString(), "fileName" to uniqueFileName))
+            call.respond(
+                HttpStatusCode.Created,
+                mapOf(
+                    "id" to ticketId.toString(),
+                    "fileName" to uniqueFileName,
+                    "receiptCount" to receiptFiles.size
+                )
+            )
         }
 
 
@@ -596,8 +697,21 @@ internal fun Route.ticketRoutes() {
                             accountantEmail = row[TicketsTable.accountantEmail],
                             amount = row[TicketsTable.amount],          //
                             currency = row[TicketsTable.currency],      //
-                            hasReceipt = row[TicketsTable.receiptPath] != null,  // 🆕 Флаг наличия чека
-                            receiptDownloadUrl = row[TicketsTable.receiptPath]?.let { "/api/v1/tickets/$ticketId/receipt" },
+                            hasReceipt = ticketReceiptAttachments(
+                                ticketId,
+                                row[TicketsTable.receiptPath],
+                                row[TicketsTable.receiptOriginalName]
+                            ).isNotEmpty(),
+                            receiptDownloadUrl = ticketReceiptAttachments(
+                                ticketId,
+                                row[TicketsTable.receiptPath],
+                                row[TicketsTable.receiptOriginalName]
+                            ).firstOrNull()?.downloadUrl,
+                            receiptAttachments = ticketReceiptAttachments(
+                                ticketId,
+                                row[TicketsTable.receiptPath],
+                                row[TicketsTable.receiptOriginalName]
+                            ),
                             recipients = emptyList()
                         )
                     }
@@ -638,8 +752,21 @@ internal fun Route.ticketRoutes() {
                             amount = row[TicketsTable.amount],          //
                             currency = row[TicketsTable.currency],      //
                             uploadedAt = row[TicketsTable.uploadedAt],
-                            hasReceipt = row[TicketsTable.receiptPath] != null,  // 🆕 Флаг наличия чека
-                            receiptDownloadUrl = row[TicketsTable.receiptPath]?.let { "/api/v1/tickets/$ticketId/receipt" },
+                            hasReceipt = ticketReceiptAttachments(
+                                ticketId,
+                                row[TicketsTable.receiptPath],
+                                row[TicketsTable.receiptOriginalName]
+                            ).isNotEmpty(),
+                            receiptDownloadUrl = ticketReceiptAttachments(
+                                ticketId,
+                                row[TicketsTable.receiptPath],
+                                row[TicketsTable.receiptOriginalName]
+                            ).firstOrNull()?.downloadUrl,
+                            receiptAttachments = ticketReceiptAttachments(
+                                ticketId,
+                                row[TicketsTable.receiptPath],
+                                row[TicketsTable.receiptOriginalName]
+                            ),
                             recipients = recipients,
                             downloadUrl = "/api/v1/tickets/$ticketId/download"
                         )
