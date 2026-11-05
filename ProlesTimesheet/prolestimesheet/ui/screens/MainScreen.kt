@@ -70,9 +70,8 @@ fun MainScreen(
     // 🆕 Состояние для предустановленного фильтра в AdminExpensesScreen
     var adminExpensesInitialEmployeeId by remember { mutableStateOf<String?>(null) }
 
-    // Нижняя панель всегда содержит три основных раздела.
-    // Чат расположен по центру, личные экраны и остальные инструменты находятся в «Управлении».
-    val bottomScreens = listOf(Screen.Home, Screen.Chat, Screen.Admin)
+    // Основные разделы: профиль возвращён в нижнюю панель рядом с чатом.
+    val bottomScreens = listOf(Screen.Home, Screen.Chat, Screen.Profile, Screen.Admin)
 
     // 🆕 АВТОПЕРЕХОД: слушаем StateFlow и user одновременно
     val pending by PendingNavigationHolder.pending.collectAsState()
@@ -202,6 +201,7 @@ fun MainScreen(
                     viewModel = viewModel,
                     onNavigateToProfile = { navigateTo(Screen.Profile) },
                     onNavigateToTimesheet = { navigateTo(Screen.Timesheet) },
+                    onNavigateToMyTrips = { navigateTo(Screen.BusinessTrips) },
                     onNavigateToPayroll = { navigateTo(Screen.Payroll) },
                     onNavigateToAnalytics = { navigateTo(Screen.Analytics) },
                     onNavigateToProjects = { navigateTo(Screen.Projects) },
