@@ -162,6 +162,18 @@ fun Application.module() {
         exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_link_code ON notification_preferences(telegram_link_code) WHERE telegram_link_code IS NOT NULL")
         exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_preferences_chat_id ON notification_preferences(telegram_chat_id) WHERE telegram_chat_id IS NOT NULL")
 
+        // Множественные чеки, приложенные к одному билету.
+        // Существующие записи с одиночным receipt_path остаются совместимыми.
+        exec("""
+            CREATE TABLE IF NOT EXISTS ticket_receipts (
+                id UUID PRIMARY KEY,
+                ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+                image_url TEXT NOT NULL,
+                uploaded_at BIGINT NOT NULL DEFAULT 0
+            )
+        """.trimIndent())
+        exec("CREATE INDEX IF NOT EXISTS ticket_receipts_ticket_idx ON ticket_receipts(ticket_id)")
+
         // Служебный флаг автоматических расходов (в том числе суточных).
         // expense_scope остаётся GENERAL/DIRECTOR и продолжает управлять видимостью.
         exec("""
