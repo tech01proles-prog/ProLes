@@ -26,12 +26,14 @@ export function TicketsPage() {
     sendToAccountant: false,
     accountantEmail: '',
     recipientIds: [] as string[],
-    amount: '',
     currency: 'RUB',
   });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedReceiptFile, setSelectedReceiptFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [ticketAmounts, setTicketAmounts] = useState<string[]>([]);
+  const [selectedReceiptFiles, setSelectedReceiptFiles] = useState<File[]>([]);
+  const [receiptAssignments, setReceiptAssignments] = useState<number[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 });
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const receiptInputRef = useRef<HTMLInputElement>(null);
@@ -96,68 +98,158 @@ export function TicketsPage() {
     }
   };
 
-  const handleReceiptDownload = async (ticket: TicketDto) => {
-    if (!ticket.receiptDownloadUrl) return;
+  const handleReceiptDownload = async (url: string, fileName: string) => {
+    if (!url) return;
     try {
-      await downloadProtectedFile(ticket.receiptDownloadUrl, `Чек — ${ticket.fileName}`);
+      await downloadProtectedFile(url, `Чек — ${fileName}`);
     } catch (err) {
       console.error(err);
       addToast('Не удалось скачать чек билета', 'error');
     }
   };
 
-  const handleFileChange = (file: File | null, isReceipt = false) => {
-    if (!file) return;
+  const handleFilesChange = (incomingFiles: FileList | File[], isReceipt = false) => {
+    const incoming = Array.from(incomingFiles);
+    if (!incoming.length) return;
     const limit = isReceipt ? 25 * 1024 * 1024 : 100 * 1024 * 1024;
-    if (file.size > limit) { alert(`Файл не должен превышать ${isReceipt ? 25 : 100} МБ`); return; }
+    const accepted = incoming.filter(file => file.size <= limit);
+    const rejected = incoming.filter(file => file.size > limit);
+    if (rejected.length) {
+      addToast(
+        `Пропущено файлов: ${rejected.length}. Максимальный размер одного ${isReceipt ? 'чека — 25' : 'билета — 100'} МБ.`,
+        'error',
+      );
+    }
+    if (!accepted.length) return;
+
     if (isReceipt) {
-      setSelectedReceiptFile(file);
+      setSelectedReceiptFiles(prev => [...prev, ...accepted]);
+      setReceiptAssignments(prev => [...prev, ...accepted.map(() => 0)]);
     } else {
-      setSelectedFile(file);
+      setSelectedFiles(prev => [...prev, ...accepted]);
+      setTicketAmounts(prev => [...prev, ...accepted.map(() => '')]);
     }
   };
 
   const handleDrop = (e: React.DragEvent, isReceipt = false) => {
     e.preventDefault();
     setDragActive(false);
-    if (e.dataTransfer.files?.[0]) handleFileChange(e.dataTransfer.files[0], isReceipt);
+    if (e.dataTransfer.files?.length) {
+      handleFilesChange(e.dataTransfer.files, isReceipt);
+    }
+  };
+
+  const removeTicketFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, fileIndex) => fileIndex !== index));
+    setTicketAmounts(prev => prev.filter((_, fileIndex) => fileIndex !== index));
+    setReceiptAssignments(prev => prev.map(ticketIndex =>
+      ticketIndex === index ? 0 : ticketIndex > index ? ticketIndex - 1 : ticketIndex,
+    ));
+  };
+
+  const removeReceiptFile = (index: number) => {
+    setSelectedReceiptFiles(prev => prev.filter((_, fileIndex) => fileIndex !== index));
+    setReceiptAssignments(prev => prev.filter((_, fileIndex) => fileIndex !== index));
   };
 
   const handleUpload = async () => {
-    if (!user || !selectedFile || !form.projectId) { alert('Заполните все поля и выберите файл билета'); return; }
+    if (!user || selectedFiles.length === 0 || !form.projectId) {
+      alert('Выберите проект и хотя бы один файл билета');
+      return;
+    }
+
+    const receiptCounts = selectedFiles.map((_, ticketIndex) =>
+      receiptAssignments.filter(assignedTicket => assignedTicket === ticketIndex).length,
+    );
+    if (receiptCounts.some(count => count > 20)) {
+      addToast('К одному билету можно приложить не более 20 чеков.', 'error');
+      return;
+    }
+
     setUploading(true);
+    setUploadProgress({ completed: 0, total: selectedFiles.length });
+    let uploadedCount = 0;
     try {
-      const base64 = await readFileAsBase64(selectedFile);
-      let receiptBase64: string | null = null;
-      if (selectedReceiptFile) {
-        receiptBase64 = await readFileAsBase64(selectedReceiptFile);
+      for (let ticketIndex = 0; ticketIndex < selectedFiles.length; ticketIndex += 1) {
+        const ticketFile = selectedFiles[ticketIndex];
+        const base64 = await readFileAsBase64(ticketFile);
+        const assignedReceipts = selectedReceiptFiles.filter(
+          (_, receiptIndex) => (receiptAssignments[receiptIndex] ?? 0) === ticketIndex,
+        );
+        const receiptFiles = await Promise.all(assignedReceipts.map(async receiptFile => ({
+          fileBase64: await readFileAsBase64(receiptFile),
+          fileName: receiptFile.name,
+          fileType: receiptFile.type || 'application/octet-stream',
+        })));
+
+        await api.post('/tickets/upload', {
+          projectId: form.projectId,
+          subprojectId: form.subprojectId || null,
+          description: form.description,
+          sendToAccountant: form.sendToAccountant,
+          accountantEmail: form.accountantEmail,
+          recipientIds: form.recipientIds,
+          fileBase64: base64,
+          fileName: ticketFile.name,
+          fileType: ticketFile.type || 'application/octet-stream',
+          receiptFiles,
+          amount: ticketAmounts[ticketIndex]
+            ? parseFloat(ticketAmounts[ticketIndex])
+            : 0,
+          currency: form.currency,
+        });
+
+        uploadedCount += 1;
+        setUploadProgress({ completed: uploadedCount, total: selectedFiles.length });
       }
-      await api.post('/tickets/upload', {
-        projectId: form.projectId,
-        subprojectId: form.subprojectId || null,
-        description: form.description,
-        sendToAccountant: form.sendToAccountant,
-        accountantEmail: form.accountantEmail,
-        recipientIds: form.recipientIds,
-        fileBase64: base64,
-        fileName: selectedFile.name,
-        fileType: selectedFile.type || 'application/octet-stream',
-        receiptBase64: receiptBase64,
-        receiptFileName: selectedReceiptFile?.name || null,
-        receiptFileType: selectedReceiptFile?.type || null,
-        amount: form.amount ? parseFloat(form.amount) : 0,
-        currency: form.currency,
-      });
+
+      const totalReceipts = selectedReceiptFiles.length;
       setShowForm(false);
-      setSelectedFile(null);
-      setSelectedReceiptFile(null);
-      setForm({ projectId: '', subprojectId: '', description: '', sendToAccountant: false, accountantEmail: '', recipientIds: [], amount: '', currency: 'RUB' });
+      setSelectedFiles([]);
+      setTicketAmounts([]);
+      setSelectedReceiptFiles([]);
+      setReceiptAssignments([]);
+      setForm({
+        projectId: '',
+        subprojectId: '',
+        description: '',
+        sendToAccountant: false,
+        accountantEmail: '',
+        recipientIds: [],
+        currency: 'RUB',
+      });
       await loadData();
-      addToast('Билет успешно загружен и отправлен в Telegram', 'success');
+      addToast(
+        `Загружено билетов: ${uploadedCount}; чеков: ${totalReceipts}.`,
+        'success',
+      );
     } catch (err) {
-      addToast('Ошибка загрузки билета', 'error');
+      console.error(err);
+      const remainingReceiptIndexes = selectedReceiptFiles
+        .map((_, index) => index)
+        .filter(index => (receiptAssignments[index] ?? 0) >= uploadedCount);
+      setSelectedFiles(selectedFiles.slice(uploadedCount));
+      setTicketAmounts(ticketAmounts.slice(uploadedCount));
+      setSelectedReceiptFiles(
+        remainingReceiptIndexes.map(index => selectedReceiptFiles[index]),
+      );
+      setReceiptAssignments(
+        remainingReceiptIndexes.map(index =>
+          Math.max(0, (receiptAssignments[index] ?? 0) - uploadedCount),
+        ),
+      );
+      if (uploadedCount > 0) {
+        await loadData();
+        addToast(
+          `Успешно загружено билетов: ${uploadedCount}. Остальные файлы оставлены в форме для повторной отправки.`,
+          'error',
+        );
+      } else {
+        addToast('Ошибка загрузки билетов. Проверьте файлы и повторите попытку.', 'error');
+      }
     } finally {
       setUploading(false);
+      setUploadProgress({ completed: 0, total: 0 });
     }
   };
 
@@ -256,19 +348,61 @@ export function TicketsPage() {
                     background: dragActive ? 'rgba(16, 185, 129, 0.05)' : 'transparent'
                   }}
                 >
-                  <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => handleFileChange(e.target.files?.[0] || null)} />
-                  {selectedFile ? (
-                    <div>
-                      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{getFileIcon(selectedFile.type)}</div>
-                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{selectedFile.name}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>{formatFileSize(selectedFile.size)}</div>
-                      <button onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }} style={{ marginTop: 8, fontSize: 12, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Убрать</button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) handleFilesChange(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                  {selectedFiles.length > 0 ? (
+                    <div className="space-y-2 text-left">
+                      <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        Выбрано билетов: {selectedFiles.length}
+                      </div>
+                      {selectedFiles.map((file, index) => (
+                        <div
+                          key={`${file.name}-${file.lastModified}-${index}`}
+                          className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-2xl">{getFileIcon(file.type)}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{file.name}</div>
+                            <div className="text-xs text-slate-500">{formatFileSize(file.size)}</div>
+                          </div>
+                          <label className="w-24 shrink-0 text-left text-[10px] text-slate-500">
+                            Сумма
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={ticketAmounts[index] ?? ''}
+                              onChange={(e) => setTicketAmounts(prev => prev.map((value, fileIndex) => fileIndex === index ? e.target.value : value))}
+                              onClick={(e) => e.stopPropagation()}
+                              placeholder="0"
+                              className="input mt-1 !px-2 !py-1 text-xs"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); removeTicketFile(index); }}
+                            className="shrink-0 text-red-500"
+                            aria-label="Убрать билет"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div>
                       <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📤</div>
-                      <div style={{ fontWeight: 600, color: '#475569' }}>Перетащите файл билета</div>
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>или кликните (до 100 МБ)</div>
+                      <div style={{ fontWeight: 600, color: '#475569' }}>Перетащите файлы билетов</div>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>или выберите несколько файлов (до 100 МБ каждый)</div>
                     </div>
                   )}
                 </div>
@@ -292,19 +426,64 @@ export function TicketsPage() {
                     background: 'transparent'
                   }}
                 >
-                  <input ref={receiptInputRef} type="file" className="hidden" onChange={(e) => handleFileChange(e.target.files?.[0] || null, true)} />
-                  {selectedReceiptFile ? (
-                    <div>
-                      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{getFileIcon(selectedReceiptFile.type)}</div>
-                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{selectedReceiptFile.name}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 4 }}>{formatFileSize(selectedReceiptFile.size)}</div>
-                      <button onClick={(e) => { e.stopPropagation(); setSelectedReceiptFile(null); }} style={{ marginTop: 8, fontSize: 12, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Убрать</button>
+                  <input
+                    ref={receiptInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) handleFilesChange(e.target.files, true);
+                      e.target.value = '';
+                    }}
+                  />
+                  {selectedReceiptFiles.length > 0 ? (
+                    <div className="space-y-2 text-left">
+                      <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        Выбрано чеков: {selectedReceiptFiles.length}
+                      </div>
+                      {selectedReceiptFiles.map((file, index) => (
+                        <div
+                          key={`${file.name}-${file.lastModified}-${index}`}
+                          className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-2xl">{getFileIcon(file.type)}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{file.name}</div>
+                            <div className="text-xs text-slate-500">{formatFileSize(file.size)}</div>
+                          </div>
+                          <label className="text-xs text-slate-500">
+                            Приложить к билету
+                            <select
+                              value={Math.min(receiptAssignments[index] ?? 0, Math.max(selectedFiles.length - 1, 0))}
+                              disabled={selectedFiles.length === 0}
+                              onChange={(e) => setReceiptAssignments(prev => prev.map((value, receiptIndex) => receiptIndex === index ? Number(e.target.value) : value))}
+                              onClick={(e) => e.stopPropagation()}
+                              className="input mt-1 !px-2 !py-1 text-xs"
+                            >
+                              {selectedFiles.map((ticketFile, ticketIndex) => (
+                                <option key={`${ticketFile.name}-${ticketIndex}`} value={ticketIndex}>
+                                  {ticketIndex + 1}. {ticketFile.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); removeReceiptFile(index); }}
+                            className="shrink-0 text-red-500"
+                            aria-label="Убрать чек"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div>
                       <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🧾</div>
-                      <div style={{ fontWeight: 600, color: '#475569' }}>Перетащите файл чека</div>
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>или кликните (до 25 МБ)</div>
+                      <div style={{ fontWeight: 600, color: '#475569' }}>Перетащите файлы чеков</div>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>или выберите несколько файлов (до 25 МБ каждый)</div>
                     </div>
                   )}
                 </div>
@@ -333,11 +512,7 @@ export function TicketsPage() {
                     <input type="text" placeholder="Москва-Питер 15.07" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" />
                   </div>
                   <div className="proles-input-group">
-                    <label>Сумма (опц.)</label>
-                    <input type="number" placeholder="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="input" />
-                  </div>
-                  <div className="proles-input-group">
-                    <label>Валюта</label>
+                    <label>Валюта (для всех выбранных билетов)</label>
                     <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} className="input bg-white dark:bg-slate-900">
                       <option>RUB</option><option>USD</option><option>EUR</option>
                     </select>
@@ -380,8 +555,10 @@ export function TicketsPage() {
             </div>
             <div className="proles-modal-footer">
               <button onClick={() => setShowForm(false)} className="proles-btn-cancel">Отмена</button>
-              <button onClick={handleUpload} disabled={uploading || !selectedFile || !form.projectId} className="proles-btn-save">
-                {uploading ? '⏳ Загрузка...' : '📤 Загрузить'}
+              <button onClick={handleUpload} disabled={uploading || selectedFiles.length === 0 || !form.projectId} className="proles-btn-save">
+                {uploading
+                  ? `⏳ Загрузка ${uploadProgress.completed}/${uploadProgress.total}`
+                  : `📤 Загрузить билеты (${selectedFiles.length})`}
               </button>
             </div>
           </div>
@@ -401,6 +578,11 @@ export function TicketsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {tickets.map(t => {
             const isUnread = tab === 'my' && !t.viewedAt;
+            const receiptAttachments = t.receiptAttachments?.length
+              ? t.receiptAttachments
+              : t.receiptDownloadUrl
+                ? [{ id: 'legacy', fileName: 'Чек', downloadUrl: t.receiptDownloadUrl }]
+                : [];
             return (
               <div key={t.id} className={`card p-5 group hover:shadow-md transition-all animate-fade-in ${isUnread ? 'border-l-4 border-l-indigo-500 bg-indigo-50/30 dark:bg-indigo-950/20' : ''}`}>
                 <div className="flex items-start gap-3 mb-3">
@@ -422,7 +604,7 @@ export function TicketsPage() {
                   <span>•</span>
                   <span>{formatDateTime(t.uploadedAt)}</span>
                   {t.amount > 0 && (<><span>•</span><span className="font-bold text-emerald-700 dark:text-emerald-400">{formatMoney(t.amount, t.currency)}</span></>)}
-                  {t.hasReceipt && (<><span>•</span><span className="text-emerald-600 dark:text-emerald-400 font-semibold">🧾 Чек приложен</span></>)}
+                  {receiptAttachments.length > 0 && (<><span>•</span><span className="text-emerald-600 dark:text-emerald-400 font-semibold">🧾 Чеков: {receiptAttachments.length}</span></>)}
                 </div>
 
                 {t.recipients.length > 0 && (
@@ -436,7 +618,16 @@ export function TicketsPage() {
                     📥 Скачать
                   </button>
 
-                  {t.hasReceipt && t.receiptDownloadUrl && <button onClick={() => handleReceiptDownload(t)} className="btn-outline px-3 py-1.5 text-xs flex-1">Чек</button>}
+                  {receiptAttachments.map((receipt, index) => (
+                    <button
+                      key={receipt.id}
+                      onClick={() => handleReceiptDownload(receipt.downloadUrl, receipt.fileName || `Чек ${index + 1}`)}
+                      className="btn-outline px-3 py-1.5 text-xs"
+                      title={receipt.fileName}
+                    >
+                      🧾 {receiptAttachments.length > 1 ? `Чек ${index + 1}` : 'Чек'}
+                    </button>
+                  ))}
 
                   {isUnread && (
                     <button onClick={() => handleMarkViewed(t.id)} className="btn-ghost px-3 py-1.5 text-xs text-indigo-600 dark:text-indigo-400">
