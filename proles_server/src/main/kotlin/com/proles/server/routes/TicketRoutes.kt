@@ -66,6 +66,13 @@ data class TicketReceiptDto(
 )
 
 @Serializable
+data class TicketUploadResponse(
+    val id: String,
+    val fileName: String,
+    val receiptCount: Int
+)
+
+@Serializable
 data class TicketDto(
     val id: String,
     val projectId: String,
@@ -659,8 +666,7 @@ internal fun Route.ticketRoutes() {
                     ticketJson.encodeToString(
                         mapOf(
                             "ticketId" to ticketId.toString(),
-                            "receiptPath" to (receiptFilePath ?: ""),
-                            "receiptPaths" to receiptFiles.map { it.second }
+                            "receiptPath" to (receiptFilePath ?: "")
                         )
                     ),
                     "ticketReceipt"
@@ -669,10 +675,10 @@ internal fun Route.ticketRoutes() {
             println("🎫 [Ticket upload] completed: ticketId=$ticketId")
             call.respond(
                 HttpStatusCode.Created,
-                mapOf(
-                    "id" to ticketId.toString(),
-                    "fileName" to uniqueFileName,
-                    "receiptCount" to receiptFiles.size
+                TicketUploadResponse(
+                    id = ticketId.toString(),
+                    fileName = uniqueFileName,
+                    receiptCount = receiptFiles.size
                 )
             )
         }
