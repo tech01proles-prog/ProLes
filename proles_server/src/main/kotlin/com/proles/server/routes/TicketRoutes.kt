@@ -409,7 +409,7 @@ internal fun Route.ticketRoutes() {
             }
 
             val ticketId = UUID.randomUUID()
-            println("🎫 [Ticket upload] validated: projectId=$projectId, recipients=${recipientIds.size}, fileBytes=${fileBytes.size}, receiptBytes=${receiptBytes?.size ?: 0}, amount=${request.amount}")
+            println("🎫 [Ticket upload] validated: projectId=$projectId, recipients=${recipientIds.size}, fileBytes=${fileBytes.size}, receiptFiles=${receiptUploads.size}, amount=${request.amount}")
             val originalFileName =
                 sanitizeTicketFileName(request.fileName)
             val uniqueFileName = "${ticketId}_$originalFileName"
