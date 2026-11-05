@@ -61,7 +61,7 @@ fun LoginScreen(viewModel: TimesheetViewModel, modifier: Modifier = Modifier) {
             Spacer(Modifier.height(48.dp))
             Surface(
                 modifier = Modifier.size(74.dp),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = Color.White.copy(alpha = 0.18f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -106,7 +106,7 @@ fun LoginScreen(viewModel: TimesheetViewModel, modifier: Modifier = Modifier) {
                     isError = error != null,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(12.dp)
                 )
 
                 Row(
