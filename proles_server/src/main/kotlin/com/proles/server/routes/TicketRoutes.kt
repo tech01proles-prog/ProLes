@@ -108,6 +108,12 @@ private suspend fun ApplicationCall.checkTicketSession():
 }
 
 
+private fun ticketReceiptFileName(ticketId: UUID, path: String): String {
+    val storedName = path.substringAfterLast('/')
+    val encodedName = storedName.removePrefix("${ticketId}_receipt_")
+    return encodedName.substringAfter('_').ifBlank { storedName }
+}
+
 private fun ticketReceiptAttachments(
     ticketId: UUID,
     legacyPath: String?,
@@ -121,10 +127,7 @@ private fun ticketReceiptAttachments(
             val id = row[TicketReceiptsTable.id].value.toString()
             val path = row[TicketReceiptsTable.imageUrl]
             val storedName = path.substringAfterLast('/')
-            val fileName = storedName
-                .removePrefix("${ticketId}_receipt_")
-                .substringAfter('_')
-                .ifBlank { storedName }
+            val fileName = ticketReceiptFileName(ticketId, path)
             TicketReceiptDto(
                 id = id,
                 fileName = fileName,
@@ -216,24 +219,34 @@ internal fun Route.ticketRoutes() {
 
 
 
+            val additionalReceiptPaths = transaction {
+                TicketReceiptsTable
+                    .selectAll()
+                    .where { TicketReceiptsTable.ticketId eq ticketId }
+                    .map { it[TicketReceiptsTable.imageUrl] }
+            }
+
             transaction {
-                // Удаляем получателей
-                TicketRecipientsTable.deleteWhere { TicketRecipientsTable.ticketId eq ticketId }
-                // Удаляем сам билет
+                TicketRecipientsTable.deleteWhere {
+                    TicketRecipientsTable.ticketId eq ticketId
+                }
+                TicketReceiptsTable.deleteWhere {
+                    TicketReceiptsTable.ticketId eq ticketId
+                }
                 TicketsTable.deleteWhere { TicketsTable.id eq ticketId }
             }
 
-                        // Удаляем билет и связанный чек с диска.
             val ticketFilePath = ticket[TicketsTable.filePath]
             val receiptPath = ticket[TicketsTable.receiptPath]
-
-            listOfNotNull(ticketFilePath, receiptPath).forEach { path ->
-                runCatching {
-                    java.io.File("." + path)
-                        .takeIf { it.isFile }
-                        ?.delete()
+            (listOfNotNull(ticketFilePath, receiptPath) + additionalReceiptPaths)
+                .distinct()
+                .forEach { storedPath ->
+                    runCatching {
+                        java.io.File("." + storedPath)
+                            .takeIf { it.isFile }
+                            ?.delete()
+                    }
                 }
-            }
 
             call.respond(HttpStatusCode.NoContent)
         }
@@ -831,11 +844,93 @@ internal fun Route.ticketRoutes() {
             val ticket = transaction { TicketsTable.selectAll().where { TicketsTable.id eq ticketId }.limit(1).singleOrNull() } ?: return@get call.respond(HttpStatusCode.NotFound, "Ticket not found")
             val allowed = session.role in listOf("admin", "superadmin", "director") || ticket[TicketsTable.uploadedBy].value == session.userId || transaction { TicketRecipientsTable.selectAll().where { (TicketRecipientsTable.ticketId eq ticketId) and (TicketRecipientsTable.userId eq session.userId) }.limit(1).any() }
             if (!allowed) return@get call.respond(HttpStatusCode.Forbidden, "Access denied")
-            val storedPath = ticket[TicketsTable.receiptPath] ?: return@get call.respond(HttpStatusCode.NotFound, "Receipt not found")
+            val storedPath = ticket[TicketsTable.receiptPath]
+                ?: transaction {
+                    TicketReceiptsTable
+                        .selectAll()
+                        .where { TicketReceiptsTable.ticketId eq ticketId }
+                        .orderBy(TicketReceiptsTable.uploadedAt to SortOrder.ASC)
+                        .limit(1)
+                        .singleOrNull()
+                        ?.get(TicketReceiptsTable.imageUrl)
+                }
+                ?: return@get call.respond(HttpStatusCode.NotFound, "Receipt not found")
             val file = java.io.File("." + storedPath)
             if (!file.isFile) return@get call.respond(HttpStatusCode.NotFound, "Receipt file not found")
-            val fileName = ticket[TicketsTable.receiptOriginalName] ?: "receipt"
+            val fileName = ticket[TicketsTable.receiptOriginalName]
+                ?.takeIf(String::isNotBlank)
+                ?: ticketReceiptFileName(ticketId, storedPath)
             call.response.header(HttpHeaders.ContentDisposition, ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, fileName).toString())
+            call.respondFile(file)
+        }
+
+        // Скачать конкретный чек из списка вложений.
+        get("/{ticketId}/receipts/{receiptId}") {
+            if (!call.checkPermission(Permission.TICKETS, "view")) return@get
+            val session = call.checkTicketSession() ?: return@get
+            val ticketId = runCatching {
+                UUID.fromString(call.parameters["ticketId"])
+            }.getOrNull() ?: return@get call.respond(
+                HttpStatusCode.BadRequest,
+                "Invalid ticketId"
+            )
+            val receiptId = runCatching {
+                UUID.fromString(call.parameters["receiptId"])
+            }.getOrNull() ?: return@get call.respond(
+                HttpStatusCode.BadRequest,
+                "Invalid receiptId"
+            )
+
+            val attachment = transaction {
+                val ticket = TicketsTable
+                    .selectAll()
+                    .where { TicketsTable.id eq ticketId }
+                    .limit(1)
+                    .singleOrNull() ?: return@transaction null
+                val allowed = session.role in listOf("admin", "superadmin", "director") ||
+                    ticket[TicketsTable.uploadedBy].value == session.userId ||
+                    TicketRecipientsTable.selectAll().where {
+                        (TicketRecipientsTable.ticketId eq ticketId) and
+                            (TicketRecipientsTable.userId eq session.userId)
+                    }.limit(1).any()
+                if (!allowed) return@transaction false to null
+
+                val receipt = TicketReceiptsTable
+                    .selectAll()
+                    .where {
+                        (TicketReceiptsTable.id eq receiptId) and
+                            (TicketReceiptsTable.ticketId eq ticketId)
+                    }
+                    .limit(1)
+                    .singleOrNull()
+                    ?: return@transaction true to null
+                true to receipt[TicketReceiptsTable.imageUrl]
+            }
+
+            if (attachment == null) {
+                return@get call.respond(HttpStatusCode.NotFound, "Ticket not found")
+            }
+            if (attachment.first.not()) {
+                return@get call.respond(HttpStatusCode.Forbidden, "Access denied")
+            }
+            val storedPath = attachment.second
+                ?: return@get call.respond(HttpStatusCode.NotFound, "Receipt not found")
+            val file = java.io.File("." + storedPath)
+            if (!file.isFile) {
+                return@get call.respond(HttpStatusCode.NotFound, "Receipt file not found")
+            }
+            val fileName = ticketReceiptFileName(ticketId, storedPath)
+            call.response.header(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment
+                    .withParameter(ContentDisposition.Parameters.FileName, fileName)
+                    .toString()
+            )
+            call.response.header(
+                HttpHeaders.ContentType,
+                java.net.URLConnection.guessContentTypeFromName(fileName)
+                    ?: "application/octet-stream"
+            )
             call.respondFile(file)
         }
 
