@@ -26,6 +26,7 @@ fun AdminManagementScreen(
     viewModel: TimesheetViewModel,
     onNavigateToProfile: () -> Unit,
     onNavigateToTimesheet: () -> Unit,
+    onNavigateToMyTrips: () -> Unit,
     onNavigateToPayroll: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
     onNavigateToProjects: () -> Unit,
@@ -111,6 +112,18 @@ fun AdminManagementScreen(
                 onNavigateToTimesheet,
                 Modifier.weight(1f)
             )
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ManagementTile(
+                "Мои командировки",
+                "Мои поездки и суточные",
+                Icons.Default.Train,
+                listOf(Color(0xFF7C3AED), Color(0xFF9333EA)),
+                onNavigateToMyTrips,
+                Modifier.weight(1f)
+            )
+            Spacer(Modifier.weight(1f))
         }
 
         Text(
