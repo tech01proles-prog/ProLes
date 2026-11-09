@@ -591,7 +591,8 @@ internal fun Route.payrollRoutes() {
                     gross = gross,
                     total = total,
                     balance = balance,
-                    projectGroups = breakdown.projectGroups
+                    projectGroups = breakdown.projectGroups,
+                    componentBreakdown = breakdown.componentBreakdown
                 )
             }
 
