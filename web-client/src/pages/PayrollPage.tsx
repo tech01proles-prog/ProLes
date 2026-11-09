@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../api/client';
 import type {
-  SalaryComponentDto, SalaryBreakdownResponse, SalaryRecordDto,
+  SalaryComponentDto, SalaryBreakdownResponse, PayrollComponentBreakdownDto, SalaryRecordDto,
   PayrollExportResponse, UserDto, ProjectDto, TimeEntryDto, SubprojectDto
 } from '../types';
 import { generateUUID, formatDate, formatDateTimeExact, formatMoney, monthName } from '../lib/utils';
@@ -617,7 +617,7 @@ export function PayrollPage() {
                           )}
                         </div>
                       </div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{c.type === 'PIECE' ? `Требуемых единиц: ${c.amount}` : formatMoney(c.amount)}</div>
+                      <div className={c.type === 'PIECE' ? "text-sm font-semibold text-slate-900 dark:text-slate-100" : "text-2xl font-bold text-slate-900 dark:text-slate-100"}>{c.type === 'PIECE' ? `Требуемых единиц: ${c.amount}` : formatMoney(c.amount)}</div>
                       {c.ratePerHour != null && c.ratePerHour > 0 && (
                         <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">⏱ {formatMoney(c.ratePerHour)}/час</div>
                       )}
@@ -782,7 +782,7 @@ export function PayrollPage() {
                                   {can('payroll', 'delete') && <button onClick={() => handleDeleteComponent(c.id)} className="text-red-500 hover:text-red-700 text-sm" title="Удалить">🗑</button>}
                                 </div>
                               </div>
-                              <div className="text-lg font-bold mt-2">{c.type === 'PIECE' ? `Требуемых единиц: ${c.amount}` : formatMoney(c.amount)}</div>
+                              <div className={c.type === 'PIECE' ? "text-sm font-semibold mt-2" : "text-lg font-bold mt-2"}>{c.type === 'PIECE' ? `Требуемых единиц: ${c.amount}` : formatMoney(c.amount)}</div>
                               {c.ratePerHour != null && c.ratePerHour > 0 && <div className="text-xs text-slate-500">⏱ {formatMoney(c.ratePerHour)}/час</div>}
                               {c.ratePerUnit != null && c.ratePerUnit > 0 && <div className="text-xs text-slate-500">🔨 {formatMoney(c.ratePerUnit)}/ед.</div>}
                               {c.subprojectName && <div className="text-xs font-semibold text-indigo-600 mt-1">Подпроект: {c.subprojectName}</div>}
