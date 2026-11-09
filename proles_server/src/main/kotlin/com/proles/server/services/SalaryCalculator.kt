@@ -182,7 +182,7 @@ object SalaryCalculator {
                     applicable.filter { it[SalaryComponentsTable.type] == "HOURLY" }
                 }
 
-                selectedComponents.forEach { component ->
+                selectedComponents.forEach componentLoop@ { component ->
                     val type = component[SalaryComponentsTable.type]
                     val componentId = component[SalaryComponentsTable.id].value
                     val rate = if (type == "PIECE") {
@@ -190,7 +190,7 @@ object SalaryCalculator {
                     } else {
                         component[SalaryComponentsTable.ratePerHour] ?: 0.0
                     }
-                    if (rate <= 0.0) return@forEach
+                    if (rate <= 0.0) return@componentLoop
 
                     val key = ComponentBreakdownKey(
                         componentId = componentId,
