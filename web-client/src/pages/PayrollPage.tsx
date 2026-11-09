@@ -835,6 +835,7 @@ export function PayrollPage() {
                         entries={employeeEntries}
                         projects={allProjects}
                         componentBreakdown={employeeBreakdown?.componentBreakdown || []}
+                        calculated={employeeBreakdown !== null}
                         year={exportPeriod.year}
                         month={exportPeriod.month}
                         loading={employeeHoursLoading}
@@ -1032,6 +1033,7 @@ function EmployeeHoursDetails({
   entries,
   projects,
   componentBreakdown,
+  calculated,
   year,
   month,
   loading,
@@ -1039,6 +1041,7 @@ function EmployeeHoursDetails({
   entries: TimeEntryDto[];
   projects: ProjectDto[];
   componentBreakdown: SalaryBreakdownResponse['componentBreakdown'];
+  calculated: boolean;
   year: number;
   month: number;
   loading: boolean;
@@ -1177,9 +1180,11 @@ function EmployeeHoursDetails({
       {!loading && projectRows.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 px-4 py-3 text-xs">
           <span className="text-slate-500">
-            {componentBreakdown.length
-              ? 'В карточках показаны только фактически применённые компоненты по каждому подпроекту.'
-              : 'Рассчитайте зарплату, чтобы увидеть фактическое распределение часов и сдельных единиц.'}
+            {!calculated
+              ? 'Рассчитайте зарплату, чтобы увидеть фактическое распределение часов и сдельных единиц.'
+              : componentBreakdown.length
+                ? 'В карточках показаны только фактически применённые компоненты по каждому подпроекту.'
+                : 'Для рабочих записей за этот период не найдено применимых сдельных или почасовых компонентов.'}
           </span>
           {componentBreakdown.length > 0 && (
             <strong className="text-slate-700">Начислено по рабочему времени: {formatMoney(totalAllocated)}</strong>
