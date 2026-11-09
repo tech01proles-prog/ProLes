@@ -255,6 +255,20 @@ export interface PayrollHourEntryDto {
   comment: string;
 }
 
+export interface PayrollComponentBreakdownDto {
+  componentId: string;
+  type: 'PIECE' | 'HOURLY';
+  projectId: string;
+  projectName: string;
+  subprojectId: string | null;
+  subprojectName: string;
+  scope: 'SUBPROJECT' | 'PROJECT' | 'GENERAL';
+  hours: number;
+  units: number;
+  rate: number;
+  amount: number;
+}
+
 export interface PayrollSubprojectGroupDto {
   subprojectId: string;
   subprojectName: string;
@@ -287,6 +301,7 @@ export interface SalaryBreakdownResponse {
   taxInclusiveCost: number;
   remoteEmployee: boolean;
   projectGroups: PayrollProjectGroupDto[];
+  componentBreakdown: PayrollComponentBreakdownDto[];
 }
 
 export interface SalaryRecordDto {
