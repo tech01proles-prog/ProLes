@@ -617,7 +617,7 @@ export function PayrollPage() {
                           )}
                         </div>
                       </div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{formatMoney(c.amount)}</div>
+                      <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{c.type === 'PIECE' ? `Требуемых единиц: ${c.amount}` : formatMoney(c.amount)}</div>
                       {c.ratePerHour != null && c.ratePerHour > 0 && (
                         <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">⏱ {formatMoney(c.ratePerHour)}/час</div>
                       )}
@@ -782,7 +782,7 @@ export function PayrollPage() {
                                   {can('payroll', 'delete') && <button onClick={() => handleDeleteComponent(c.id)} className="text-red-500 hover:text-red-700 text-sm" title="Удалить">🗑</button>}
                                 </div>
                               </div>
-                              <div className="text-lg font-bold mt-2">{formatMoney(c.amount)}</div>
+                              <div className="text-lg font-bold mt-2">{c.type === 'PIECE' ? `Требуемых единиц: ${c.amount}` : formatMoney(c.amount)}</div>
                               {c.ratePerHour != null && c.ratePerHour > 0 && <div className="text-xs text-slate-500">⏱ {formatMoney(c.ratePerHour)}/час</div>}
                               {c.ratePerUnit != null && c.ratePerUnit > 0 && <div className="text-xs text-slate-500">🔨 {formatMoney(c.ratePerUnit)}/ед.</div>}
                               {c.subprojectName && <div className="text-xs font-semibold text-indigo-600 mt-1">Подпроект: {c.subprojectName}</div>}
@@ -834,7 +834,7 @@ export function PayrollPage() {
                       <EmployeeHoursDetails
                         entries={employeeEntries}
                         projects={allProjects}
-                        components={employeeComponents}
+                        componentBreakdown={employeeBreakdown?.componentBreakdown || []}
                         year={exportPeriod.year}
                         month={exportPeriod.month}
                         loading={employeeHoursLoading}
@@ -857,7 +857,6 @@ export function PayrollPage() {
                           </div>
                         </div>
                         </div>
-                        <SalaryProjectBreakdown groups={employeeBreakdown.projectGroups} />
                       </>
                     )}
                   </div>
@@ -1032,14 +1031,14 @@ function formatPayrollHours(hours: number): string {
 function EmployeeHoursDetails({
   entries,
   projects,
-  components,
+  componentBreakdown,
   year,
   month,
   loading,
 }: {
   entries: TimeEntryDto[];
   projects: ProjectDto[];
-  components: SalaryComponentDto[];
+  componentBreakdown: SalaryBreakdownResponse['componentBreakdown'];
   year: number;
   month: number;
   loading: boolean;
@@ -1053,72 +1052,138 @@ function EmployeeHoursDetails({
       current.entries.push(entry);
       map.set(entry.projectId, current);
     });
-    return Array.from(map.values()).map(row => ({
-      ...row,
-      days: new Set(row.entries.map(e => e.date)).size,
-      linked: components.filter(c => c.projectId === row.projectId && c.isActive),
-    })).sort((a, b) => b.hours - a.hours);
-  }, [entries, projects, components]);
+
+    return Array.from(map.values()).map(row => {
+      const subprojects = new Map<string, { id: string; name: string; hours: number; entries: TimeEntryDto[] }>();
+      row.entries.forEach(entry => {
+        const id = entry.subprojectId || '';
+        const name = entry.subprojectName || (id ? 'Подпроект' : 'Без подпроекта');
+        const current = subprojects.get(id) || { id, name, hours: 0, entries: [] };
+        current.hours += entry.hours;
+        current.entries.push(entry);
+        subprojects.set(id, current);
+      });
+
+      const lines = componentBreakdown.filter(line => line.projectId === row.projectId);
+      return {
+        ...row,
+        days: new Set(row.entries.map(e => e.date)).size,
+        subprojects: Array.from(subprojects.values()).map(subproject => ({
+          ...subproject,
+          componentLines: lines.filter(line => (line.subprojectId || '') === subproject.id),
+        })).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
+      };
+    }).sort((a, b) => b.hours - a.hours);
+  }, [entries, projects, componentBreakdown]);
 
   const totalHours = entries.reduce((sum, e) => sum + e.hours, 0);
+  const totalAllocated = componentBreakdown.reduce((sum, line) => sum + line.amount, 0);
+
+  const scopeLabel = (scope: PayrollComponentBreakdownDto['scope']) => {
+    if (scope === 'SUBPROJECT') return 'ставка подпроекта';
+    if (scope === 'PROJECT') return 'ставка проекта';
+    return 'общая ставка';
+  };
+
+  const renderComponentLines = (lines: PayrollComponentBreakdownDto[]) => {
+    if (!lines.length) return null;
+    return (
+      <div className="mt-2 grid grid-cols-1 xl:grid-cols-2 gap-2">
+        {lines.map(line => {
+          const isPiece = line.type === 'PIECE';
+          return (
+            <div
+              key={line.componentId + ':' + (line.subprojectId || 'no-subproject')}
+              className={`rounded-xl border px-3 py-2.5 ${isPiece ? 'border-orange-200 bg-orange-50/80' : 'border-indigo-200 bg-indigo-50/80'}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className={`text-xs font-bold ${isPiece ? 'text-orange-800' : 'text-indigo-800'}`}>
+                    {isPiece ? '📦 Сдельная' : '🕒 Почасовая'}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-slate-500">{scopeLabel(line.scope)}</div>
+                </div>
+                <div className={`shrink-0 text-sm font-black ${isPiece ? 'text-orange-900' : 'text-indigo-900'}`}>
+                  {formatMoney(line.amount)}
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-slate-700">
+                {isPiece
+                  ? `${line.units.toLocaleString('ru-RU')} ед. × ${formatMoney(line.rate)}/ед.`
+                  : `${formatPayrollHours(line.hours)} × ${formatMoney(line.rate)}/ч`}
+              </div>
+              {isPiece && (
+                <div className="mt-1 text-[10px] text-slate-500">
+                  {formatPayrollHours(line.hours)} отнесено к сдельной части и исключено из почасовой
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
-    <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50/60 overflow-hidden">
-      <div className="px-4 py-3 border-b border-blue-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div className="mt-4 overflow-hidden rounded-2xl border border-blue-200 bg-blue-50/60">
+      <div className="flex flex-col gap-2 border-b border-blue-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="font-bold text-blue-900">🕒 Рабочее время по проектам</div>
-          <div className="text-xs text-blue-700 mt-0.5">{monthName(month)} {year} • {loading ? 'Загрузка часов…' : `${formatPayrollHours(totalHours)} всего`}</div>
+          <div className="mt-0.5 text-xs text-blue-700">
+            {monthName(month)} {year} • {loading ? 'Загрузка часов…' : `${formatPayrollHours(totalHours)} всего`}
+          </div>
         </div>
-        {!loading && <div className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-blue-700 border border-blue-100">{projectRows.length} {projectRows.length === 1 ? 'проект' : 'проекта'}</div>}
+        {!loading && (
+          <div className="rounded-lg border border-blue-100 bg-white px-3 py-1.5 text-xs font-bold text-blue-700">
+            {projectRows.length} {projectRows.length === 1 ? 'проект' : 'проекта'}
+          </div>
+        )}
       </div>
+
       {loading ? (
         <div className="px-4 py-6 text-center text-sm text-blue-600">Загружаем рабочие записи…</div>
       ) : projectRows.length === 0 ? (
         <div className="px-4 py-6 text-center text-sm text-slate-500">За выбранный период часов нет.</div>
       ) : (
-        <div className="p-3 space-y-2">
+        <div className="space-y-3 p-3">
           {projectRows.map(row => (
-            <div key={row.projectId} className="rounded-xl border border-blue-100 bg-white p-3">
-              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+            <section key={row.projectId} className="overflow-hidden rounded-xl border border-blue-100 bg-white p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <div className="font-semibold text-slate-900 truncate">📁 {row.projectName}</div>
-                  <div className="text-xs text-slate-500 mt-1">{row.days} раб. дн. • {row.entries.length} записей</div>
+                  <div className="truncate font-semibold text-slate-900">📁 {row.projectName}</div>
+                  <div className="mt-1 text-xs text-slate-500">{row.days} раб. дн. • {row.entries.length} записей</div>
                 </div>
-                <div className="text-lg font-black text-blue-700 whitespace-nowrap">{formatPayrollHours(row.hours)}</div>
+                <div className="shrink-0 text-lg font-black text-blue-700">{formatPayrollHours(row.hours)}</div>
               </div>
-              {row.linked.length > 0 && (
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {row.linked.map(component => {
-                    const typeLabel = COMPONENT_TYPES[component.type]?.label || component.type;
-                    let calculated: number | null = null;
-                    let formula = '';
-                    if (component.type === 'HOURLY' && component.ratePerHour != null) {
-                      calculated = row.hours * component.ratePerHour;
-                      formula = `${formatPayrollHours(row.hours)} × ${formatMoney(component.ratePerHour)}/ч`;
-                    } else if (component.type === 'PIECE' && component.ratePerUnit != null && component.amount > 0) {
-                      calculated = component.ratePerUnit * component.amount;
-                      formula = `${component.amount} ед. × ${formatMoney(component.ratePerUnit)}`;
-                    } else if (component.type === 'MARGIN_PERCENT') {
-                      calculated = null;
-                      formula = `${component.amount}% от маржи проекта`;
-                    } else {
-                      calculated = component.amount;
-                      formula = 'фиксированная сумма';
-                    }
-                    return (
-                      <div key={component.id} className={`rounded-lg px-3 py-2 border ${component.type === 'PENALTY' ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] font-bold text-slate-600">{typeLabel}</span>
-                          <span className={`font-black ${component.type === 'PENALTY' ? 'text-red-700' : 'text-emerald-700'}`}>{calculated == null ? '—' : formatMoney(Math.abs(calculated))}</span>
-                        </div>
-                        <div className="text-[10px] text-slate-500 mt-1">{formula}</div>
+
+              <div className="mt-3 space-y-2">
+                {row.subprojects.map(subproject => (
+                  <div key={subproject.id || 'no-subproject'} className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 text-sm font-semibold text-slate-800">
+                        {subproject.id ? '↳ ' : '· '}{subproject.name}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      <div className="shrink-0 text-xs font-bold text-slate-600">{formatPayrollHours(subproject.hours)}</div>
+                    </div>
+                    {renderComponentLines(subproject.componentLines)}
+                  </div>
+                ))}
+              </div>
+            </section>
           ))}
+        </div>
+      )}
+
+      {!loading && projectRows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-blue-100 px-4 py-3 text-xs">
+          <span className="text-slate-500">
+            {componentBreakdown.length
+              ? 'В карточках показаны только фактически применённые компоненты по каждому подпроекту.'
+              : 'Рассчитайте зарплату, чтобы увидеть фактическое распределение часов и сдельных единиц.'}
+          </span>
+          {componentBreakdown.length > 0 && (
+            <strong className="text-slate-700">Начислено по рабочему времени: {formatMoney(totalAllocated)}</strong>
+          )}
         </div>
       )}
     </div>
