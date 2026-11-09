@@ -335,7 +335,8 @@ data class SalaryBreakdownResponse(
     val balance: Double = 0.0,
     val taxInclusiveCost: Double = 0.0,
     val remoteEmployee: Boolean = false,
-    val projectGroups: List<PayrollProjectGroupDto> = emptyList()
+    val projectGroups: List<PayrollProjectGroupDto> = emptyList(),
+    val componentBreakdown: List<PayrollComponentBreakdownDto> = emptyList()
 )
 
 @Serializable
@@ -466,6 +467,21 @@ data class PayrollHourEntryDto(
     val hourlyCost: Double = 0.0,
     val amount: Double = 0.0,
     val comment: String = ""
+)
+
+@Serializable
+data class PayrollComponentBreakdownDto(
+    val componentId: String,
+    val type: String,
+    val projectId: String,
+    val projectName: String,
+    val subprojectId: String? = null,
+    val subprojectName: String = "",
+    val scope: String = "GENERAL", // SUBPROJECT, PROJECT, GENERAL
+    val hours: Double = 0.0,
+    val units: Double = 0.0,
+    val rate: Double = 0.0,
+    val amount: Double = 0.0
 )
 
 @Serializable
